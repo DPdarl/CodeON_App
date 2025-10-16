@@ -216,7 +216,7 @@ export function CustomizeAvatar({ user, onSaveAvatar }: CustomizeAvatarProps) {
       accessory: config.accessory,
     });
 
-    return `/api/avatar?${params.toString()}`;
+    // return `/api/avatar?${params.toString()}`;
   };
 
   return (
