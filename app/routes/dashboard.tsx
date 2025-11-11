@@ -3,9 +3,9 @@ import { PrivateRoute } from "~/components/PrivateRoute";
 import { useState } from "react";
 import { useNavigate } from "@remix-run/react";
 import type { MetaFunction } from "@remix-run/node";
-import { Sidebar } from "~/components/dashboard/SideBar";
-import { DashboardTabs } from "~/components/dashboard/DashboardTabs";
-import { DashboardHeader } from "~/components/dashboard/DashboardHeader";
+import { Sidebar } from "~/components/dashboardmodule/SideBar";
+import { DashboardTabs } from "~/components/dashboardmodule/DashboardTabs";
+import { DashboardHeader } from "~/components/dashboardmodule/DashboardHeader";
 
 export const meta: MetaFunction = () => {
   return [

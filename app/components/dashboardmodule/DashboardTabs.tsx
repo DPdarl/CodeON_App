@@ -3,7 +3,7 @@ import { PlayTab } from "./PlayTab";
 import { LeaderboardTab } from "./LeaderboardTab";
 import { ProgressTab } from "./ProgressTab";
 import { StreakTab } from "./StreakTaB";
-import { CustomizeAvatar } from "~/components/dashboard/CustomizeAvatar";
+import { CustomizeAvatar } from "~/components/dashboardmodule/CustomizeAvatar";
 import { SettingsTab } from "./SettingsTab";
 import { AboutTab } from "./AboutTab";
 
