@@ -1,16 +1,18 @@
 import { useAuth } from "~/contexts/AuthContext";
 import { PrivateRoute } from "~/components/PrivateRoute";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useNavigate } from "@remix-run/react";
 import type { MetaFunction } from "@remix-run/node";
 import { Sidebar } from "~/components/dashboardmodule/SideBar";
 import { DashboardTabs } from "~/components/dashboardmodule/DashboardTabs";
 import { DashboardHeader } from "~/components/dashboardmodule/DashboardHeader";
+import { HomeTab } from "~/components/dashboardmodule/HomeTab";
+import { PlayTab } from "~/components/dashboardmodule/PlayTab";
 
 export const meta: MetaFunction = () => {
   return [
-    { title: "Dashboard | MyApp" },
-    { name: "description", content: "Your app dashboard" },
+    { title: "Dashboard | CodeON" },
+    { name: "description", content: "Your CodeON dashboard" },
   ];
 };
 
@@ -20,6 +22,29 @@ export default function Dashboard() {
   const [activeTab, setActiveTab] = useState("home");
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
 
+  // --- Theme Logic ---
+  // This effect runs once on component load to set the theme
+  useEffect(() => {
+    if (
+      localStorage.theme === "dark" ||
+      (!("theme" in localStorage) &&
+        window.matchMedia("(prefers-color-scheme: dark)").matches)
+    ) {
+      document.documentElement.classList.add("dark");
+    } else {
+      document.documentElement.classList.remove("dark");
+    }
+  }, []);
+
+  // This is the function the header button will call
+  const handleSwitchTheme = () => {
+    // Check if 'dark' class is on the <html> tag
+    const isDarkMode = document.documentElement.classList.toggle("dark");
+    // Save the preference to localStorage
+    localStorage.theme = isDarkMode ? "dark" : "light";
+  };
+
+  // --- Logout Logic ---
   const handleLogout = async () => {
     try {
       await logout();
@@ -28,11 +53,12 @@ export default function Dashboard() {
     }
   };
 
+  // --- Sidebar Toggle Logic ---
   const toggleSidebar = () => {
     setSidebarCollapsed(!sidebarCollapsed);
   };
 
-  // Multiplayer quiz logic
+  // --- Multiplayer Quiz Logic ---
   const startMultiplayerQuiz = () => {
     const gameId = Math.random().toString(36).substring(2, 8);
     navigate(`/multiplayer/${gameId}`);
@@ -45,6 +71,7 @@ export default function Dashboard() {
     }
   };
 
+  // --- Avatar Logic ---
   const handleSaveAvatar = async (avatarConfig: any) => {
     try {
       console.log("Saving avatar configuration:", avatarConfig);
@@ -76,8 +103,7 @@ export default function Dashboard() {
     return `/api/avatar?${params.toString()}`;
   };
 
-  // Add these to your existing Dashboard component
-
+  // --- Tab Change Logic ---
   const handleTabChange = (tab: string) => {
     // Handle special cases for more dropdown options
     if (tab === "logout") {
@@ -119,6 +145,15 @@ export default function Dashboard() {
             user={user}
             sidebarCollapsed={sidebarCollapsed}
             onToggleSidebar={toggleSidebar}
+            stats={{
+              streaks: 0,
+              coins: 0,
+              hearts: 0,
+            }}
+            // ▼▼▼ THIS IS THE FIX ▼▼▼
+            onSwitchTheme={handleSwitchTheme}
+            onLogout={handleLogout}
+            // ▲▲▲ END OF FIX ▲▲▲
           />
 
           {/* Main Content Area */}
