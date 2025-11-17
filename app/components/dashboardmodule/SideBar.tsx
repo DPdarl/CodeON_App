@@ -45,7 +45,6 @@ export function Sidebar({
     { id: "progress", label: "Progress", icon: BarChart3 },
     { id: "streak", label: "Streak", icon: Flame },
     { id: "store", label: "Store", icon: Store },
-    { id: "customize", label: "Customize", icon: Palette },
     { id: "profile", label: "Profile", icon: UserCircle },
     { id: "more", label: "More", icon: MoreHorizontal, hasDropdown: true },
   ];

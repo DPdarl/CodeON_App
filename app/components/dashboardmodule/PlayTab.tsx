@@ -1,186 +1,128 @@
-// app/routes/dashboard/PlayTab.tsx
-
+// app/components/dashboardmodule/PlayTab.tsx
 import { useState } from "react";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "~/components/ui/card";
-import {
-  SelectionCarousel,
-  type CarouselItem,
-} from "~/components/dashboardmodule/SelectionCarousel";
-import { MultiplayerModal } from "~/components/playmodule/MultiplayerModal";
-// 1. Import the new SoloChallengeModal
-import { SoloChallengeModal } from "~/components/playmodule/SoloChallengeModal";
-import { useNavigate, useNavigation } from "@remix-run/react";
-import { BookOpen, Target, Users } from "lucide-react";
+import { Gamepad2, Users, Map } from "lucide-react";
+import { MultiplayerQuiz } from "./MultiplayerQuiz";
+import { ChallengeNode } from "./ChallengeNode";
+import { motion } from "framer-motion";
+import { challenges } from "~/data/challenges";
+import { useNavigate } from "@remix-run/react";
+import { Challenge } from "~/types/challenge.types";
 
 interface PlayTabProps {
-  // These are passed from the main dashboard route
-  onStartMultiplayerQuiz: (gameMode: string) => void;
-  onJoinMultiplayerQuiz: (gameCode: string) => void;
+  onStartMultiplayerQuiz: () => void;
+  onJoinMultiplayerQuiz: () => void;
 }
 
-// Define the carousel items (unchanged)
-const gameModes: CarouselItem[] = [
-  {
-    id: "multiplayer",
-    title: "Multiplayer",
-    description: "Challenge other C# developers",
-    Icon: Users,
-  },
-  {
-    id: "solo",
-    title: "Solo Challenge",
-    description: "Solve machine problems",
-    Icon: Target,
-  },
-  {
-    id: "basics",
-    title: "Learn Basics",
-    description: "Practice C# fundamentals",
-    Icon: BookOpen,
-  },
-];
+type ChallengeStatus = "locked" | "unlocked" | "completed";
 
-// 2. Define the shape of our mock progress data
-interface SoloProgress {
-  level: number;
-  lastChallengeName: string;
-  userProgress: number;
-}
-
-// 3. This is our mock data fetching function
-const fetchSoloProgress = (): Promise<SoloProgress> => {
-  return new Promise((resolve) => {
-    // This simulates a network request to your database
-    setTimeout(() => {
-      resolve({
-        level: 1, // You would fetch this from your DB
-        lastChallengeName: "Volume of Sphere", // You would fetch this
-        userProgress: 0, // You would fetch this
-      });
-    }, 500); // 500ms simulated network delay
-  });
-};
+// ▼▼▼ ALIGNMENT FIX ▼▼▼
+// We define node height (160px = h-40) and gap (32px = gap-8)
+// to calculate the progress line height.
+const NODE_ROW_HEIGHT = 160;
+const NODE_ROW_GAP = 32;
 
 export function PlayTab({
   onStartMultiplayerQuiz,
   onJoinMultiplayerQuiz,
 }: PlayTabProps) {
-  const [isMultiplayerModalOpen, setIsMultiplayerModalOpen] = useState(false);
-  // 4. Add state for the new Solo Challenge modal
-  const [isSoloModalOpen, setIsSoloModalOpen] = useState(false);
-  const [soloProgress, setSoloProgress] = useState<SoloProgress | null>(null);
-
-  // 5. This loading state is for the CAROUSEL "Play" button
-  const [isFetchingProgress, setIsFetchingProgress] = useState(false);
-
   const navigate = useNavigate();
-  const navigation = useNavigation();
 
-  // 6. Use the fetching state for the carousel button's loading spinner
-  const loadingItemId = isFetchingProgress
-    ? "solo"
-    : navigation.state === "loading"
-    ? "basics" // Keep loading for 'basics'
-    : null;
+  // --- MOCK DATA ---
+  const [userProgress, setUserProgress] = useState(2); // User has completed 2 challenges
+  // --- END MOCK DATA ---
 
-  const handlePlay = async (item: CarouselItem) => {
-    // Prevent clicking if we're already loading
-    if (navigation.state !== "idle" || isFetchingProgress) return;
-
-    switch (item.id) {
-      case "multiplayer":
-        setIsMultiplayerModalOpen(true);
-        break;
-
-      case "solo":
-        // 7. Handle the "solo" card click
-        setIsFetchingProgress(true); // Show spinner on carousel button
-        const progress = await fetchSoloProgress(); // "Fetch" data
-        setSoloProgress(progress); // Store the data
-        setIsFetchingProgress(false); // Hide spinner on carousel button
-        setIsSoloModalOpen(true); // Open the modal
-        break;
-
-      case "basics":
-        // This still uses the simple delay
-        setTimeout(() => navigate("/learn-basics"), 100);
-        break;
-
-      default:
-        console.warn("Unknown play item:", item.id);
-    }
+  const handleStartSoloChallenge = (challenge: Challenge) => {
+    navigate(`/solo-challenge`, {
+      state: { challenge },
+    });
   };
 
-  // Handlers for the multiplayer modal (unchanged)
-  const handleCreateGame = (gameMode: string) => {
-    setIsMultiplayerModalOpen(false);
-    onStartMultiplayerQuiz(gameMode);
+  const getChallengeStatus = (index: number): ChallengeStatus => {
+    if (index < userProgress) return "completed";
+    if (index === userProgress) return "unlocked";
+    return "locked";
   };
 
-  const handleJoinGame = (gameCode: string) => {
-    setIsMultiplayerModalOpen(false);
-    onJoinMultiplayerQuiz(gameCode);
-  };
+  // ▼▼▼ COLORED LINE FIX ▼▼▼
+  // Calculate the height of the "completed" progress line
+  const progressLineHeight =
+    userProgress > 0
+      ? (userProgress - 1) * (NODE_ROW_HEIGHT + NODE_ROW_GAP) +
+        NODE_ROW_HEIGHT / 2
+      : 0;
 
   return (
-    <div>
-      <div className="mb-8">
-        <h2 className="text-3xl font-bold text-gray-900 dark:text-gray-100 mb-2">
-          Play & Learn 🎮
-        </h2>
-        <p className="text-gray-600 dark:text-gray-400">
-          Choose a mode to test your skills and have fun!
-        </p>
-      </div>
+    <div className="max-w-4xl mx-auto space-y-12 pb-12">
+      {/* Header */}
+      <motion.div
+        initial={{ opacity: 0, y: -20 }}
+        animate={{ opacity: 1, y: 0 }}
+        className="flex items-center gap-3"
+      >
+        <Gamepad2 className="w-8 h-8 text-indigo-500" />
+        <h1 className="text-4xl font-extrabold text-gray-900 dark:text-white">
+          Challenge Arena
+        </h1>
+      </motion.div>
 
-      <div className="my-12">
-        <SelectionCarousel
-          items={gameModes}
-          onPlay={handlePlay}
-          loadingItemId={loadingItemId}
+      {/* Section 1: Multiplayer Battles */}
+      <motion.div
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: 0.1 }}
+      >
+        <div className="flex items-center gap-3 mb-6">
+          <Users className="w-6 h-6 text-red-500" />
+          <h2 className="text-3xl font-bold text-gray-900 dark:text-white">
+            Multiplayer Battles
+          </h2>
+        </div>
+        <MultiplayerQuiz
+          onStartMultiplayerQuiz={onStartMultiplayerQuiz}
+          onJoinMultiplayerQuiz={onJoinMultiplayerQuiz}
         />
-      </div>
+      </motion.div>
 
-      {/* Recent games card */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Recent Games</CardTitle>
-          <CardDescription>Your recent multiplayer sessions</CardDescription>
-        </CardHeader>
-        <CardContent>
-          {/* ... your recent games items ... */}
-          <div className="flex items-center justify-between p-4 border rounded-lg">
-            <div className="flex items-center space-x-3">
-              <div className="w-3 h-3 rounded-full bg-green-500"></div>
-              <div>
-                <p className="font-medium">C# Basics Challenge</p>
-                <p className="text-sm text-muted-foreground">2 days ago</p>
-              </div>
-            </div>
+      {/* Section 2: Solo Journey */}
+      <motion.div
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: 0.2 }}
+      >
+        <div className="flex items-center gap-3 mb-8">
+          <Map className="w-6 h-6 text-green-500" />
+          <h2 className="text-3xl font-bold text-gray-900 dark:text-white">
+            Solo Journey
+          </h2>
+        </div>
+
+        {/* The Path */}
+        <div className="relative w-full">
+          {/* 1. The gray "background" path line */}
+          <div className="absolute top-0 left-1/2 -translate-x-1/2 h-full w-1.5 bg-gray-200 dark:bg-gray-700 rounded-full" />
+
+          {/* 2. The green "completed" path line */}
+          {userProgress > 0 && (
+            <div
+              className="absolute top-0 left-1/2 -translate-x-1/2 w-1.5 bg-green-500 rounded-full transition-all duration-500 ease-out"
+              style={{ height: `${progressLineHeight}px` }}
+            />
+          )}
+
+          {/* ▼▼▼ ALIGNMENT FIX: Increased gap to gap-8 ▼▼▼ */}
+          <div className="relative z-10 flex flex-col items-center gap-8">
+            {challenges.map((challenge, index) => (
+              <ChallengeNode
+                key={challenge.id}
+                challenge={challenge}
+                status={getChallengeStatus(index)}
+                alignment={index % 2 === 0 ? "left" : "right"}
+                onSelect={() => handleStartSoloChallenge(challenge)}
+              />
+            ))}
           </div>
-        </CardContent>
-      </Card>
-
-      {/* Multiplayer Modal */}
-      <MultiplayerModal
-        open={isMultiplayerModalOpen}
-        onOpenChange={setIsMultiplayerModalOpen}
-        onCreateGame={handleCreateGame}
-        onJoinGame={handleJoinGame}
-      />
-
-      {/* 8. Add the new Solo Challenge Modal */}
-      <SoloChallengeModal
-        open={isSoloModalOpen}
-        onOpenChange={setIsSoloModalOpen}
-        progress={soloProgress}
-      />
+        </div>
+      </motion.div>
     </div>
   );
 }

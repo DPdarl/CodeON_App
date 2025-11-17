@@ -1,255 +1,166 @@
-// app/components/dashboard/SelectionCarousel.tsx
-import { useState } from "react";
-import { Button } from "~/components/ui/button";
+import * as React from "react";
 import {
   Card,
   CardContent,
   CardDescription,
   CardHeader,
   CardTitle,
+  CardFooter,
 } from "~/components/ui/card";
-// Import Loader2 for the spinner
-import { ChevronLeft, ChevronRight, Play, Loader2 } from "lucide-react";
-import type { LucideIcon } from "lucide-react";
-import { motion, AnimatePresence } from "framer-motion";
+import {
+  Carousel,
+  CarouselContent,
+  CarouselItem,
+  CarouselNext,
+  CarouselPrevious,
+} from "~/components/ui/carousel";
+import { Badge } from "~/components/ui/badge";
+import { Button } from "~/components/ui/button";
+import { Challenge } from "~/types/challenge.types";
+import { Zap, Brain, Code2, Terminal, Cpu, ArrowRight } from "lucide-react";
 
-/**
- * Define the shape of an item for the carousel
- */
-export interface CarouselItem {
-  id: string;
-  title: string;
-  description: string;
-  Icon: LucideIcon;
-}
+// Helper functions to get styles based on challenge data
+const getLanguageStyle = (lang: string) => {
+  switch (lang.toLowerCase()) {
+    case "python":
+      return {
+        icon: Terminal,
+        gradient: "from-yellow-400 via-orange-500 to-orange-600",
+        badge:
+          "bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200",
+      };
+    case "javascript":
+      return {
+        icon: Code2,
+        gradient: "from-yellow-300 via-yellow-400 to-yellow-500",
+        badge:
+          "bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200",
+      };
+    case "react":
+      return {
+        icon: Cpu,
+        gradient: "from-cyan-400 via-blue-500 to-blue-600",
+        badge: "bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200",
+      };
+    default:
+      return {
+        icon: Brain,
+        gradient: "from-indigo-400 via-purple-500 to-purple-600",
+        badge:
+          "bg-indigo-100 text-indigo-800 dark:bg-indigo-900 dark:text-indigo-200",
+      };
+  }
+};
 
-/**
- * Props for the main SelectionCarousel component
- */
+const getDifficultyStyle = (difficulty: "Easy" | "Medium" | "Hard") => {
+  switch (difficulty) {
+    case "Easy":
+      return "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200";
+    case "Medium":
+      return "bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200";
+    case "Hard":
+      return "bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200";
+    default:
+      return "bg-gray-100 text-gray-800 dark:bg-gray-900 dark:text-gray-200";
+  }
+};
+
 interface SelectionCarouselProps {
-  items: CarouselItem[];
-  onPlay: (item: CarouselItem) => void;
-  loadingItemId: string | null; // Prop to indicate which item is loading
+  challenges: Challenge[];
+  onSelectChallenge: (challenge: Challenge) => void;
 }
 
-/**
- * A reusable component for the carousel card itself.
- */
-interface CarouselCardProps {
-  item: CarouselItem;
-  onPlayClick: () => void;
-  isFocused: boolean;
-  isLoading: boolean; // Prop to show loading state
-}
-
-function CarouselCard({
-  item,
-  onPlayClick,
-  isFocused,
-  isLoading,
-}: CarouselCardProps) {
-  const { Icon, title, description } = item;
+export function SelectionCarousel({
+  challenges,
+  onSelectChallenge,
+}: SelectionCarouselProps) {
   return (
-    <Card className="w-64 h-80 flex flex-col justify-between">
-      <CardHeader className="text-center">
-        <div className="flex justify-center mb-3">
-          <Icon className="w-12 h-12" />
-        </div>
-        <CardTitle>{title}</CardTitle>
-        <CardDescription>{description}</CardDescription>
-      </CardHeader>
-      <CardContent className="flex justify-center">
-        {/* Update the button to show a loading state */}
-        {isFocused && (
-          <Button onClick={onPlayClick} disabled={isLoading} className="w-28">
-            {isLoading ? (
-              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-            ) : (
-              <Play className="mr-2 h-4 w-4" />
-            )}
-            {isLoading ? "Loading..." : "Play"}
-          </Button>
-        )}
-      </CardContent>
-    </Card>
+    <Carousel
+      opts={{
+        align: "start",
+        loop: true,
+      }}
+      className="w-full"
+    >
+      <CarouselContent>
+        {challenges.map((challenge, index) => (
+          <CarouselItem key={index} className="md:basis-1/2 lg:basis-1/3">
+            <div className="p-1">
+              <ChallengeCard
+                challenge={challenge}
+                onSelect={() => onSelectChallenge(challenge)}
+              />
+            </div>
+          </CarouselItem>
+        ))}
+      </CarouselContent>
+      <CarouselPrevious className="ml-10" />
+      <CarouselNext className="mr-10" />
+    </Carousel>
   );
 }
 
-/**
- * Animation variants for the main (center) card
- */
-const slideVariants = {
-  enter: (direction: number) => ({
-    x: direction > 0 ? 300 : -300,
-    opacity: 0,
-    scale: 0.9,
-  }),
-  center: {
-    zIndex: 1,
-    x: 0,
-    opacity: 1,
-    scale: 1,
-  },
-  exit: (direction: number) => ({
-    zIndex: 0,
-    x: direction < 0 ? 300 : -300,
-    opacity: 0,
-    scale: 0.9,
-  }),
-};
+// --- The New Redesigned Challenge Card ---
+function ChallengeCard({
+  challenge,
+  onSelect,
+}: {
+  challenge: Challenge;
+  onSelect: () => void;
+}) {
+  const {
+    icon: Icon,
+    gradient,
+    badge: langBadge,
+    // @ts-ignore
+  } = getLanguageStyle(challenge.language || "General");
+  const diffBadge = getDifficultyStyle(challenge.difficulty);
 
-/**
- * Animation variants for the side cards
- */
-const sideVariants = {
-  initial: {
-    scale: 0.9,
-    opacity: 0,
-    filter: "blur(4px)",
-  },
-  animate: {
-    scale: 0.9,
-    opacity: 0.5,
-    filter: "blur(4px)",
-    transition: { duration: 0.3 },
-  },
-  exit: {
-    scale: 0.9,
-    opacity: 0,
-    filter: "blur(4px)",
-    transition: { duration: 0.2 },
-  },
-};
-
-/**
- * The main carousel component
- */
-export function SelectionCarousel({
-  items,
-  onPlay,
-  loadingItemId,
-}: SelectionCarouselProps) {
-  const [[activeIndex, direction], setPage] = useState([0, 0]);
-
-  const length = items.length;
-  const prevIndex = (activeIndex - 1 + length) % length;
-  const nextIndex = (activeIndex + 1) % length;
-
-  // --- Event Handlers ---
-  const handlePrev = () => {
-    setPage([prevIndex, -1]);
-  };
-
-  const handleNext = () => {
-    setPage([nextIndex, 1]);
-  };
-
-  const handlePlay = () => {
-    onPlay(items[activeIndex]);
-  };
-
-  // --- (edge case logic for < 3 items) ---
-  if (length < 3) {
-    const isLoading = items[0].id === loadingItemId;
-    return (
-      <div className="flex justify-center items-center p-8">
-        <motion.div
-          initial={{ scale: 0.8, opacity: 0 }}
-          animate={{ scale: 1, opacity: 1 }}
-        >
-          <CarouselCard
-            item={items[0]}
-            isFocused={true}
-            onPlayClick={handlePlay}
-            isLoading={isLoading} // Pass loading state
-          />
-        </motion.div>
-      </div>
-    );
-  }
-
-  // --- Render ---
   return (
-    <div className="flex items-center justify-center gap-4 w-full">
-      {/* 1. Previous Button (with tap animation) */}
-      <motion.div whileTap={{ scale: 0.9 }}>
-        <Button variant="outline" size="icon" onClick={handlePrev}>
-          <ChevronLeft className="h-6 w-6" />
-          <span className="sr-only">Previous</span>
-        </Button>
-      </motion.div>
-
-      {/* 2. Carousel Cards Container */}
-      <div className="flex items-center justify-center w-[60rem] overflow-hidden relative h-[350px]">
-        {/* Side Card: Previous */}
-        <motion.div
-          key={prevIndex}
-          variants={sideVariants}
-          initial="initial"
-          animate="animate"
-          exit="exit"
-          className="absolute"
-          style={{ x: -200 }}
-        >
-          <CarouselCard
-            item={items[prevIndex]}
-            isFocused={false}
-            onPlayClick={() => {}}
-            isLoading={false}
-          />
-        </motion.div>
-
-        {/* Center Card: Active (with sliding animation) */}
-        <AnimatePresence initial={false} custom={direction}>
-          <motion.div
-            key={activeIndex}
-            custom={direction}
-            variants={slideVariants}
-            initial="enter"
-            animate="center"
-            exit="exit"
-            transition={{
-              x: { type: "spring", stiffness: 300, damping: 30 },
-              opacity: { duration: 0.2 },
-            }}
-            className="absolute z-10"
-          >
-            {/* Pass the isLoading prop */}
-            <CarouselCard
-              item={items[activeIndex]}
-              isFocused={true}
-              onPlayClick={handlePlay}
-              isLoading={items[activeIndex].id === loadingItemId}
-            />
-          </motion.div>
-        </AnimatePresence>
-
-        {/* Side Card: Next */}
-        <motion.div
-          key={nextIndex}
-          variants={sideVariants}
-          initial="initial"
-          animate="animate"
-          exit="exit"
-          className="absolute"
-          style={{ x: 200 }}
-        >
-          <CarouselCard
-            item={items[nextIndex]}
-            isFocused={false}
-            onPlayClick={() => {}}
-            isLoading={false}
-          />
-        </motion.div>
+    <Card className="h-[350px] relative flex flex-col overflow-hidden rounded-3xl shadow-lg transition-all duration-300 hover:shadow-2xl hover:-translate-y-1 border-gray-100 dark:border-gray-800">
+      {/* Background Gradient & Icon */}
+      <div
+        className={`absolute inset-0 h-40 bg-gradient-to-br ${gradient} opacity-20 dark:opacity-30`}
+      />
+      <div className="absolute top-6 right-6 p-3 rounded-2xl bg-white/30 dark:bg-black/30 backdrop-blur-sm">
+        <Icon className="w-8 h-8 text-gray-900 dark:text-white opacity-80" />
       </div>
 
-      {/* 3. Next Button (with tap animation) */}
-      <motion.div whileTap={{ scale: 0.9 }}>
-        <Button variant="outline" size="icon" onClick={handleNext}>
-          <ChevronRight className="h-6 w-6" />
-          <span className="sr-only">Next</span>
-        </Button>
-      </motion.div>
-    </div>
+      {/* Content */}
+      <CardHeader className="relative z-10">
+        <div className="flex gap-2 mb-2">
+          <Badge className={diffBadge}>{challenge.difficulty}</Badge>
+          <Badge className={langBadge}>
+            {/* @ts-ignore */}
+            {challenge.language || "General"}
+          </Badge>
+        </div>
+        <CardTitle className="text-2xl font-bold text-gray-900 dark:text-white">
+          {challenge.title}
+        </CardTitle>
+      </CardHeader>
+
+      <CardContent className="relative z-10 flex-1">
+        <CardDescription className="text-base text-gray-600 dark:text-gray-400 line-clamp-3">
+          {challenge.description}
+        </CardDescription>
+      </CardContent>
+
+      <CardFooter className="relative z-10 mt-auto p-6 bg-white/30 dark:bg-black/20 backdrop-blur-sm">
+        <div className="flex justify-between items-center w-full">
+          <div className="flex items-center gap-1.5 text-lg font-bold text-green-600 dark:text-green-400">
+            <Zap className="w-5 h-5 fill-current" />
+            <span>{challenge.xp} XP</span>
+          </div>
+          <Button
+            onClick={onSelect}
+            className="bg-gray-900 dark:bg-white text-white dark:text-gray-900 hover:bg-indigo-600 dark:hover:bg-indigo-200 font-bold rounded-xl shadow-lg transition-all group"
+          >
+            Start{" "}
+            <ArrowRight className="w-4 h-4 ml-1.5 transition-transform group-hover:translate-x-1" />
+          </Button>
+        </div>
+      </CardFooter>
+    </Card>
   );
 }

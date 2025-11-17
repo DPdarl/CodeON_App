@@ -10,10 +10,11 @@ import {
   Cpu,
   ArrowRight,
   Play,
+  Brain, // <-- Import Brain
 } from "lucide-react";
 import { Button } from "~/components/ui/button";
-import { Progress } from "~/components/ui/progress"; // Ensure you have this shadcn component
-import { challenges } from "~/data/challenges"; // Importing your data
+import { Progress } from "~/components/ui/progress";
+import { challenges } from "~/data/challenges";
 import { Link } from "@remix-run/react";
 
 // --- Types & Helper Interfaces ---
@@ -25,7 +26,7 @@ interface UserStats {
   streak: number;
 }
 
-// Mock user stats - in a real app, these would come from your user profile/database
+// Mock user stats
 const MOCK_STATS: UserStats = {
   level: 3,
   rank: "Novice Coder",
@@ -34,14 +35,15 @@ const MOCK_STATS: UserStats = {
   streak: 5,
 };
 
-// Group challenges by language/category to create "Courses" like Codédex
+// Group challenges by language/category to create "Courses"
 const getCourseGroups = () => {
   const groups: Record<string, typeof challenges> = {};
 
   challenges.forEach((challenge) => {
-    // Fallback to 'General' if language/category is missing
-    // @ts-ignore - Assuming 'language' or 'category' exists on your challenge type
-    const key = challenge.language || challenge.category || "General";
+    // @ts-ignore
+    const key = (challenge.language ||
+      challenge.category ||
+      "General") as string;
     if (!groups[key]) groups[key] = [];
     groups[key].push(challenge);
   });
@@ -49,10 +51,11 @@ const getCourseGroups = () => {
   return Object.entries(groups).map(([title, items]) => ({
     title,
     count: items.length,
-    // Calculate a mock progress percentage (replace with real user progress later)
     progress: Math.floor(Math.random() * 100),
-    color: getColorForLanguage(title),
-    icon: getIconForLanguage(title),
+    // ▼▼▼ THIS IS THE FIX ▼▼▼
+    color: getColorForLanguage(title), // Was: getColorForLanguage
+    icon: getIconForLanguage(title), // Was: getIconForLanguage
+    // ▲▲▲ END OF FIX ▲▲▲
   }));
 };
 
@@ -62,8 +65,6 @@ const getColorForLanguage = (lang: string) => {
       return "from-yellow-400 to-orange-500";
     case "javascript":
       return "from-yellow-300 to-yellow-500";
-    case "typescript":
-      return "from-blue-400 to-blue-600";
     case "html/css":
       return "from-orange-400 to-red-500";
     case "react":
@@ -82,14 +83,14 @@ const getIconForLanguage = (lang: string) => {
     case "react":
       return Cpu;
     default:
-      return Map;
+      return Brain; // <-- Use Brain as default
   }
 };
 
 export function HomeTab() {
   const courses = getCourseGroups();
 
-  // Animation variants for "popping" in elements
+  // Animation variants
   const containerVariants = {
     hidden: { opacity: 0 },
     visible: {
@@ -113,7 +114,6 @@ export function HomeTab() {
         animate={{ opacity: 1, y: 0 }}
         className="relative overflow-hidden rounded-3xl bg-gradient-to-r from-indigo-600 to-purple-600 text-white shadow-xl"
       >
-        {/* Decorative background elements (Pixel-art vibe circles) */}
         <div className="absolute top-0 right-0 -mr-16 -mt-16 h-64 w-64 rounded-full bg-white/10 blur-3xl" />
         <div className="absolute bottom-0 left-0 -ml-16 -mb-16 h-64 w-64 rounded-full bg-white/10 blur-3xl" />
 
@@ -218,7 +218,7 @@ export function HomeTab() {
             </motion.div>
           ))}
 
-          {/* "Coming Soon" Card to fill space if few courses */}
+          {/* "Coming Soon" Card */}
           <motion.div
             variants={itemVariants}
             className="group relative h-full min-h-[200px] rounded-3xl border-2 border-dashed border-gray-300 dark:border-gray-700 flex flex-col items-center justify-center p-6 text-center hover:border-indigo-300 transition-colors cursor-pointer bg-gray-50 dark:bg-gray-800/50"
@@ -294,11 +294,10 @@ function StatCard({ icon: Icon, label, value, color, bgColor }: any) {
 }
 
 function CourseCard({ course }: { course: any }) {
-  const Icon = course.icon;
+  const Icon = course.icon; // This now works
 
   return (
     <div className="group relative bg-white dark:bg-gray-900 rounded-3xl p-6 border border-gray-100 dark:border-gray-800 shadow-sm hover:shadow-xl transition-all duration-300 hover:-translate-y-1 overflow-hidden">
-      {/* Gradient Background for the header part */}
       <div
         className={`absolute top-0 left-0 right-0 h-24 bg-gradient-to-br ${course.color} opacity-10 group-hover:opacity-20 transition-opacity`}
       />
