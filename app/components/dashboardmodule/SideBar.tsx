@@ -91,16 +91,14 @@ export function Sidebar({
     >
       {/* Logo Section */}
       <div className="p-4 border-b">
-        <div
-          className={`flex items-center ${
-            collapsed ? "justify-center" : "space-x-3"
-          }`}
-        >
-          <CodeOnLogo className={collapsed ? "h-6 w-6" : "h-8 w-8"} />
-
+        <div className="flex items-center space-x-3">
+          <CodeOnLogo className="h-8 w-8" />
           {!collapsed && (
             <div className="flex flex-col">
-              <h1 className="text-xl font-bold leading-tight">CodeON</h1>
+              {/* Add font-pixelify here */}
+              <h1 className="text-xl font-bold leading-tight font-pixelify">
+                CodeON
+              </h1>
               <span className="text-xs text-muted-foreground leading-tight">
                 Learn & Compete
               </span>

@@ -93,3 +93,9 @@
     transition: width 0.2s ease-in-out;
   }
 }
+
+/* @layer utilities {
+  .font-pixelify {
+    font-family: "Pixelify Sans", cursive;
+  }
+} */

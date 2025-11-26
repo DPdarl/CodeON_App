@@ -30,6 +30,10 @@ export const links: LinksFunction = () => [
     rel: "shortcut icon",
     href: "/logo/CodeON_LOGODark.ico",
   },
+  {
+    rel: "stylesheet",
+    href: "https://fonts.googleapis.com/css2?family=Pixelify+Sans:wght@400;500;600;700&display=swap",
+  },
 ];
 
 export const meta: MetaFunction = () => [{ title: "CodeON App" }];

@@ -1,5 +1,6 @@
 // app/types/challenge.types.ts
 export interface Challenge {
+  category: (language: any) => unknown;
   language(language: any): unknown;
   id: string;
   title: string;

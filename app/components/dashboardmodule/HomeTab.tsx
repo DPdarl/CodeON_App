@@ -1,3 +1,4 @@
+import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
 import {
   Trophy,
@@ -10,55 +11,19 @@ import {
   Cpu,
   ArrowRight,
   Play,
-  Brain, // <-- Import Brain
+  Brain,
 } from "lucide-react";
 import { Button } from "~/components/ui/button";
 import { Progress } from "~/components/ui/progress";
-import { challenges } from "~/data/challenges";
-import { Link } from "@remix-run/react";
+import { Link, useNavigate } from "@remix-run/react";
+import { useAuth } from "~/contexts/AuthContext";
+import { collection, getDocs, getFirestore } from "firebase/firestore";
+import app from "~/lib/firebase";
+import { Challenge } from "~/types/challenge.types";
 
-// --- Types & Helper Interfaces ---
-interface UserStats {
-  level: number;
-  rank: string;
-  xp: number;
-  maxXp: number;
-  streak: number;
-}
+const db = getFirestore(app);
 
-// Mock user stats
-const MOCK_STATS: UserStats = {
-  level: 3,
-  rank: "Novice Coder",
-  xp: 350,
-  maxXp: 1000,
-  streak: 5,
-};
-
-// Group challenges by language/category to create "Courses"
-const getCourseGroups = () => {
-  const groups: Record<string, typeof challenges> = {};
-
-  challenges.forEach((challenge) => {
-    // @ts-ignore
-    const key = (challenge.language ||
-      challenge.category ||
-      "General") as string;
-    if (!groups[key]) groups[key] = [];
-    groups[key].push(challenge);
-  });
-
-  return Object.entries(groups).map(([title, items]) => ({
-    title,
-    count: items.length,
-    progress: Math.floor(Math.random() * 100),
-    // ▼▼▼ THIS IS THE FIX ▼▼▼
-    color: getColorForLanguage(title), // Was: getColorForLanguage
-    icon: getIconForLanguage(title), // Was: getIconForLanguage
-    // ▲▲▲ END OF FIX ▲▲▲
-  }));
-};
-
+// Helper to get colors based on language (Visuals)
 const getColorForLanguage = (lang: string) => {
   switch (lang.toLowerCase()) {
     case "python":
@@ -69,11 +34,15 @@ const getColorForLanguage = (lang: string) => {
       return "from-orange-400 to-red-500";
     case "react":
       return "from-cyan-400 to-blue-500";
+    case "csharp":
+    case "c#":
+      return "from-green-400 to-blue-500";
     default:
       return "from-indigo-400 to-purple-500";
   }
 };
 
+// Helper to get icons based on language (Visuals)
 const getIconForLanguage = (lang: string) => {
   switch (lang.toLowerCase()) {
     case "python":
@@ -82,12 +51,73 @@ const getIconForLanguage = (lang: string) => {
       return Code2;
     case "react":
       return Cpu;
+    case "csharp":
+    case "c#":
+      return Code2;
     default:
-      return Brain; // <-- Use Brain as default
+      return Brain;
   }
 };
 
 export function HomeTab() {
+  const { user } = useAuth();
+  const navigate = useNavigate();
+  const [challenges, setChallenges] = useState<Challenge[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  // 1. Fetch Data from Firestore
+  useEffect(() => {
+    const fetchChallenges = async () => {
+      try {
+        const querySnapshot = await getDocs(collection(db, "challenges"));
+        const data = querySnapshot.docs.map((doc) => ({
+          id: doc.id,
+          ...doc.data(),
+        })) as Challenge[];
+        setChallenges(data);
+      } catch (error) {
+        console.error("Error fetching challenges:", error);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchChallenges();
+  }, []);
+
+  // 2. Calculate Stats from Real User Data
+  const stats = {
+    level: user?.level || 1,
+    rank: "Novice", // You could calculate this based on Level (e.g., >Lvl10 = "Intermediate")
+    xp: user?.xp || 0,
+    maxXp: (user?.level || 1) * 1000, // Example: Level 1 = 1000 max, Level 2 = 2000 max
+    streak: user?.streaks || 0,
+  };
+
+  // 3. Group Challenges into "Courses" (Dynamic from DB)
+  const getCourseGroups = () => {
+    const groups: Record<string, Challenge[]> = {};
+
+    challenges.forEach((challenge) => {
+      const lang = (challenge as any).language;
+      const key =
+        typeof lang === "string" && lang.trim() !== "" ? lang : "General";
+      if (!groups[key]) {
+        groups[key] = [];
+      }
+      groups[key].push(challenge);
+    });
+
+    return Object.entries(groups).map(([title, items]) => ({
+      title,
+      count: items.length,
+      // TODO: Calculate real progress based on user.completedChallenges
+      progress: 0,
+      color: getColorForLanguage(title),
+      icon: getIconForLanguage(title),
+    }));
+  };
+
   const courses = getCourseGroups();
 
   // Animation variants
@@ -95,9 +125,7 @@ export function HomeTab() {
     hidden: { opacity: 0 },
     visible: {
       opacity: 1,
-      transition: {
-        staggerChildren: 0.1,
-      },
+      transition: { staggerChildren: 0.1 },
     },
   };
 
@@ -123,11 +151,11 @@ export function HomeTab() {
               <div className="flex items-center space-x-2 mb-2">
                 <span className="bg-white/20 backdrop-blur-md px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider flex items-center gap-1">
                   <Trophy className="w-3 h-3" />
-                  Rank: {MOCK_STATS.rank}
+                  Rank: {stats.rank}
                 </span>
               </div>
               <h1 className="text-3xl md:text-4xl font-extrabold mb-2 tracking-tight">
-                Welcome back, Traveler!
+                Welcome back, {user?.displayName || "Traveler"}!
               </h1>
               <p className="text-indigo-100 max-w-lg text-lg">
                 Ready to continue your coding adventure? The world of code
@@ -138,21 +166,18 @@ export function HomeTab() {
             {/* Level / XP Card */}
             <div className="bg-black/20 backdrop-blur-sm rounded-2xl p-6 min-w-[280px] border border-white/10">
               <div className="flex justify-between items-end mb-2">
-                <span className="text-2xl font-black">
-                  Lvl {MOCK_STATS.level}
-                </span>
+                <span className="text-2xl font-black">Lvl {stats.level}</span>
                 <span className="text-sm text-indigo-200 font-mono">
-                  {MOCK_STATS.xp}/{MOCK_STATS.maxXp} XP
+                  {stats.xp}/{stats.maxXp} XP
                 </span>
               </div>
               <Progress
-                value={(MOCK_STATS.xp / MOCK_STATS.maxXp) * 100}
+                value={(stats.xp / stats.maxXp) * 100}
                 className="h-3 bg-black/30"
                 indicatorClassName="bg-gradient-to-r from-yellow-300 to-yellow-500"
               />
               <p className="text-xs text-indigo-200 mt-3 text-right">
-                {MOCK_STATS.maxXp - MOCK_STATS.xp} XP to Level{" "}
-                {MOCK_STATS.level + 1}
+                {stats.maxXp - stats.xp} XP to Level {stats.level + 1}
               </p>
             </div>
           </div>
@@ -164,28 +189,28 @@ export function HomeTab() {
         <StatCard
           icon={Flame}
           label="Day Streak"
-          value={MOCK_STATS.streak.toString()}
+          value={stats.streak.toString()}
           color="text-orange-500"
           bgColor="bg-orange-50 dark:bg-orange-950/30"
         />
         <StatCard
           icon={Zap}
           label="Total XP"
-          value={MOCK_STATS.xp.toString()}
+          value={stats.xp.toString()}
           color="text-yellow-500"
           bgColor="bg-yellow-50 dark:bg-yellow-950/30"
         />
         <StatCard
           icon={Star}
           label="Challenges"
-          value="12"
+          value={challenges.length.toString()}
           color="text-blue-500"
           bgColor="bg-blue-50 dark:bg-blue-950/30"
         />
         <StatCard
           icon={Trophy}
           label="Badges"
-          value="3"
+          value="3" // TODO: Fetch real badges length
           color="text-purple-500"
           bgColor="bg-purple-50 dark:bg-purple-950/30"
         />
@@ -206,17 +231,22 @@ export function HomeTab() {
           <Button
             variant="ghost"
             className="text-indigo-600 dark:text-indigo-400 font-semibold"
+            onClick={() => navigate("/dashboard/play")} // Link to Play tab
           >
             View Map <ArrowRight className="w-4 h-4 ml-1" />
           </Button>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {courses.map((course, index) => (
-            <motion.div key={course.title} variants={itemVariants}>
-              <CourseCard course={course} />
-            </motion.div>
-          ))}
+          {loading ? (
+            <p>Loading your courses...</p>
+          ) : (
+            courses.map((course) => (
+              <motion.div key={course.title} variants={itemVariants}>
+                <CourseCard course={course} />
+              </motion.div>
+            ))
+          )}
 
           {/* "Coming Soon" Card */}
           <motion.div
@@ -294,7 +324,7 @@ function StatCard({ icon: Icon, label, value, color, bgColor }: any) {
 }
 
 function CourseCard({ course }: { course: any }) {
-  const Icon = course.icon; // This now works
+  const Icon = course.icon;
 
   return (
     <div className="group relative bg-white dark:bg-gray-900 rounded-3xl p-6 border border-gray-100 dark:border-gray-800 shadow-sm hover:shadow-xl transition-all duration-300 hover:-translate-y-1 overflow-hidden">

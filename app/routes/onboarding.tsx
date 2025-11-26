@@ -5,6 +5,7 @@ import { CustomizeAvatar } from "~/components/dashboardmodule/CustomizeAvatar";
 import { PrivateRoute } from "~/components/PrivateRoute";
 import CodeOnLogo from "~/components/ui/CodeOnLogo";
 import { motion } from "framer-motion";
+import confetti from "canvas-confetti";
 
 export default function Onboarding() {
   const { user, updateProfile } = useAuth();
@@ -12,11 +13,25 @@ export default function Onboarding() {
 
   const handleSaveAvatar = async (avatarConfig: any) => {
     try {
-      // Save the avatar to Firestore
       await updateProfile({ avatarConfig });
 
-      // After saving, redirect to the dashboard
-      navigate("/dashboard");
+      // 1. Play Sound
+      const audio = new Audio("/success.mp3"); // Make sure this file exists in public/
+      audio.volume = 0.5;
+      audio.play().catch(() => {}); // Catch errors if user hasn't interacted yet
+
+      // 2. Fire Confetti
+      confetti({
+        particleCount: 100,
+        spread: 70,
+        origin: { y: 0.6 },
+        colors: ["#a855f7", "#ec4899", "#3b82f6"],
+      });
+
+      // 3. Delay slightly for effect, then navigate
+      setTimeout(() => {
+        navigate("/dashboard");
+      }, 1500);
     } catch (error) {
       console.error("Failed to save avatar:", error);
       alert("Something went wrong. Please try again.");
@@ -27,7 +42,6 @@ export default function Onboarding() {
     <PrivateRoute>
       <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 dark:from-gray-900 dark:to-gray-800 py-10 px-4">
         <div className="max-w-6xl mx-auto space-y-8">
-          {/* Welcome Header */}
           <motion.div
             initial={{ opacity: 0, y: -20 }}
             animate={{ opacity: 1, y: 0 }}
@@ -36,16 +50,14 @@ export default function Onboarding() {
             <div className="flex justify-center">
               <CodeOnLogo className="h-16 w-16" />
             </div>
-            <h1 className="text-4xl md:text-5xl font-extrabold text-gray-900 dark:text-white">
+            <h1 className="text-4xl md:text-5xl font-extrabold text-gray-900 dark:text-white font-pixelify">
               Welcome, {user?.displayName || "Coder"}!
             </h1>
             <p className="text-xl text-gray-600 dark:text-gray-300 max-w-2xl mx-auto">
-              Before we start your coding journey, let's design your character.
-              This is how other players will see you in the arena.
+              Let's design your character for the arena.
             </p>
           </motion.div>
 
-          {/* Avatar Customizer */}
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
