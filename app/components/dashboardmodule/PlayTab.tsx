@@ -8,55 +8,32 @@ import { challenges } from "~/data/challenges";
 import { useNavigate } from "@remix-run/react";
 import { Challenge } from "~/types/challenge.types";
 
-interface PlayTabProps {
-  onStartMultiplayerQuiz: () => void;
-  onJoinMultiplayerQuiz: () => void;
-}
-
-type ChallengeStatus = "locked" | "unlocked" | "completed";
-
-// ▼▼▼ ALIGNMENT FIX ▼▼▼
-// We define node height (160px = h-40) and gap (32px = gap-8)
-// to calculate the progress line height.
-const NODE_ROW_HEIGHT = 160;
-const NODE_ROW_GAP = 32;
+// Constants for perfect alignment
+const NODE_HEIGHT = 160; // h-40
+const NODE_GAP = 32; // gap-8
 
 export function PlayTab({
   onStartMultiplayerQuiz,
   onJoinMultiplayerQuiz,
-}: PlayTabProps) {
+}: any) {
   const navigate = useNavigate();
+  const [userProgress, setUserProgress] = useState(2);
 
-  // --- MOCK DATA ---
-  const [userProgress, setUserProgress] = useState(2); // User has completed 2 challenges
-  // --- END MOCK DATA ---
-
-  const handleStartSoloChallenge = (challenge: Challenge) => {
-    navigate(`/solo-challenge`, {
-      state: { challenge },
-    });
+  const handleStartSolo = (challenge: Challenge) => {
+    navigate(`/solo-challenge`, { state: { challenge } });
   };
 
-  const getChallengeStatus = (index: number): ChallengeStatus => {
-    if (index < userProgress) return "completed";
-    if (index === userProgress) return "unlocked";
-    return "locked";
-  };
-
-  // ▼▼▼ COLORED LINE FIX ▼▼▼
-  // Calculate the height of the "completed" progress line
-  const progressLineHeight =
+  // Calculate green line height
+  const progressHeight =
     userProgress > 0
-      ? (userProgress - 1) * (NODE_ROW_HEIGHT + NODE_ROW_GAP) +
-        NODE_ROW_HEIGHT / 2
+      ? (userProgress - 1) * (NODE_HEIGHT + NODE_GAP) + NODE_HEIGHT / 2
       : 0;
 
   return (
     <div className="max-w-4xl mx-auto space-y-12 pb-12">
-      {/* Header */}
       <motion.div
-        initial={{ opacity: 0, y: -20 }}
-        animate={{ opacity: 1, y: 0 }}
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
         className="flex items-center gap-3"
       >
         <Gamepad2 className="w-8 h-8 text-indigo-500" />
@@ -65,59 +42,47 @@ export function PlayTab({
         </h1>
       </motion.div>
 
-      {/* Section 1: Multiplayer Battles */}
+      {/* Multiplayer Section */}
       <motion.div
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ delay: 0.1 }}
+        initial={{ y: 20, opacity: 0 }}
+        animate={{ y: 0, opacity: 1 }}
       >
-        <div className="flex items-center gap-3 mb-6">
-          <Users className="w-6 h-6 text-red-500" />
-          <h2 className="text-3xl font-bold text-gray-900 dark:text-white">
-            Multiplayer Battles
-          </h2>
-        </div>
         <MultiplayerQuiz
           onStartMultiplayerQuiz={onStartMultiplayerQuiz}
           onJoinMultiplayerQuiz={onJoinMultiplayerQuiz}
         />
       </motion.div>
 
-      {/* Section 2: Solo Journey */}
+      {/* Solo Journey Section */}
       <motion.div
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
+        initial={{ y: 20, opacity: 0 }}
+        animate={{ y: 0, opacity: 1 }}
         transition={{ delay: 0.2 }}
       >
-        <div className="flex items-center gap-3 mb-8">
-          <Map className="w-6 h-6 text-green-500" />
-          <h2 className="text-3xl font-bold text-gray-900 dark:text-white">
-            Solo Journey
-          </h2>
-        </div>
-
-        {/* The Path */}
         <div className="relative w-full">
-          {/* 1. The gray "background" path line */}
+          {/* Gray Path */}
           <div className="absolute top-0 left-1/2 -translate-x-1/2 h-full w-1.5 bg-gray-200 dark:bg-gray-700 rounded-full" />
+          {/* Green Progress Path */}
+          <div
+            className="absolute top-0 left-1/2 -translate-x-1/2 w-1.5 bg-green-500 rounded-full transition-all duration-500"
+            style={{ height: `${progressHeight}px` }}
+          />
 
-          {/* 2. The green "completed" path line */}
-          {userProgress > 0 && (
-            <div
-              className="absolute top-0 left-1/2 -translate-x-1/2 w-1.5 bg-green-500 rounded-full transition-all duration-500 ease-out"
-              style={{ height: `${progressLineHeight}px` }}
-            />
-          )}
-
-          {/* ▼▼▼ ALIGNMENT FIX: Increased gap to gap-8 ▼▼▼ */}
+          {/* Nodes Container with Gap */}
           <div className="relative z-10 flex flex-col items-center gap-8">
             {challenges.map((challenge, index) => (
               <ChallengeNode
                 key={challenge.id}
                 challenge={challenge}
-                status={getChallengeStatus(index)}
+                status={
+                  index < userProgress
+                    ? "completed"
+                    : index === userProgress
+                    ? "unlocked"
+                    : "locked"
+                }
                 alignment={index % 2 === 0 ? "left" : "right"}
-                onSelect={() => handleStartSoloChallenge(challenge)}
+                onSelect={() => handleStartSolo(challenge)}
               />
             ))}
           </div>

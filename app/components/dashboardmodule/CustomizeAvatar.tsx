@@ -1,43 +1,47 @@
+// app/components/dashboardmodule/CustomizeAvatar.tsx
 import React, { useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "~/components/ui/card";
 import { Button } from "~/components/ui/button";
 import { Label } from "~/components/ui/label";
 import { cn } from "~/lib/utils";
-import { Check, Wand2 } from "lucide-react";
+import { Wand2, User, Shirt, Smile } from "lucide-react";
 import { motion } from "framer-motion";
 import { User as AuthUser } from "firebase/auth";
+import { AvatarDisplay } from "./AvatarDisplay";
 
-// --- Data for Avatar Options ---
+// --- New Options with "none" added ---
 const options = {
-  hairStyle: ["long", "short", "wavy", "curly", "mohawk"],
-  clothingStyle: ["tshirt", "hoodie", "dress", "suit"],
-  accessory: ["none", "glasses", "sunglasses", "hat", "bandana"],
-};
-
-const colors = {
-  skinTone: ["#f2d6c4", "#e0b8a0", "#c6906f", "#a56a49", "#8a4f33", "#603222"],
-  hairColor: ["#000000", "#4a3728", "#b88662", "#f5deb3", "#d2691e", "#ff0000"],
-  eyeColor: ["#000000", "#5b3a29", "#0077be", "#008000"],
-  clothingColor: [
-    "#ff0000",
-    "#0000ff",
-    "#008000",
-    "#ffff00",
-    "#800080",
-    "#ffffff",
+  body: ["male", "female"],
+  // Added "none" to hair, top, bottom, shoes
+  hair: ["none", "default", "style1", "style2"],
+  eyes: ["angry", "disgust", "eepy", "nonchalant", "shock", "sideeye"],
+  mouth: ["smile", "sad", "kissy", "cat", "small", "nonchalant"],
+  top: ["none", "tshirt", "sweater", "sando", "leatherjacket"],
+  bottom: ["none", "pants", "short", "skirt"],
+  shoes: ["none", "shoes", "boots", "slides", "fp"],
+  accessory: [
+    "none",
+    "glassesfull",
+    "glassesround",
+    "glassessquare",
+    "semisquaredglasses",
+    "bowtie",
+    "scarf1",
+    "scarf2",
+    "scarf3",
   ],
 };
 
 const defaultConfig = {
-  skinTone: "#f2d6c4",
-  hairStyle: "short",
-  hairColor: "#000000",
-  eyeColor: "#000000",
-  clothingStyle: "tshirt",
-  clothingColor: "#0000ff",
+  body: "male",
+  hair: "default",
+  eyes: "nonchalant",
+  mouth: "smile",
+  top: "tshirt",
+  bottom: "pants",
+  shoes: "shoes",
   accessory: "none",
 };
-// --- End Data ---
 
 interface CustomizeAvatarProps {
   initialConfig?: any;
@@ -65,167 +69,163 @@ export function CustomizeAvatar({
     setIsLoading(false);
   };
 
-  const generateAvatarURL = (config: any) => {
-    const finalConfig = { ...defaultConfig, ...config };
-    const params = new URLSearchParams({
-      skin: (finalConfig.skinTone || "").replace("#", ""),
-      hair: finalConfig.hairStyle || "short",
-      hairColor: (finalConfig.hairColor || "").replace("#", ""),
-      eyes: (finalConfig.eyeColor || "").replace("#", ""),
-      clothing: finalConfig.clothingStyle || "tshirt",
-      clothingColor: (finalConfig.clothingColor || "").replace("#", ""),
-      accessory: finalConfig.accessory || "none",
-    });
-    return `/api/avatar?${params.toString()}`;
-  };
-
   return (
     <Card className="bg-white dark:bg-gray-900 shadow-lg border-gray-100 dark:border-gray-800 rounded-3xl">
       <CardHeader>
         <CardTitle className="text-2xl font-bold flex items-center gap-2">
           <Wand2 className="w-6 h-6" />
-          Customize Your Avatar
+          Customize Your Look
         </CardTitle>
       </CardHeader>
       <CardContent>
-        {/* ▼▼▼ LAYOUT FIX 1: Widened the grid ▼▼▼ */}
         <div className="grid grid-cols-1 lg:grid-cols-5 gap-8">
-          {/* --- Left Column: Sticky Preview (Wider) --- */}
+          {/* --- Left Column: Sticky Preview --- */}
           <motion.div
             className="lg:col-span-3"
             initial={{ opacity: 0, x: -20 }}
             animate={{ opacity: 1, x: 0 }}
           >
-            <div className="lg:sticky lg:top-28 flex flex-col items-center p-6 bg-gray-50 dark:bg-gray-800/50 rounded-2xl">
-              {/* ▼▼▼ LAYOUT FIX 2: Changed to tall rectangle ▼▼▼ */}
-              <div className="w-full h-[500px] rounded-2xl overflow-hidden bg-gray-200 dark:bg-gray-700 shadow-inner">
-                <img
-                  src={generateAvatarURL(avatarConfig)}
-                  alt="Avatar Preview"
-                  className="w-full h-full object-cover"
-                />
+            <div className="lg:sticky lg:top-28 flex flex-col items-center p-4 bg-gray-50 dark:bg-gray-800/50 rounded-2xl">
+              <div className="w-full h-[600px] rounded-2xl overflow-hidden bg-gray-200 dark:bg-gray-700 shadow-inner relative">
+                <AvatarDisplay config={avatarConfig} />
               </div>
-              {/* ▲▲▲ END OF FIX 2 ▲▲▲ */}
             </div>
           </motion.div>
 
-          {/* --- Right Column: Scrollable Options (Narrower) --- */}
+          {/* --- Right Column: Options --- */}
           <motion.div
-            className="lg:col-span-2 space-y-6"
+            className="lg:col-span-2 space-y-6 h-[600px] overflow-y-auto pr-2 custom-scrollbar"
             initial={{ opacity: 0, x: 20 }}
             animate={{ opacity: 1, x: 0 }}
             transition={{ delay: 0.1 }}
           >
-            {/* Skin Tone */}
-            <OptionCard title="Skin Tone">
-              <div className="grid grid-cols-7 sm:grid-cols-8 gap-2">
-                {colors.skinTone.map((color) => (
-                  <ColorSwatch
-                    key={color}
-                    color={color}
-                    isSelected={avatarConfig.skinTone === color}
-                    onClick={() => setConfigValue("skinTone", color)}
+            {/* Body Type */}
+            <OptionCard title="Body Type" icon={User}>
+              <div className="grid grid-cols-2 gap-3">
+                {options.body.map((item) => (
+                  <ItemSwatch
+                    key={item}
+                    label={item}
+                    isSelected={avatarConfig.body === item}
+                    onClick={() => setConfigValue("body", item)}
                   />
                 ))}
               </div>
             </OptionCard>
 
             {/* Hair */}
-            <OptionCard title="Hair">
-              <div className="space-y-3">
-                <Label className="font-semibold">Style</Label>
-                <div className="grid grid-cols-4 sm:grid-cols-5 gap-3">
-                  {options.hairStyle.map((style) => (
-                    <ItemSwatch
-                      key={style}
-                      label={style}
-                      isSelected={avatarConfig.hairStyle === style}
-                      onClick={() => setConfigValue("hairStyle", style)}
-                    />
-                  ))}
-                </div>
-              </div>
-              <div className="space-y-3">
-                <Label className="font-semibold">Color</Label>
-                <div className="grid grid-cols-7 sm:grid-cols-8 gap-2">
-                  {colors.hairColor.map((color) => (
-                    <ColorSwatch
-                      key={color}
-                      color={color}
-                      isSelected={avatarConfig.hairColor === color}
-                      onClick={() => setConfigValue("hairColor", color)}
-                    />
-                  ))}
-                </div>
-              </div>
-            </OptionCard>
-
-            {/* Eyes (Note: Color won't change, but we keep the UI) */}
-            <OptionCard title="Eyes">
-              <div className="grid grid-cols-7 sm:grid-cols-8 gap-2">
-                {colors.eyeColor.map((color) => (
-                  <ColorSwatch
-                    key={color}
-                    color={color}
-                    isSelected={avatarConfig.eyeColor === color}
-                    onClick={() => setConfigValue("eyeColor", color)}
+            <OptionCard title="Hair" icon={User}>
+              <div className="grid grid-cols-3 sm:grid-cols-3 gap-3">
+                {options.hair.map((item) => (
+                  <ItemSwatch
+                    key={item}
+                    label={item}
+                    isSelected={avatarConfig.hair === item}
+                    onClick={() => setConfigValue("hair", item)}
                   />
                 ))}
               </div>
             </OptionCard>
 
-            {/* Clothing */}
-            <OptionCard title="Clothing">
-              <div className="space-y-3">
-                <Label className="font-semibold">Style</Label>
-                <div className="grid grid-cols-4 sm:grid-cols-5 gap-3">
-                  {options.clothingStyle.map((style) => (
-                    <ItemSwatch
-                      key={style}
-                      label={style}
-                      isSelected={avatarConfig.clothingStyle === style}
-                      onClick={() => setConfigValue("clothingStyle", style)}
-                    />
-                  ))}
-                </div>
+            {/* Face */}
+            <OptionCard title="Face" icon={Smile}>
+              <Label className="mb-2 block text-xs uppercase text-muted-foreground">
+                Eyes
+              </Label>
+              <div className="grid grid-cols-3 sm:grid-cols-3 gap-3 mb-4">
+                {options.eyes.map((item) => (
+                  <ItemSwatch
+                    key={item}
+                    label={item}
+                    isSelected={avatarConfig.eyes === item}
+                    onClick={() => setConfigValue("eyes", item)}
+                  />
+                ))}
               </div>
-              <div className="space-y-3">
-                <Label className="font-semibold">Color</Label>
-                <div className="grid grid-cols-7 sm:grid-cols-8 gap-2">
-                  {colors.clothingColor.map((color) => (
-                    <ColorSwatch
-                      key={color}
-                      color={color}
-                      isSelected={avatarConfig.clothingColor === color}
-                      onClick={() => setConfigValue("clothingColor", color)}
-                    />
-                  ))}
-                </div>
+
+              <Label className="mb-2 block text-xs uppercase text-muted-foreground">
+                Mouth
+              </Label>
+              <div className="grid grid-cols-3 sm:grid-cols-3 gap-3">
+                {options.mouth.map((item) => (
+                  <ItemSwatch
+                    key={item}
+                    label={item}
+                    isSelected={avatarConfig.mouth === item}
+                    onClick={() => setConfigValue("mouth", item)}
+                  />
+                ))}
+              </div>
+            </OptionCard>
+
+            {/* Outfit */}
+            <OptionCard title="Outfit" icon={Shirt}>
+              <Label className="mb-2 block text-xs uppercase text-muted-foreground">
+                Tops
+              </Label>
+              <div className="grid grid-cols-3 sm:grid-cols-2 gap-3 mb-4">
+                {options.top.map((item) => (
+                  <ItemSwatch
+                    key={item}
+                    label={item}
+                    isSelected={avatarConfig.top === item}
+                    onClick={() => setConfigValue("top", item)}
+                  />
+                ))}
+              </div>
+
+              <Label className="mb-2 block text-xs uppercase text-muted-foreground">
+                Bottoms
+              </Label>
+              <div className="grid grid-cols-3 gap-3 mb-4">
+                {options.bottom.map((item) => (
+                  <ItemSwatch
+                    key={item}
+                    label={item}
+                    isSelected={avatarConfig.bottom === item}
+                    onClick={() => setConfigValue("bottom", item)}
+                  />
+                ))}
+              </div>
+
+              <Label className="mb-2 block text-xs uppercase text-muted-foreground">
+                Shoes
+              </Label>
+              <div className="grid grid-cols-3 sm:grid-cols-2 gap-3">
+                {options.shoes.map((item) => (
+                  <ItemSwatch
+                    key={item}
+                    label={item}
+                    isSelected={avatarConfig.shoes === item}
+                    onClick={() => setConfigValue("shoes", item)}
+                  />
+                ))}
               </div>
             </OptionCard>
 
             {/* Accessories */}
-            <OptionCard title="Accessory">
-              <div className="grid grid-cols-4 sm:grid-cols-5 gap-3">
-                {options.accessory.map((style) => (
+            <OptionCard title="Accessories" icon={Wand2}>
+              <div className="grid grid-cols-3 sm:grid-cols-3 gap-3">
+                {options.accessory.map((item) => (
                   <ItemSwatch
-                    key={style}
-                    label={style}
-                    isSelected={avatarConfig.accessory === style}
-                    onClick={() => setConfigValue("accessory", style)}
+                    key={item}
+                    label={item}
+                    isSelected={avatarConfig.accessory === item}
+                    onClick={() => setConfigValue("accessory", item)}
                   />
                 ))}
               </div>
             </OptionCard>
 
-            {/* Save Button */}
-            <Button
-              onClick={handleSave}
-              disabled={isLoading}
-              className="w-full h-12 rounded-xl font-bold text-lg"
-            >
-              {isLoading ? "Saving..." : "Save Avatar"}
-            </Button>
+            <div className="pt-4">
+              <Button
+                onClick={handleSave}
+                disabled={isLoading}
+                className="w-full h-12 rounded-xl font-bold text-lg bg-indigo-600 hover:bg-indigo-700 text-white"
+              >
+                {isLoading ? "Saving..." : "Save Avatar"}
+              </Button>
+            </div>
           </motion.div>
         </div>
       </CardContent>
@@ -233,48 +233,27 @@ export function CustomizeAvatar({
   );
 }
 
-// --- Sub-components (OptionCard, ColorSwatch, ItemSwatch) ---
-// (These are unchanged from the previous version)
+// --- Sub-components ---
 
 function OptionCard({
   title,
+  icon: Icon,
   children,
 }: {
   title: string;
+  icon: any;
   children: React.ReactNode;
 }) {
   return (
     <Card className="bg-gray-50/50 dark:bg-gray-800/30 shadow-inner border-gray-200 dark:border-gray-700/50">
-      <CardHeader>
-        <CardTitle className="text-xl">{title}</CardTitle>
+      <CardHeader className="pb-2">
+        <CardTitle className="text-lg flex items-center gap-2 text-gray-700 dark:text-gray-200">
+          <Icon className="w-5 h-5" />
+          {title}
+        </CardTitle>
       </CardHeader>
-      <CardContent className="space-y-4">{children}</CardContent>
+      <CardContent>{children}</CardContent>
     </Card>
-  );
-}
-
-function ColorSwatch({
-  color,
-  isSelected,
-  onClick,
-}: {
-  color: string;
-  isSelected: boolean;
-  onClick: () => void;
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className={cn(
-        "w-10 h-10 rounded-full border-2 border-white/50 shadow-md transition-all flex items-center justify-center",
-        isSelected ? "border-4 border-indigo-500 scale-110" : "hover:scale-110"
-      )}
-      style={{ backgroundColor: color }}
-      aria-label={color}
-    >
-      {isSelected && <Check className="w-5 h-5 text-white" />}
-    </button>
   );
 }
 
@@ -292,15 +271,15 @@ function ItemSwatch({
       type="button"
       onClick={onClick}
       className={cn(
-        "w-16 h-16 rounded-full border-2 shadow-md transition-all flex items-center justify-center p-1 text-center",
+        "h-12 rounded-xl border-2 shadow-sm transition-all flex items-center justify-center px-2 text-center",
         isSelected
-          ? "border-4 border-indigo-500 bg-indigo-100 dark:bg-indigo-900"
-          : "bg-white dark:bg-gray-700 border-gray-200 dark:border-gray-600 hover:bg-gray-100"
+          ? "border-indigo-500 bg-indigo-100 dark:bg-indigo-900/50 text-indigo-700 dark:text-indigo-200"
+          : "bg-white dark:bg-gray-700 border-gray-200 dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-600 text-gray-600 dark:text-gray-300"
       )}
       title={label}
     >
-      <span className="text-[10px] font-bold uppercase tracking-wide text-gray-700 dark:text-gray-300">
-        {label}
+      <span className="text-xs font-bold capitalize truncate w-full">
+        {label.replace(/([A-Z])/g, " $1").trim()}
       </span>
     </button>
   );

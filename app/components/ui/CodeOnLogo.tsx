@@ -18,7 +18,7 @@ export default function CodeOnLogo({ className = "h-8 w-8" }: LogoProps) {
         - Hidden when dark mode is active ("dark:hidden")
       */}
       <img
-        src="/CodeON_LOGO.png"
+        src="/logo/CodeON_LOGO.png"
         alt="CodeON Logo"
         className={`block dark:hidden ${className}`}
       />
@@ -27,7 +27,7 @@ export default function CodeOnLogo({ className = "h-8 w-8" }: LogoProps) {
         - Shown when dark mode is active ("dark:block")
       */}
       <img
-        src="/CodeON_LOGODark.png"
+        src="/logo/CodeON_LOGODark.png"
         alt="CodeON Logo"
         className={`hidden dark:block ${className}`}
       />

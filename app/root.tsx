@@ -28,11 +28,11 @@ export const links: LinksFunction = () => [
   },
   {
     rel: "shortcut icon",
-    href: "/CodeON_LOGODark.ico",
+    href: "/logo/CodeON_LOGODark.ico",
   },
 ];
 
-export const meta: MetaFunction = () => [{ title: "My Remix App" }];
+export const meta: MetaFunction = () => [{ title: "CodeON App" }];
 
 export function Layout({ children }: { children: React.ReactNode }) {
   return (

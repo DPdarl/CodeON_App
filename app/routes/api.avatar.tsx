@@ -1,101 +1,126 @@
-// RENAME THIS FILE to: app/routes/api.avatar.tsx
-
+// app/routes/api.avatar.tsx
 import { LoaderFunctionArgs } from "@remix-run/node";
-import { createAvatar } from "@dicebear/core";
-import { bigSmile } from "@dicebear/collection";
-
-// --- These are the *actual* valid types based on the error messages ---
-const validHair: string[] = [
-  "shortHair",
-  "mohawk",
-  "wavyBob",
-  "bowlCutHair",
-  "curlyBob",
-  "straightHair",
-  "braids",
-  "shavedHead",
-  "bunHair",
-  "froBun",
-  "bangs",
-  "halfShavedHead",
-  "curlyShortHair",
-];
-
-const validAccessories: string[] = [
-  "glasses",
-  "sunglasses",
-  "catEars",
-  "sailormoonCrown",
-  "clownNose",
-  "sleepMask",
-  "faceMask",
-  "mustache",
-];
-
-const validClothing: string[] = ["shirt", "hoodie", "suit", "dress"];
-
-// Helper to map your frontend names to the library's names
-const mapHair = (hairParam: string | null): string => {
-  const map: { [key: string]: string } = {
-    short: "shortHair",
-    long: "straightHair",
-    wavy: "wavyBob",
-    curly: "curlyBob",
-    mohawk: "mohawk",
-  };
-  const mappedValue = map[hairParam || "short"];
-  return validHair.includes(mappedValue) ? mappedValue : "shortHair";
-};
-
-const mapAccessory = (accParam: string | null): string | undefined => {
-  if (!accParam || accParam === "none") return undefined;
-  if (validAccessories.includes(accParam)) return accParam;
-  return undefined; // 'hat' and 'bandana' are not supported, so return undefined
-};
-
-const mapClothing = (clothingParam: string | null): string => {
-  if (clothingParam === "tshirt") return "shirt";
-  if (clothingParam && validClothing.includes(clothingParam))
-    return clothingParam;
-  return "shirt";
-};
 
 export async function loader({ request }: LoaderFunctionArgs) {
   const url = new URL(request.url);
 
-  // Get params and map them to valid, safe types
-  const skin = url.searchParams.get("skin") || "f2d6c4";
-  const hair = mapHair(url.searchParams.get("hair"));
-  const hairColor = url.searchParams.get("hairColor") || "000000";
-  const clothing = mapClothing(url.searchParams.get("clothing"));
-  const clothingColor = url.searchParams.get("clothingColor") || "0000ff";
-  const accessories = mapAccessory(url.searchParams.get("accessory"));
+  const body = url.searchParams.get("body") || "male";
+  const eyes = url.searchParams.get("eyes") || "normal";
+  const hair = url.searchParams.get("hair") || "default";
+  const mouth = url.searchParams.get("mouth") || "smile";
+  const top = url.searchParams.get("top") || "tshirt";
+  const bottom = url.searchParams.get("bottom") || "pants";
+  const shoes = url.searchParams.get("shoes") || "shoes";
+  const accessory = url.searchParams.get("accessory") || "none";
 
-  // Build the options object
-  // We have to use 'any' because the DiceBear types are strict
-  const options: any = {
-    skinColor: [skin],
-    hair: [hair],
-    hairColor: [hairColor],
-    clothing: [clothing],
-    clothingColor: [clothingColor],
-    eyes: ["normal"], // 'bigSmile' does not support eye *color*
-  };
+  const isHeadOnly = url.searchParams.get("head") === "true";
 
-  // Only add accessories if a valid one was selected
-  if (accessories) {
-    options.accessories = [accessories];
-    options.accessoriesProbability = 100;
+  // Body
+  const bodyPath =
+    body === "female"
+      ? "/assets/body/BaseBodyFemale.png"
+      : "/assets/body/BaseBodyMale.png";
+
+  // Eyes
+  let eyesFile = `${eyes}.png`;
+  if (eyes === "angry") {
+    eyesFile = body === "female" ? "angryf.png" : "angrym.png";
+  } else if (eyes === "normal") {
+    eyesFile = body === "female" ? "normalf.png" : "normalm.png";
+  }
+  const eyesPath = `/assets/eyes/${eyesFile}`;
+
+  // Hair
+  let hairPath = null;
+  if (hair !== "none") {
+    let hairFile = "HairDefaultM1.png";
+    if (body === "female") {
+      if (hair === "default") hairFile = "HairDefaultF2.png";
+      else if (hair === "style1") hairFile = "HairStyleF1.png";
+      else if (hair === "style2") hairFile = "HairStyleF3.png";
+      else hairFile = "HairDefaultF2.png";
+    } else {
+      if (hair === "default") hairFile = "HairDefaultM1.png";
+      else if (hair === "style1") hairFile = "HairStyleM2.png";
+      else if (hair === "style2") hairFile = "HairStyleM3.png";
+      else hairFile = "HairDefaultM1.png";
+    }
+    hairPath = `/assets/hair/${hairFile}`;
   }
 
-  // 4. Create the avatar SVG
-  const svg = createAvatar(bigSmile, options).toString();
+  // Mouth
+  const mouthPath = `/assets/mouth/${mouth}.png`;
 
-  // 5. Send the SVG back as an image
-  return new Response(svg, {
+  // Tops
+  let topPath = null;
+  if (top !== "none") {
+    const genderedTops = ["leatherjacket", "sando", "sweater", "tshirt"];
+    let topFile = `${top}.png`;
+    if (body === "female" && genderedTops.includes(top)) {
+      topFile = `${top}f.png`;
+    }
+    topPath = `/assets/tops/${topFile}`;
+  }
+
+  // Bottoms
+  let bottomPath = null;
+  if (bottom !== "none") {
+    bottomPath = `/assets/bottoms/${bottom}.png`;
+  }
+
+  // Shoes
+  let shoesPath = null;
+  if (shoes !== "none") {
+    let shoesFile = `${shoes}.png`;
+    if (shoes === "shoes" && body === "female") {
+      shoesFile = "shoesf.png";
+    }
+    shoesPath = `/assets/shoes/${shoesFile}`;
+  }
+
+  // Accessory
+  const accessoryPath =
+    accessory !== "none" ? `/assets/accessories/${accessory}.png` : null;
+
+  const viewBox = isHeadOnly ? "350 50 800 800" : "0 0 1500 2000";
+
+  const svgContent = `
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="${viewBox}" preserveAspectRatio="xMidYMid meet">
+      <image href="${bodyPath}" x="0" y="0" width="100%" height="100%"/>
+      <image href="${eyesPath}" x="0" y="0" width="100%" height="100%"/>
+      <image href="${mouthPath}" x="0" y="0" width="100%" height="100%"/>
+      ${
+        bottomPath
+          ? `<image href="${bottomPath}" x="0" y="0" width="100%" height="100%"/>`
+          : ""
+      }
+      ${
+        topPath
+          ? `<image href="${topPath}" x="0" y="0" width="100%" height="100%"/>`
+          : ""
+      }
+      ${
+        shoesPath
+          ? `<image href="${shoesPath}" x="0" y="0" width="100%" height="100%"/>`
+          : ""
+      }
+      ${
+        hairPath
+          ? `<image href="${hairPath}" x="0" y="0" width="100%" height="100%"/>`
+          : ""
+      }
+      ${
+        accessoryPath
+          ? `<image href="${accessoryPath}" x="0" y="0" width="100%" height="100%"/>`
+          : ""
+      }
+    </svg>
+  `;
+
+  return new Response(svgContent, {
     headers: {
       "Content-Type": "image/svg+xml",
-      "Cache-Control": "public, max-age=604800",
+      "Cache-Control": "no-store, max-age=0",
     },
   });
 }

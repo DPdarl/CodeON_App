@@ -1,4 +1,3 @@
-// app/components/dashboardmodule/ProfileTab.tsx
 import { useState, useEffect } from "react";
 import { useAuth } from "~/contexts/AuthContext";
 import { User as AuthUser } from "firebase/auth";
@@ -7,24 +6,15 @@ import {
   CardHeader,
   CardTitle,
   CardContent,
-  CardDescription,
   CardFooter,
 } from "~/components/ui/card";
 import { Button } from "~/components/ui/button";
 import { Input } from "~/components/ui/input";
 import { Label } from "~/components/ui/label";
-import { Avatar, AvatarFallback, AvatarImage } from "~/components/ui/avatar";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "~/components/ui/tabs";
 import { CustomizeAvatar } from "./CustomizeAvatar";
-import {
-  User,
-  Mail,
-  Calendar,
-  Zap,
-  Flame,
-  Trophy,
-  Sparkles, // Added Sparkles
-} from "lucide-react";
+import { AvatarDisplay } from "./AvatarDisplay"; // <-- Import the display component
+import { User, Calendar, Zap, Flame, Trophy, Sparkles } from "lucide-react";
 import { motion } from "framer-motion";
 
 interface ProfileTabProps {
@@ -67,19 +57,7 @@ export function ProfileTab({ user, onSaveAvatar }: ProfileTabProps) {
     ? new Date(user.metadata.creationTime).toLocaleDateString()
     : "N/A";
 
-  const getUserInitials = (name: string | null | undefined) => {
-    if (!name) return "U";
-    return name
-      .split(" ")
-      .map((n) => n[0])
-      .join("")
-      .toUpperCase()
-      .slice(0, 2);
-  };
-
   return (
-    // ▼▼▼ THIS IS THE FIX ▼▼▼
-    // Changed max-w-4xl to max-w-6xl
     <div className="max-w-6xl mx-auto space-y-8 pb-12">
       {/* --- 1. Duolingo-style Profile Header --- */}
       <motion.div
@@ -88,12 +66,16 @@ export function ProfileTab({ user, onSaveAvatar }: ProfileTabProps) {
       >
         <Card className="bg-white dark:bg-gray-900 shadow-lg border-gray-100 dark:border-gray-800 rounded-3xl overflow-hidden">
           <CardContent className="p-6 flex flex-col sm:flex-row items-center gap-6">
-            <Avatar className="w-24 h-24 border-4 border-indigo-500 shadow-md">
-              <AvatarImage src={user?.photoURL || undefined} />
-              <AvatarFallback className="text-3xl">
-                {getUserInitials(user?.displayName)}
-              </AvatarFallback>
-            </Avatar>
+            {/* ▼▼▼ UPDATED: Use AvatarDisplay for Profile Picture ▼▼▼ */}
+            <div className="w-24 h-24 rounded-full overflow-hidden border-4 border-indigo-500 shadow-md bg-gray-100 dark:bg-gray-800 flex-shrink-0">
+              <AvatarDisplay
+                // @ts-ignore - Cast to any to access avatarConfig safely
+                config={(user as any)?.avatarConfig}
+                headOnly
+              />
+            </div>
+            {/* ▲▲▲ END UPDATE ▲▲▲ */}
+
             <div className="text-center sm:text-left">
               <h1 className="text-3xl font-extrabold text-gray-900 dark:text-white">
                 {user?.displayName || "New Coder"}
@@ -195,7 +177,7 @@ export function ProfileTab({ user, onSaveAvatar }: ProfileTabProps) {
               <CustomizeAvatar
                 user={user}
                 // @ts-ignore
-                initialConfig={user?.avatarConfig}
+                initialConfig={(user as any)?.avatarConfig}
                 onSave={onSaveAvatar}
               />
             </div>

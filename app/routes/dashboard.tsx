@@ -9,10 +9,7 @@ import { DashboardTabs } from "~/components/dashboardmodule/DashboardTabs";
 import { DashboardHeader } from "~/components/dashboardmodule/DashboardHeader";
 
 export const meta: MetaFunction = () => {
-  return [
-    { title: "Dashboard | CodeON" },
-    { name: "description", content: "Your CodeON dashboard" },
-  ];
+  return [{ title: "Dashboard | CodeON" }];
 };
 
 export default function Dashboard() {
@@ -39,59 +36,22 @@ export default function Dashboard() {
     localStorage.theme = isDarkMode ? "dark" : "light";
   };
 
-  const handleLogout = async () => {
-    try {
-      await logout();
-    } catch (error) {
-      console.error("Error logging out:", error);
-    }
-  };
-
-  const toggleSidebar = () => {
-    setSidebarCollapsed(!sidebarCollapsed);
-  };
-
-  // Multiplayer Quiz Logic
-  const startMultiplayerQuiz = () => {
-    const gameId = Math.random().toString(36).substring(2, 8);
-    navigate(`/multiplayer/${gameId}`);
-  };
-
-  const joinMultiplayerQuiz = () => {
-    const gameCode = prompt("Enter game code:");
-    if (gameCode) {
-      navigate(`/multiplayer/${gameCode}`);
-    }
-  };
-
-  // Avatar Logic
+  // ▼▼▼ SAVE LOGIC (Database Ready) ▼▼▼
   const handleSaveAvatar = async (avatarConfig: any) => {
     try {
-      await updateProfile({
-        displayName: user?.displayName ?? undefined,
-        photoURL: generateAvatarURL(avatarConfig),
-        avatarConfig: avatarConfig,
-      });
+      console.log("Saving to DB:", avatarConfig);
+      // This saves to Firestore AND updates the UI instantly
+      await updateProfile({ avatarConfig });
       alert("Avatar saved successfully!");
     } catch (error) {
-      console.error("Error saving avatar:", error);
-      alert("Error saving avatar. Please try again.");
+      console.error("Save failed:", error);
+      alert("Error saving avatar.");
     }
   };
 
-  const generateAvatarURL = (config: any) => {
-    const params = new URLSearchParams({
-      skin: config.skinTone.replace("#", ""),
-      hair: config.hairStyle,
-      hairColor: config.hairColor.replace("#", ""),
-      eyes: config.eyeColor.replace("#", ""),
-      clothing: config.clothingStyle,
-      clothingColor: config.clothingColor.replace("#", ""),
-      accessory: config.accessory,
-    });
-    return `/api/avatar?${params.toString()}`;
-  };
-
+  // Layout Logic
+  const toggleSidebar = () => setSidebarCollapsed(!sidebarCollapsed);
+  const handleLogout = async () => await logout();
   const handleTabChange = (tab: string) => {
     if (tab === "logout") {
       handleLogout();
@@ -102,16 +62,13 @@ export default function Dashboard() {
 
   return (
     <PrivateRoute>
-      {/* ▼▼▼ SIDEBAR FIX ▼▼▼
-        h-screen: sets height to 100% of the viewport.
-        overflow-hidden: prevents the *whole page* from scrolling.
-      */}
+      {/* ▼▼▼ LAYOUT FIX: h-screen + overflow-hidden ▼▼▼ */}
       <div className="flex h-screen overflow-hidden bg-gradient-to-br from-blue-50 to-indigo-100 dark:from-gray-900 dark:to-gray-800">
-        {/* Sidebar Navigation */}
+        {/* Fixed Sidebar */}
         <div
           className={`flex-shrink-0 transition-all duration-300 ${
             sidebarCollapsed ? "w-24" : "w-64"
-          } h-screen`} // Added h-screen
+          } h-screen`}
         >
           <Sidebar
             activeTab={activeTab}
@@ -122,28 +79,28 @@ export default function Dashboard() {
           />
         </div>
 
-        {/* ▼▼▼ SCROLLING CONTENT FIX ▼▼▼
-          flex-1: makes it take up the remaining space.
-          overflow-y-auto: makes ONLY this div scrollable.
-        */}
+        {/* Scrollable Content Area */}
         <div className="flex-1 flex flex-col overflow-y-auto transition-all duration-300">
           <DashboardHeader
             user={user}
             sidebarCollapsed={sidebarCollapsed}
             onToggleSidebar={toggleSidebar}
-            stats={{ streaks: 5, coins: 1200, hearts: 3 }} // Mock stats
+            stats={{
+              streaks: user?.streaks || 0,
+              coins: user?.coins || 0,
+              hearts: user?.hearts || 5,
+            }}
             onSwitchTheme={handleSwitchTheme}
             onLogout={handleLogout}
           />
 
-          {/* Main Content Area */}
           <main className="p-6">
             <DashboardTabs
               activeTab={activeTab}
               user={user}
-              onSaveAvatar={handleSaveAvatar}
-              onStartMultiplayerQuiz={startMultiplayerQuiz}
-              onJoinMultiplayerQuiz={joinMultiplayerQuiz}
+              onSaveAvatar={handleSaveAvatar} // Pass the save function
+              onStartMultiplayerQuiz={() => {}}
+              onJoinMultiplayerQuiz={() => {}}
             />
           </main>
         </div>
