@@ -1,12 +1,14 @@
 // app/components/dashboardmodule/PlayTab.tsx
 import { useState } from "react";
-import { Gamepad2, Users, Map } from "lucide-react";
+import { Gamepad2, Users, Map, Lock } from "lucide-react";
 import { MultiplayerQuiz } from "./MultiplayerQuiz";
 import { ChallengeNode } from "./ChallengeNode";
 import { motion } from "framer-motion";
 import { challenges } from "~/data/challenges";
 import { useNavigate } from "@remix-run/react";
 import { Challenge } from "~/types/challenge.types";
+import { useAuth } from "~/contexts/AuthContext";
+import { Button } from "~/components/ui/button";
 
 // Constants for perfect alignment
 const NODE_HEIGHT = 160; // h-40
@@ -17,11 +19,18 @@ export function PlayTab({
   onJoinMultiplayerQuiz,
 }: any) {
   const navigate = useNavigate();
+  const { user } = useAuth();
+
+  // TODO: Connect this to user.completedChallenges.length in the future
   const [userProgress, setUserProgress] = useState(2);
 
   const handleStartSolo = (challenge: Challenge) => {
     navigate(`/solo-challenge`, { state: { challenge } });
   };
+
+  // Logic: Unlock at Level 5
+  const currentLevel = user?.level || 1;
+  const isMultiplayerUnlocked = currentLevel >= 5;
 
   // Calculate green line height
   const progressHeight =
@@ -42,15 +51,46 @@ export function PlayTab({
         </h1>
       </motion.div>
 
-      {/* Multiplayer Section */}
+      {/* Multiplayer Section (Conditional Lock) */}
       <motion.div
         initial={{ y: 20, opacity: 0 }}
         animate={{ y: 0, opacity: 1 }}
       >
-        <MultiplayerQuiz
-          onStartMultiplayerQuiz={onStartMultiplayerQuiz}
-          onJoinMultiplayerQuiz={onJoinMultiplayerQuiz}
-        />
+        {isMultiplayerUnlocked ? (
+          <MultiplayerQuiz
+            onStartMultiplayerQuiz={onStartMultiplayerQuiz}
+            onJoinMultiplayerQuiz={onJoinMultiplayerQuiz}
+          />
+        ) : (
+          /* LOCKED STATE CARD */
+          <div className="relative overflow-hidden rounded-3xl border-2 border-dashed border-gray-300 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/50 p-8 md:p-12 text-center">
+            {/* Blurry Background Elements for visual interest */}
+            <div className="absolute top-0 right-0 -mr-16 -mt-16 h-64 w-64 rounded-full bg-indigo-500/5 blur-3xl" />
+            <div className="absolute bottom-0 left-0 -ml-16 -mb-16 h-64 w-64 rounded-full bg-purple-500/5 blur-3xl" />
+
+            <div className="relative z-10 flex flex-col items-center justify-center space-y-4">
+              <div className="h-16 w-16 rounded-2xl bg-gray-200 dark:bg-gray-700 flex items-center justify-center mb-2 shadow-inner">
+                <Lock className="w-8 h-8 text-gray-400 dark:text-gray-500" />
+              </div>
+
+              <h2 className="text-2xl font-bold text-gray-500 dark:text-gray-400">
+                Multiplayer Arena Locked
+              </h2>
+
+              <p className="text-gray-400 max-w-md mx-auto">
+                Prove your skills in the solo journey first. Reach{" "}
+                <span className="font-bold text-indigo-500">Level 5</span> to
+                unlock competitive coding battles!
+              </p>
+
+              <div className="pt-4">
+                <div className="inline-flex items-center px-4 py-2 rounded-full bg-gray-200 dark:bg-gray-700 text-gray-600 dark:text-gray-300 font-mono text-sm font-bold">
+                  Current Level: {currentLevel} / 5
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
       </motion.div>
 
       {/* Solo Journey Section */}

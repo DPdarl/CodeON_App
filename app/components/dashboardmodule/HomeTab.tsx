@@ -1,3 +1,4 @@
+// app/components/dashboardmodule/HomeTab.tsx
 import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
 import {
@@ -10,16 +11,20 @@ import {
   Terminal,
   Cpu,
   ArrowRight,
-  Play,
   Brain,
+  Loader2,
+  Play, // Added Play icon import (was missing in imports but used in JSX)
 } from "lucide-react";
 import { Button } from "~/components/ui/button";
 import { Progress } from "~/components/ui/progress";
-import { Link, useNavigate } from "@remix-run/react";
+import { useNavigate } from "@remix-run/react";
 import { useAuth } from "~/contexts/AuthContext";
 import { collection, getDocs, getFirestore } from "firebase/firestore";
 import app from "~/lib/firebase";
 import { Challenge } from "~/types/challenge.types";
+import { SelectionCarousel } from "./SelectionCarousel";
+import { PlayTab } from "./PlayTab";
+import { calculateProgress } from "~/lib/leveling-system"; // 1. Import XP Logic
 
 const db = getFirestore(app);
 
@@ -59,7 +64,11 @@ const getIconForLanguage = (lang: string) => {
   }
 };
 
-export function HomeTab() {
+interface HomeTabProps {
+  onTabChange: (tab: string) => void;
+}
+
+export function HomeTab({ onTabChange }: HomeTabProps) {
   const { user } = useAuth();
   const navigate = useNavigate();
   const [challenges, setChallenges] = useState<Challenge[]>([]);
@@ -85,40 +94,26 @@ export function HomeTab() {
     fetchChallenges();
   }, []);
 
-  // 2. Calculate Stats from Real User Data
+  // 2. Calculate Stats using the new XP System
+  const progressData = calculateProgress(user?.xp || 0);
+
   const stats = {
-    level: user?.level || 1,
-    rank: "Novice", // You could calculate this based on Level (e.g., >Lvl10 = "Intermediate")
-    xp: user?.xp || 0,
-    maxXp: (user?.level || 1) * 1000, // Example: Level 1 = 1000 max, Level 2 = 2000 max
+    // Level & Bar Progress (for Hero Card)
+    level: progressData.currentLevel,
+    currentBarXP: progressData.currentXP, // XP earned in this level
+    maxBarXP: progressData.xpForNextLevel, // XP needed to finish this level
+
+    // Global Stats (for Grid)
+    totalXp: user?.xp || 0, // Lifetime XP
+    rank: user?.league || "Novice", // Real League from DB
     streak: user?.streaks || 0,
   };
 
-  // 3. Group Challenges into "Courses" (Dynamic from DB)
-  const getCourseGroups = () => {
-    const groups: Record<string, Challenge[]> = {};
-
-    challenges.forEach((challenge) => {
-      const lang = (challenge as any).language;
-      const key =
-        typeof lang === "string" && lang.trim() !== "" ? lang : "General";
-      if (!groups[key]) {
-        groups[key] = [];
-      }
-      groups[key].push(challenge);
+  const handleSelectChallenge = (challenge: Challenge) => {
+    navigate(`/solo-challenge`, {
+      state: { challenge },
     });
-
-    return Object.entries(groups).map(([title, items]) => ({
-      title,
-      count: items.length,
-      // TODO: Calculate real progress based on user.completedChallenges
-      progress: 0,
-      color: getColorForLanguage(title),
-      icon: getIconForLanguage(title),
-    }));
   };
-
-  const courses = getCourseGroups();
 
   // Animation variants
   const containerVariants = {
@@ -154,7 +149,7 @@ export function HomeTab() {
                   Rank: {stats.rank}
                 </span>
               </div>
-              <h1 className="text-3xl md:text-4xl font-extrabold mb-2 tracking-tight">
+              <h1 className="text-3xl md:text-4xl font-extrabold mb-2 tracking-tight font-pixelify">
                 Welcome back, {user?.displayName || "Traveler"}!
               </h1>
               <p className="text-indigo-100 max-w-lg text-lg">
@@ -163,21 +158,23 @@ export function HomeTab() {
               </p>
             </div>
 
-            {/* Level / XP Card */}
+            {/* Level / XP Card (UPDATED with Real Logic) */}
             <div className="bg-black/20 backdrop-blur-sm rounded-2xl p-6 min-w-[280px] border border-white/10">
               <div className="flex justify-between items-end mb-2">
                 <span className="text-2xl font-black">Lvl {stats.level}</span>
                 <span className="text-sm text-indigo-200 font-mono">
-                  {stats.xp}/{stats.maxXp} XP
+                  {stats.currentBarXP}/{stats.maxBarXP} XP
                 </span>
               </div>
+              {/* Progress Bar now reflects progress WITHIN the current level */}
               <Progress
-                value={(stats.xp / stats.maxXp) * 100}
+                value={(stats.currentBarXP / stats.maxBarXP) * 100}
                 className="h-3 bg-black/30"
                 indicatorClassName="bg-gradient-to-r from-yellow-300 to-yellow-500"
               />
               <p className="text-xs text-indigo-200 mt-3 text-right">
-                {stats.maxXp - stats.xp} XP to Level {stats.level + 1}
+                {stats.maxBarXP - stats.currentBarXP} XP to Level{" "}
+                {stats.level + 1}
               </p>
             </div>
           </div>
@@ -196,7 +193,7 @@ export function HomeTab() {
         <StatCard
           icon={Zap}
           label="Total XP"
-          value={stats.xp.toString()}
+          value={stats.totalXp.toLocaleString()}
           color="text-yellow-500"
           bgColor="bg-yellow-50 dark:bg-yellow-950/30"
         />
@@ -210,13 +207,13 @@ export function HomeTab() {
         <StatCard
           icon={Trophy}
           label="Badges"
-          value="3" // TODO: Fetch real badges length
+          value="3"
           color="text-purple-500"
           bgColor="bg-purple-50 dark:bg-purple-950/30"
         />
       </div>
 
-      {/* --- My Journey (Courses) --- */}
+      {/* --- Carousel Section --- */}
       <motion.div
         variants={containerVariants}
         initial="hidden"
@@ -226,44 +223,37 @@ export function HomeTab() {
         <div className="flex justify-between items-center">
           <h2 className="text-2xl font-bold text-gray-900 dark:text-white flex items-center gap-2">
             <Map className="w-6 h-6 text-indigo-500" />
-            Your Journey
+            Available Challenges
           </h2>
           <Button
             variant="ghost"
             className="text-indigo-600 dark:text-indigo-400 font-semibold"
-            onClick={() => navigate("/dashboard/play")} // Link to Play tab
+            onClick={() => onTabChange("play")}
           >
             View Map <ArrowRight className="w-4 h-4 ml-1" />
           </Button>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {loading ? (
-            <p>Loading your courses...</p>
-          ) : (
-            courses.map((course) => (
-              <motion.div key={course.title} variants={itemVariants}>
-                <CourseCard course={course} />
-              </motion.div>
-            ))
-          )}
-
-          {/* "Coming Soon" Card */}
-          <motion.div
-            variants={itemVariants}
-            className="group relative h-full min-h-[200px] rounded-3xl border-2 border-dashed border-gray-300 dark:border-gray-700 flex flex-col items-center justify-center p-6 text-center hover:border-indigo-300 transition-colors cursor-pointer bg-gray-50 dark:bg-gray-800/50"
-          >
-            <div className="w-12 h-12 rounded-full bg-gray-200 dark:bg-gray-700 flex items-center justify-center mb-3 group-hover:scale-110 transition-transform">
-              <Code2 className="w-6 h-6 text-gray-400" />
-            </div>
-            <h3 className="font-bold text-gray-500 dark:text-gray-400">
-              Discover New Lands
-            </h3>
-            <p className="text-sm text-gray-400 mt-1">
-              More courses coming soon!
+        {/* Load Carousel or Loading State */}
+        {loading ? (
+          <div className="flex justify-center py-20">
+            <Loader2 className="h-10 w-10 animate-spin text-indigo-500" />
+          </div>
+        ) : challenges.length > 0 ? (
+          <SelectionCarousel
+            challenges={challenges}
+            onSelectChallenge={handleSelectChallenge}
+          />
+        ) : (
+          <div className="text-center py-20 bg-gray-50 dark:bg-gray-800/50 rounded-3xl border border-dashed border-gray-300 dark:border-gray-700">
+            <p className="text-gray-500 text-lg">
+              No challenges found in the database.
             </p>
-          </motion.div>
-        </div>
+            <p className="text-sm text-gray-400 mt-2">
+              (Try uploading them using the seed script!)
+            </p>
+          </div>
+        )}
       </motion.div>
 
       {/* --- Daily Challenge Banner --- */}
@@ -303,72 +293,18 @@ export function HomeTab() {
   );
 }
 
-// --- Sub-components ---
-
 function StatCard({ icon: Icon, label, value, color, bgColor }: any) {
   return (
-    <div className="bg-white dark:bg-gray-900 rounded-2xl p-4 border border-gray-100 dark:border-gray-800 shadow-sm hover:shadow-md transition-shadow flex items-center gap-4">
+    <div className="bg-white dark:bg-gray-900 rounded-2xl p-4 border border-gray-100 dark:border-gray-800 shadow-sm dark:hover:shadow-white hover:shadow-md transition-shadow flex items-center gap-4">
       <div className={`p-3 rounded-xl ${bgColor}`}>
         <Icon className={`w-5 h-5 ${color}`} />
       </div>
       <div>
-        <div className="text-2xl font-black text-gray-900 dark:text-white leading-none mb-1">
+        <div className="text-2xl font-black text-gray-900 dark:text-white">
           {value}
         </div>
         <div className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide">
           {label}
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function CourseCard({ course }: { course: any }) {
-  const Icon = course.icon;
-
-  return (
-    <div className="group relative bg-white dark:bg-gray-900 rounded-3xl p-6 border border-gray-100 dark:border-gray-800 shadow-sm hover:shadow-xl transition-all duration-300 hover:-translate-y-1 overflow-hidden">
-      <div
-        className={`absolute top-0 left-0 right-0 h-24 bg-gradient-to-br ${course.color} opacity-10 group-hover:opacity-20 transition-opacity`}
-      />
-
-      <div className="relative z-10 flex flex-col h-full">
-        <div className="flex justify-between items-start mb-4">
-          <div
-            className={`w-12 h-12 rounded-2xl bg-gradient-to-br ${course.color} flex items-center justify-center shadow-lg text-white`}
-          >
-            <Icon className="w-6 h-6" />
-          </div>
-          {course.progress === 100 && (
-            <div className="bg-green-100 dark:bg-green-900/30 text-green-600 dark:text-green-400 px-2 py-1 rounded-full text-xs font-bold">
-              Completed
-            </div>
-          )}
-        </div>
-
-        <h3 className="text-xl font-bold text-gray-900 dark:text-white mb-1 group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors">
-          {course.title}
-        </h3>
-        <p className="text-sm text-gray-500 dark:text-gray-400 mb-6">
-          {course.count} Challenges
-        </p>
-
-        <div className="mt-auto space-y-2">
-          <div className="flex justify-between text-xs font-bold text-gray-500 dark:text-gray-400">
-            <span>Progress</span>
-            <span>{course.progress}%</span>
-          </div>
-          <Progress
-            value={course.progress}
-            className="h-2.5 rounded-full bg-gray-100 dark:bg-gray-800"
-            indicatorClassName={`bg-gradient-to-r ${course.color}`}
-          />
-
-          <div className="pt-4">
-            <Button className="w-full bg-gray-900 dark:bg-white text-white dark:text-gray-900 hover:bg-indigo-600 dark:hover:bg-indigo-200 font-bold rounded-xl transition-colors">
-              {course.progress > 0 ? "Continue" : "Start Adventure"}
-            </Button>
-          </div>
         </div>
       </div>
     </div>

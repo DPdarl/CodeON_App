@@ -1,5 +1,5 @@
+// app/components/dashboardmodule/LeaderboardTab.tsx
 import { useState, useEffect } from "react";
-// ▼▼▼ FIX 1: Import 'app' (the FirebaseApp) and 'getFirestore' ▼▼▼
 import app from "~/lib/firebase";
 import {
   getFirestore,
@@ -9,56 +9,43 @@ import {
   limit,
   getDocs,
 } from "firebase/firestore";
-// ▲▲▲ END OF FIX 1 ▲▲▲
 import { useAuth } from "~/contexts/AuthContext";
-import { Avatar, AvatarFallback, AvatarImage } from "~/components/ui/avatar";
+// Removed standard Avatar imports as we are replacing them
+// import { Avatar, AvatarFallback, AvatarImage } from "~/components/ui/avatar";
 import { Card } from "~/components/ui/card";
 import { Skeleton } from "~/components/ui/skeleton";
-import { Medal, Trophy, Zap, Award } from "lucide-react";
+import { Medal, Trophy, Award, Crown } from "lucide-react";
 import { motion } from "framer-motion";
+import { AvatarDisplay } from "./AvatarDisplay"; // Import Custom Avatar
 
-// Define the shape of user data we expect from Firestore
 interface LeaderboardUser {
   id: string;
   displayName: string | null;
   photoURL: string | null;
   xp: number;
   level: number;
+  trophies: number;
+  league: string;
+  avatarConfig?: any; // Added avatarConfig
 }
 
-// ▼▼▼ FIX 1 (Continued): Initialize the db instance from the app ▼▼▼
 const db = getFirestore(app);
-// ▲▲▲ END OF FIX 1 ▲▲▲
 
 export function LeaderboardTab() {
   const { user } = useAuth();
   const [users, setUsers] = useState<LeaderboardUser[]>([]);
   const [loading, setLoading] = useState(true);
 
-  // Helper function for Avatar fallbacks
-  const getUserInitials = (name: string | null | undefined) => {
-    if (!name) return "U";
-    return name
-      .split(" ")
-      .map((n) => n[0])
-      .join("")
-      .toUpperCase()
-      .slice(0, 2);
-  };
-
   useEffect(() => {
     const fetchUsers = async () => {
       setLoading(true);
       try {
-        // Query the 'users' collection, order by 'xp' descending, limit to 100
-        const usersRef = collection(db, "users"); // This will now work
-        const q = query(usersRef, orderBy("xp", "desc"), limit(100));
+        const usersRef = collection(db, "users");
+        const q = query(usersRef, orderBy("trophies", "desc"), limit(100));
 
         const querySnapshot = await getDocs(q);
         const fetchedUsers: LeaderboardUser[] = [];
         querySnapshot.forEach((doc) => {
-          // IMPORTANT: Assumes user data in Firestore has fields
-          // 'displayName', 'photoURL', 'xp', and 'level'
           const data = doc.data();
           fetchedUsers.push({
             id: doc.id,
@@ -66,6 +53,9 @@ export function LeaderboardTab() {
             photoURL: data.photoURL || null,
             xp: data.xp || 0,
             level: data.level || 1,
+            trophies: data.trophies || 0,
+            league: data.league || "Novice",
+            avatarConfig: data.avatarConfig || null, // Fetch Config
           });
         });
 
@@ -80,16 +70,13 @@ export function LeaderboardTab() {
     fetchUsers();
   }, []);
 
-  // Separate top 3 from the rest
   const topThree = users.slice(0, 3);
   const restOfUsers = users.slice(3);
 
-  // Find the current user's rank
   const currentUserRank = users.findIndex((u) => u.id === user?.uid);
   const currentUserData =
     currentUserRank !== -1 ? users[currentUserRank] : null;
 
-  // Animation variants for items
   const containerVariants = {
     hidden: { opacity: 0 },
     visible: { opacity: 1, transition: { staggerChildren: 0.05 } },
@@ -108,12 +95,12 @@ export function LeaderboardTab() {
         animate={{ opacity: 1, y: 0 }}
         className="text-center"
       >
-        <Trophy className="w-16 h-16 text-yellow-500 mx-auto" />
-        <h1 className="text-4xl font-extrabold text-gray-900 dark:text-white mt-4">
-          Hall of Coders
+        <Trophy className="w-16 h-16 text-yellow-500 mx-auto drop-shadow-lg" />
+        <h1 className="text-4xl font-extrabold text-gray-900 dark:text-white mt-4 font-pixelify tracking-wide">
+          Hall of Champions
         </h1>
         <p className="text-lg text-gray-600 dark:text-gray-400 mt-2">
-          See who's commanding the world of code!
+          Ranked by Trophies earned in the Arena
         </p>
       </motion.div>
 
@@ -131,36 +118,21 @@ export function LeaderboardTab() {
             animate="visible"
           >
             {/* 2nd Place */}
-            <motion.div variants={itemVariants} className="md:mt-8">
-              {topThree[1] && (
-                <PodiumCard
-                  user={topThree[1]}
-                  rank={2}
-                  getInitials={getUserInitials}
-                />
-              )}
+            <motion.div
+              variants={itemVariants}
+              className="md:mt-8 order-2 md:order-1"
+            >
+              {topThree[1] && <PodiumCard user={topThree[1]} rank={2} />}
             </motion.div>
 
             {/* 1st Place */}
-            <motion.div variants={itemVariants}>
-              {topThree[0] && (
-                <PodiumCard
-                  user={topThree[0]}
-                  rank={1}
-                  getInitials={getUserInitials}
-                />
-              )}
+            <motion.div variants={itemVariants} className="order-1 md:order-2">
+              {topThree[0] && <PodiumCard user={topThree[0]} rank={1} />}
             </motion.div>
 
             {/* 3rd Place */}
-            <motion.div variants={itemVariants} className="md:mt-8">
-              {topThree[2] && (
-                <PodiumCard
-                  user={topThree[2]}
-                  rank={3}
-                  getInitials={getUserInitials}
-                />
-              )}
+            <motion.div variants={itemVariants} className="md:mt-8 order-3">
+              {topThree[2] && <PodiumCard user={topThree[2]} rank={3} />}
             </motion.div>
           </motion.div>
 
@@ -177,7 +149,6 @@ export function LeaderboardTab() {
                   user={leaderboardUser}
                   rank={index + 4}
                   isCurrentUser={leaderboardUser.id === user?.uid}
-                  getInitials={getUserInitials}
                 />
               </motion.div>
             ))}
@@ -193,7 +164,7 @@ export function LeaderboardTab() {
             The Leaderboard is Empty
           </h3>
           <p className="text-gray-500 dark:text-gray-400 mt-1">
-            Be the first to get on the board by completing a challenge!
+            Be the first to win a trophy!
           </p>
         </Card>
       )}
@@ -201,18 +172,19 @@ export function LeaderboardTab() {
       {/* Current User's Sticky Rank */}
       {currentUserData && (
         <motion.div
-          className="sticky bottom-6"
+          className="sticky bottom-6 z-20"
           initial={{ opacity: 0, y: 100 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ type: "spring", stiffness: 100 }}
         >
-          <UserRankRow
-            user={currentUserData}
-            rank={currentUserRank + 1}
-            isCurrentUser={true}
-            isSticky={true}
-            getInitials={getUserInitials}
-          />
+          <div className="mx-4 md:mx-0 shadow-2xl rounded-xl">
+            <UserRankRow
+              user={currentUserData}
+              rank={currentUserRank + 1}
+              isCurrentUser={true}
+              isSticky={true}
+            />
+          </div>
         </motion.div>
       )}
     </div>
@@ -221,142 +193,176 @@ export function LeaderboardTab() {
 
 // --- Sub-components ---
 
-// Card for 1st, 2nd, 3rd place
-function PodiumCard({
-  user,
-  rank,
-  getInitials,
-}: {
-  user: LeaderboardUser;
-  rank: number;
-  getInitials: (name: string | null) => string;
-}) {
+function PodiumCard({ user, rank }: { user: LeaderboardUser; rank: number }) {
   const isFirst = rank === 1;
   const isSecond = rank === 2;
   const isThird = rank === 3;
 
   return (
     <div
-      className={`relative rounded-2xl p-6 flex flex-col items-center text-center shadow-lg transition-all hover:scale-[1.03]
+      className={`relative rounded-3xl p-6 flex flex-col items-center text-center shadow-lg transition-all hover:scale-[1.03]
       ${
         isFirst
-          ? "bg-yellow-50 dark:bg-yellow-950/30 border-2 border-yellow-400"
+          ? "bg-gradient-to-b from-yellow-50 to-white dark:from-yellow-900/20 dark:to-gray-900 border-2 border-yellow-400"
           : ""
       }
       ${
         isSecond
-          ? "bg-gray-50 dark:bg-gray-900/30 border border-gray-300 dark:border-gray-700"
+          ? "bg-gradient-to-b from-gray-50 to-white dark:from-gray-800/40 dark:to-gray-900 border border-gray-300 dark:border-gray-600"
           : ""
       }
       ${
         isThird
-          ? "bg-orange-50 dark:bg-orange-950/30 border border-orange-300 dark:border-orange-800"
+          ? "bg-gradient-to-b from-orange-50 to-white dark:from-orange-900/20 dark:to-gray-900 border border-orange-300 dark:border-orange-700"
           : ""
       }
     `}
     >
-      {/* Medal Icon */}
+      {/* Crown/Medal Icon */}
       <div
-        className={`absolute -top-5 w-10 h-10 rounded-full flex items-center justify-center border-4
-        ${isFirst ? `bg-yellow-500 border-white dark:border-gray-900` : ""}
-        ${isSecond ? `bg-gray-400 border-white dark:border-gray-900` : ""}
-        ${isThird ? `bg-orange-600 border-white dark:border-gray-900` : ""}
+        className={`absolute -top-6 w-12 h-12 rounded-full flex items-center justify-center border-4 shadow-md z-10
+        ${isFirst ? `bg-yellow-400 border-white dark:border-gray-900` : ""}
+        ${isSecond ? `bg-gray-300 border-white dark:border-gray-900` : ""}
+        ${isThird ? `bg-orange-500 border-white dark:border-gray-900` : ""}
       `}
       >
-        <Medal className="w-5 h-5 text-white" />
+        {isFirst ? (
+          <Crown className="w-6 h-6 text-white fill-current" />
+        ) : (
+          <Medal className="w-6 h-6 text-white fill-current" />
+        )}
       </div>
 
-      <Avatar
-        className={`w-20 h-20 mt-4 border-4 ${
-          isFirst ? "border-yellow-400" : "border-transparent"
-        }`}
+      {/* AVATAR DISPLAY - Podium Size */}
+      <div
+        className={`mt-6 w-24 h-24 rounded-full overflow-hidden border-4 bg-gray-100 dark:bg-gray-800 flex-shrink-0 relative
+          ${
+            isFirst
+              ? "border-yellow-400 ring-4 ring-yellow-400/20"
+              : "border-gray-200 dark:border-gray-700"
+          }
+      `}
       >
-        <AvatarImage src={user.photoURL || undefined} />
-        <AvatarFallback className="text-2xl">
-          {getInitials(user.displayName)}
-        </AvatarFallback>
-      </Avatar>
+        <AvatarDisplay config={user.avatarConfig} headOnly />
+      </div>
 
-      <h3 className="text-lg font-bold text-gray-900 dark:text-white mt-4 truncate w-full px-2">
+      <h3 className="text-xl font-bold text-gray-900 dark:text-white mt-4 truncate w-full px-2">
         {user.displayName}
       </h3>
-      <span className="text-sm text-gray-500 dark:text-gray-400">
-        Level {user.level}
-      </span>
 
-      <div className="mt-4 bg-gray-100 dark:bg-gray-800 rounded-full px-4 py-1.5 text-lg font-black text-gray-900 dark:text-white flex items-center gap-1.5">
-        <Zap
-          className={`w-4 h-4 ${isFirst ? "text-yellow-500" : "text-gray-500"}`}
+      <div className="flex flex-col items-center mt-1 space-y-1">
+        <span className="px-2 py-0.5 rounded-md bg-gray-100 dark:bg-gray-800 text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wide">
+          {user.league}
+        </span>
+        <span className="text-xs text-indigo-500 font-semibold">
+          Level {user.level}
+        </span>
+      </div>
+
+      <div className="mt-4 bg-gray-900 dark:bg-white/10 rounded-xl px-4 py-2 text-xl font-black text-white flex items-center gap-2 shadow-inner">
+        <Trophy
+          className={`w-5 h-5 ${isFirst ? "text-yellow-400" : "text-gray-300"}`}
         />
-        {user.xp} XP
+        {user.trophies}
       </div>
     </div>
   );
 }
 
-// Row for ranks 4+
 function UserRankRow({
   user,
   rank,
   isCurrentUser,
   isSticky = false,
-  getInitials,
 }: {
   user: LeaderboardUser;
   rank: number;
   isCurrentUser: boolean;
   isSticky?: boolean;
-  getInitials: (name: string | null) => string;
 }) {
+  // Logic: "You" card styles dynamically based on rank if on podium
+  let bgColor = "bg-white dark:bg-gray-900";
+  let borderColor = "border-gray-100 dark:border-gray-800";
+  let highlightClass = "";
+
+  if (isCurrentUser) {
+    if (rank === 1) {
+      bgColor = "bg-yellow-50 dark:bg-yellow-900/40";
+      borderColor = "border-yellow-400";
+      highlightClass =
+        "ring-2 ring-yellow-400 ring-offset-2 dark:ring-offset-gray-900";
+    } else if (rank === 2) {
+      bgColor = "bg-gray-100 dark:bg-gray-800";
+      borderColor = "border-gray-400";
+      highlightClass =
+        "ring-2 ring-gray-400 ring-offset-2 dark:ring-offset-gray-900";
+    } else if (rank === 3) {
+      bgColor = "bg-orange-50 dark:bg-orange-900/40";
+      borderColor = "border-orange-400";
+      highlightClass =
+        "ring-2 ring-orange-400 ring-offset-2 dark:ring-offset-gray-900";
+    } else {
+      // Standard "You" card (Not podium)
+      bgColor = "bg-indigo-50 dark:bg-indigo-950/50";
+      borderColor = "border-indigo-200 dark:border-indigo-800";
+    }
+  }
+
   return (
     <div
-      className={`flex items-center p-4 rounded-xl transition-colors
-      ${
-        isCurrentUser
-          ? "bg-indigo-100 dark:bg-indigo-950/50 border-2 border-indigo-400"
-          : "bg-white dark:bg-gray-900 border border-gray-100 dark:border-gray-800"
-      }
+      className={`flex items-center p-4 rounded-xl transition-all border
+      ${bgColor} ${borderColor} ${highlightClass}
       ${isSticky ? "shadow-2xl" : "shadow-sm"}
     `}
     >
       {/* Rank */}
       <div
-        className={`w-10 text-center text-lg font-black ${
-          isCurrentUser
-            ? "text-indigo-600 dark:text-indigo-300"
+        className={`w-10 text-center text-lg font-black italic
+        ${
+          rank <= 3
+            ? "text-gray-900 dark:text-white scale-110"
             : "text-gray-400 dark:text-gray-500"
-        }`}
+        }
+      `}
       >
         #{rank}
       </div>
 
       {/* User Info */}
-      <div className="flex-1 flex items-center gap-3 ml-3">
-        <Avatar className="w-10 h-10">
-          <AvatarImage src={user.photoURL || undefined} />
-          <AvatarFallback>{getInitials(user.displayName)}</AvatarFallback>
-        </Avatar>
-        <div>
-          <div className="text-sm font-bold text-gray-900 dark:text-white">
-            {user.displayName} {isCurrentUser && "(You)"}
+      <div className="flex-1 flex items-center gap-3 ml-3 overflow-hidden">
+        {/* AVATAR DISPLAY - Row Size */}
+        <div className="w-10 h-10 rounded-full overflow-hidden border border-gray-200 dark:border-gray-700 bg-gray-100 dark:bg-gray-800 flex-shrink-0 relative">
+          <AvatarDisplay config={user.avatarConfig} headOnly />
+        </div>
+
+        <div className="min-w-0">
+          <div className="flex items-center gap-2">
+            <div className="text-sm font-bold text-gray-900 dark:text-white truncate">
+              {user.displayName} {isCurrentUser && "(You)"}
+            </div>
+            {rank === 1 && (
+              <Crown className="w-3 h-3 text-yellow-500 fill-current" />
+            )}
           </div>
-          <div className="text-xs text-gray-500 dark:text-gray-400">
-            Level {user.level}
+          <div className="flex items-center text-xs text-gray-500 dark:text-gray-400 gap-2">
+            <span className="font-semibold text-indigo-500">{user.league}</span>
+            <span>•</span>
+            <span>Lvl {user.level}</span>
           </div>
         </div>
       </div>
 
-      {/* XP */}
-      <div className="text-right">
+      {/* Trophy Count */}
+      <div className="text-right pl-2">
         <div
-          className={`text-base font-bold ${
+          className={`flex items-center justify-end gap-1.5 text-base font-black ${
             isCurrentUser
               ? "text-indigo-700 dark:text-indigo-300"
               : "text-gray-900 dark:text-white"
           }`}
         >
-          {/* ▼▼▼ FIX 2: Removed my '... : img : ...' typo ▼▼▼ */}
-          {user.xp} XP
+          <Trophy className="w-4 h-4 text-yellow-500 fill-current" />
+          {user.trophies}
         </div>
       </div>
     </div>
@@ -369,25 +375,19 @@ function LeaderboardSkeleton() {
     <div className="space-y-8">
       {/* Top 3 Skeleton */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <div className="md:mt-8 p-6 rounded-2xl border border-gray-200 dark:border-gray-800 flex flex-col items-center">
-          <Skeleton className="w-20 h-20 rounded-full" />
-          <Skeleton className="h-6 w-3/4 mt-4" />
-          {/* ▼▼▼ FIX 3: Corrected typo 'w-1/K;' to 'w-1/4' ▼▼▼ */}
-          <Skeleton className="h-4 w-1/4 mt-2" />
-          <Skeleton className="h-10 w-1/2 mt-4 rounded-full" />
-        </div>
-        <div className="p-6 rounded-2xl border-2 border-gray-200 dark:border-gray-800 flex flex-col items-center">
-          <Skeleton className="w-20 h-20 rounded-full" />
-          <Skeleton className="h-6 w-3/4 mt-4" />
-          <Skeleton className="h-4 w-1/4 mt-2" />
-          <Skeleton className="h-10 w-1/2 mt-4 rounded-full" />
-        </div>
-        <div className="md:mt-8 p-6 rounded-2xl border border-gray-200 dark:border-gray-800 flex flex-col items-center">
-          <Skeleton className="w-20 h-20 rounded-full" />
-          <Skeleton className="h-6 w-3/4 mt-4" />
-          <Skeleton className="h-4 w-1/4 mt-2" />
-          <Skeleton className="h-10 w-1/2 mt-4 rounded-full" />
-        </div>
+        {[1, 2, 3].map((i) => (
+          <div
+            key={i}
+            className={`p-6 rounded-3xl border border-gray-200 dark:border-gray-800 flex flex-col items-center ${
+              i !== 2 ? "md:mt-8" : ""
+            }`}
+          >
+            <Skeleton className="w-20 h-20 rounded-full" />
+            <Skeleton className="h-6 w-3/4 mt-4" />
+            <Skeleton className="h-4 w-1/3 mt-2" />
+            <Skeleton className="h-10 w-1/2 mt-4 rounded-xl" />
+          </div>
+        ))}
       </div>
 
       {/* List Skeleton */}
@@ -397,13 +397,13 @@ function LeaderboardSkeleton() {
             key={i}
             className="flex items-center p-4 rounded-xl bg-white dark:bg-gray-900 border border-gray-100 dark:border-gray-800"
           >
-            <Skeleton className="h-6 w-10 rounded" />
+            <Skeleton className="h-6 w-8 rounded" />
             <Skeleton className="w-10 h-10 rounded-full ml-3" />
             <div className="flex-1 ml-3 space-y-2">
               <Skeleton className="h-4 w-1/3" />
               <Skeleton className="h-3 w-1/4" />
             </div>
-            <Skeleton className="h-6 w-20 rounded" />
+            <Skeleton className="h-6 w-16 rounded" />
           </div>
         ))}
       </div>

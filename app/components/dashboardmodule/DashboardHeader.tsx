@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { Button } from "~/components/ui/button";
 import {
   DropdownMenu,
@@ -8,6 +9,14 @@ import {
   DropdownMenuTrigger,
 } from "~/components/ui/dropdown-menu";
 import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "~/components/ui/dialog"; // Ensure these exist or use alert-dialog
+import {
   PanelLeftOpen,
   PanelLeftClose,
   Flame,
@@ -16,7 +25,6 @@ import {
   Moon,
   LogOut,
 } from "lucide-react";
-// ▼▼▼ IMPORT THE DISPLAY COMPONENT ▼▼▼
 import { AvatarDisplay } from "./AvatarDisplay";
 
 interface StatItemProps {
@@ -27,7 +35,7 @@ interface StatItemProps {
 function StatItem({ icon, value, label }: StatItemProps) {
   return (
     <div
-      className="flex items-center space-x-2 bg-gray-100 dark:bg-gray-800 px-3 py-1.5 rounded-full text-sm font-medium"
+      className="flex items-center space-x-2 bg-gray-100 dark:bg-gray-800 px-3 py-1.5 rounded-full text-sm font-medium transition-transform hover:scale-105"
       title={label}
     >
       {icon}
@@ -37,7 +45,7 @@ function StatItem({ icon, value, label }: StatItemProps) {
 }
 
 interface DashboardHeaderProps {
-  user: any; // Changed to 'any' to access avatarConfig
+  user: any;
   sidebarCollapsed: boolean;
   onToggleSidebar: () => void;
   stats: {
@@ -59,95 +67,122 @@ export function DashboardHeader({
   onSwitchTheme,
   onLogout,
 }: DashboardHeaderProps) {
-  const getUserInitials = (name: string | null | undefined) => {
-    if (!name) return "U";
-    return name
-      .split(" ")
-      .map((n) => n[0])
-      .join("")
-      .toUpperCase()
-      .slice(0, 2);
+  const [showLogoutDialog, setShowLogoutDialog] = useState(false);
+
+  const confirmLogout = () => {
+    setShowLogoutDialog(false);
+    onLogout();
   };
 
   return (
-    <header className="border-b bg-white/80 dark:bg-gray-900/80 backdrop-blur-sm sticky top-0 z-10">
-      <div className="px-6 py-4 flex items-center">
-        <div className="flex-none">
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={onToggleSidebar}
-            className="h-9 w-9"
-          >
-            {sidebarCollapsed ? (
-              <PanelLeftOpen className="h-5 w-5" />
-            ) : (
-              <PanelLeftClose className="h-5 w-5" />
-            )}
-          </Button>
-        </div>
+    <>
+      <header className="border-b bg-white/80 dark:bg-gray-900/80 backdrop-blur-sm sticky top-0 z-10 transition-colors">
+        <div className="px-6 py-4 flex items-center">
+          <div className="flex-none">
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={onToggleSidebar}
+              className="h-9 w-9"
+            >
+              {sidebarCollapsed ? (
+                <PanelLeftOpen className="h-5 w-5" />
+              ) : (
+                <PanelLeftClose className="h-5 w-5" />
+              )}
+            </Button>
+          </div>
 
-        <div className="flex-1 flex justify-center">
-          <div className="flex items-center space-x-4">
-            <StatItem
-              icon={<Flame className="h-4 w-4 text-orange-500" />}
-              value={stats.streaks}
-              label="Streak"
-            />
-            <StatItem
-              icon={<CircleDollarSign className="h-4 w-4 text-yellow-500" />}
-              value={stats.coins}
-              label="Coins"
-            />
-            <StatItem
-              icon={<Heart className="h-4 w-4 text-red-500" />}
-              value={stats.hearts}
-              label="Hearts"
-            />
+          <div className="flex-1 flex justify-center">
+            <div className="flex items-center space-x-4">
+              <StatItem
+                icon={
+                  <Flame className="h-4 w-4 text-orange-500 fill-orange-500" />
+                }
+                value={stats.streaks}
+                label="Streak"
+              />
+              <StatItem
+                icon={
+                  <CircleDollarSign className="h-4 w-4 text-yellow-500 fill-yellow-500" />
+                }
+                value={stats.coins}
+                label="Coins"
+              />
+              <StatItem
+                icon={<Heart className="h-4 w-4 text-red-500 fill-red-500" />}
+                value={stats.hearts}
+                label="Hearts"
+              />
+            </div>
+          </div>
+
+          <div className="flex-none">
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <div className="flex items-center space-x-3 cursor-pointer p-1 rounded-md hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors">
+                  <div className="h-10 w-10 rounded-full overflow-hidden border-2 border-gray-200 dark:border-gray-700 bg-gray-100 dark:bg-gray-800">
+                    <AvatarDisplay config={user?.avatarConfig} headOnly />
+                  </div>
+
+                  <div className="hidden md:block">
+                    <p className="text-sm font-medium text-gray-900 dark:text-gray-100">
+                      {user?.displayName || "User"}
+                    </p>
+                    <p className="text-xs text-muted-foreground">
+                      {user?.email}
+                    </p>
+                  </div>
+                </div>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-56">
+                <DropdownMenuLabel>My Account</DropdownMenuLabel>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem
+                  onClick={onSwitchTheme}
+                  className="cursor-pointer"
+                >
+                  <Moon className="mr-2 h-4 w-4" />
+                  <span>Switch Theme</span>
+                </DropdownMenuItem>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem
+                  onClick={() => setShowLogoutDialog(true)}
+                  className="cursor-pointer text-red-600 focus:text-red-600 focus:bg-red-50 dark:focus:bg-red-950/20"
+                >
+                  <LogOut className="mr-2 h-4 w-4" />
+                  <span>Logout</span>
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
           </div>
         </div>
+      </header>
 
-        <div className="flex-none">
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <div className="flex items-center space-x-3 cursor-pointer p-1 rounded-md hover:bg-gray-100 dark:hover:bg-gray-800">
-                {/* ▼▼▼ AVATAR FIX ▼▼▼ */}
-                {/* Instead of <Avatar>, we use our custom <AvatarDisplay> */}
-                <div className="h-10 w-10 rounded-full overflow-hidden border-2 border-gray-200 dark:border-gray-700 bg-gray-100 dark:bg-gray-800">
-                  <AvatarDisplay config={user?.avatarConfig} headOnly />
-                </div>
-                {/* ▲▲▲ END OF AVATAR FIX ▲▲▲ */}
-
-                <div className="hidden md:block">
-                  <p className="text-sm font-medium">
-                    {user?.displayName || "User"}
-                  </p>
-                  <p className="text-xs text-muted-foreground">{user?.email}</p>
-                </div>
-              </div>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-56">
-              <DropdownMenuLabel>My Account</DropdownMenuLabel>
-              <DropdownMenuSeparator />
-              <DropdownMenuItem
-                onClick={onSwitchTheme}
-                className="cursor-pointer"
-              >
-                <Moon className="mr-2 h-4 w-4" />
-                <span>Switch Theme</span>
-              </DropdownMenuItem>
-              <DropdownMenuSeparator />
-              <DropdownMenuItem
-                onClick={onLogout}
-                className="cursor-pointer text-red-600"
-              >
-                <LogOut className="mr-2 h-4 w-4" />
-                <span>Logout</span>
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
-        </div>
-      </div>
-    </header>
+      {/* Logout Confirmation Dialog */}
+      <Dialog open={showLogoutDialog} onOpenChange={setShowLogoutDialog}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Sign out?</DialogTitle>
+            <DialogDescription>
+              Are you sure you want to sign out? You will need to log back in to
+              access your dashboard.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="gap-2 sm:gap-0">
+            <Button variant="ghost" onClick={() => setShowLogoutDialog(false)}>
+              Cancel
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={confirmLogout}
+              className="bg-red-600 hover:bg-red-700"
+            >
+              Sign out
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </>
   );
 }

@@ -7,7 +7,7 @@ import { Input } from "~/components/ui/input";
 import { Label } from "~/components/ui/label";
 import { Separator } from "~/components/ui/separator";
 import CodeOnLogo from "~/components/ui/CodeOnLogo";
-import { Loader2, Mail, Lock, ArrowRight, CheckCircle2 } from "lucide-react";
+import { Loader2, Mail, Lock, CheckCircle2 } from "lucide-react";
 import { motion } from "framer-motion";
 
 export default function Login() {
@@ -36,8 +36,12 @@ export default function Login() {
 
   const handleGoogleLogin = async () => {
     try {
-      await signInWithGoogle();
-      navigate("/dashboard");
+      const isNewUser = await signInWithGoogle();
+      if (isNewUser) {
+        navigate("/onboarding");
+      } else {
+        navigate("/dashboard");
+      }
     } catch (error) {
       console.error(error);
       setError("Failed to sign in with Google");
@@ -46,22 +50,15 @@ export default function Login() {
 
   return (
     <div className="min-h-screen w-full flex bg-white dark:bg-gray-900">
-      {/* --- Left Side: Visuals (Hidden on mobile) --- */}
+      {/* --- Left Side: Visuals --- */}
       <div className="hidden lg:flex w-1/2 bg-gray-900 relative overflow-hidden items-center justify-center p-12">
-        {/* Animated Background Elements */}
         <motion.div
-          animate={{
-            scale: [1, 1.2, 1],
-            rotate: [0, 90, 0],
-          }}
+          animate={{ scale: [1, 1.2, 1], rotate: [0, 90, 0] }}
           transition={{ duration: 20, repeat: Infinity, ease: "linear" }}
           className="absolute top-[-20%] left-[-20%] w-[80%] h-[80%] bg-indigo-600/20 rounded-full blur-3xl"
         />
         <motion.div
-          animate={{
-            scale: [1, 1.5, 1],
-            rotate: [0, -60, 0],
-          }}
+          animate={{ scale: [1, 1.5, 1], rotate: [0, -60, 0] }}
           transition={{ duration: 15, repeat: Infinity, ease: "linear" }}
           className="absolute bottom-[-20%] right-[-20%] w-[80%] h-[80%] bg-purple-600/20 rounded-full blur-3xl"
         />

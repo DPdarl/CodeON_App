@@ -16,17 +16,16 @@ import {
   updateProfile as updateProfileAuth,
   GoogleAuthProvider,
   signInWithPopup,
+  getAdditionalUserInfo,
 } from "firebase/auth";
-import { getFirestore, doc, getDoc, setDoc } from "firebase/firestore";
+import { getFirestore, doc, setDoc, onSnapshot } from "firebase/firestore"; // Import onSnapshot
 import app from "~/lib/firebase";
 
 const auth = getAuth(app);
 const db = getFirestore(app);
 
-// ▼▼▼ 1. UPDATE USER TYPE ▼▼▼
 export interface UserData extends User {
   avatarConfig?: any;
-  // New Settings Object
   settings?: {
     theme?: "light" | "dark" | "system";
     reduceMotion?: boolean;
@@ -38,6 +37,8 @@ export interface UserData extends User {
   streaks?: number;
   coins?: number;
   hearts?: number;
+  trophies?: number;
+  league?: string;
 }
 
 interface AuthContextType {
@@ -50,13 +51,15 @@ interface AuthContextType {
   ) => Promise<void>;
   login: (email: string, password: string) => Promise<void>;
   logout: () => Promise<void>;
-  signInWithGoogle: () => Promise<void>;
-  // Updated signature to accept settings
+  signInWithGoogle: () => Promise<boolean>;
   updateProfile: (data: {
     displayName?: string;
     photoURL?: string;
     avatarConfig?: any;
-    settings?: UserData["settings"]; // Accept settings
+    settings?: UserData["settings"];
+    xp?: number;
+    level?: number;
+    coins?: number;
   }) => Promise<void>;
 }
 
@@ -66,78 +69,97 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<UserData | null>(null);
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
-      try {
-        if (firebaseUser) {
-          try {
-            const userDocRef = doc(db, "users", firebaseUser.uid);
-            const userDoc = await getDoc(userDocRef);
+  const getDefaultUserData = (
+    firebaseUser: User,
+    displayNameOverride?: string
+  ) => ({
+    uid: firebaseUser.uid,
+    email: firebaseUser.email,
+    displayName: displayNameOverride || firebaseUser.displayName,
+    photoURL: firebaseUser.photoURL,
+    xp: 0,
+    level: 1,
+    streaks: 0,
+    coins: 0,
+    hearts: 5,
+    trophies: 0,
+    league: "Novice",
+    settings: {
+      theme: "system",
+      reduceMotion: false,
+      highContrast: false,
+      soundEnabled: true,
+    },
+    avatarConfig: {
+      body: "male",
+      hair: "default",
+      eyes: "nonchalant",
+      mouth: "smile",
+      top: "tshirt",
+      bottom: "pants",
+      shoes: "shoes",
+      accessory: "none",
+    },
+  });
 
-            if (userDoc.exists()) {
-              setUser({ ...firebaseUser, ...userDoc.data() } as UserData);
+  useEffect(() => {
+    let unsubscribeSnapshot: (() => void) | null = null;
+
+    const unsubscribeAuth = onAuthStateChanged(auth, async (firebaseUser) => {
+      // 1. Unsubscribe from previous user listener if it exists
+      if (unsubscribeSnapshot) {
+        unsubscribeSnapshot();
+        unsubscribeSnapshot = null;
+      }
+
+      if (firebaseUser) {
+        const userDocRef = doc(db, "users", firebaseUser.uid);
+
+        // 2. Set up Real-time Listener
+        unsubscribeSnapshot = onSnapshot(
+          userDocRef,
+          async (docSnap) => {
+            if (docSnap.exists()) {
+              // Real-time update
+              setUser({ ...firebaseUser, ...docSnap.data() } as UserData);
             } else {
-              // New user defaults
-              const newUser = {
-                uid: firebaseUser.uid,
-                email: firebaseUser.email,
-                displayName: firebaseUser.displayName,
-                photoURL: firebaseUser.photoURL,
-                xp: 0,
-                level: 1,
-                streaks: 0,
-                coins: 0,
-                hearts: 5,
-                // Default Settings
-                settings: {
-                  theme: "system",
-                  reduceMotion: false,
-                  highContrast: false,
-                  soundEnabled: true,
-                },
-                avatarConfig: {
-                  body: "male",
-                  hair: "default",
-                  eyes: "nonchalant",
-                  mouth: "smile",
-                  top: "tshirt",
-                  bottom: "pants",
-                  shoes: "shoes",
-                  accessory: "none",
-                },
-              };
+              // Create doc if missing (e.g. first Google login)
+              const newUser = getDefaultUserData(firebaseUser);
               await setDoc(userDocRef, newUser, { merge: true });
               setUser({ ...firebaseUser, ...newUser } as UserData);
             }
-          } catch (firestoreError) {
-            console.error("Firestore Error:", firestoreError);
-            setUser(firebaseUser as UserData);
+            setLoading(false);
+          },
+          (error) => {
+            console.error("Firestore Listener Error:", error);
+            setLoading(false);
           }
-        } else {
-          setUser(null);
-        }
-      } catch (error) {
-        console.error("Auth Error:", error);
+        );
+      } else {
         setUser(null);
-      } finally {
         setLoading(false);
       }
     });
 
-    return () => unsubscribe();
+    return () => {
+      unsubscribeAuth();
+      if (unsubscribeSnapshot) unsubscribeSnapshot();
+    };
   }, []);
 
-  // --- UPDATE PROFILE FUNCTION ---
   const updateProfile = async (data: {
     displayName?: string;
     photoURL?: string;
     avatarConfig?: any;
     settings?: UserData["settings"];
+    xp?: number;
+    level?: number;
+    coins?: number;
   }) => {
     if (!user) throw new Error("No user is signed in");
 
-    // ▼▼▼ 2. HANDLE SETTINGS SAVE ▼▼▼
-    const { displayName, photoURL, avatarConfig, settings } = data;
+    const { displayName, photoURL, avatarConfig, settings, xp, level, coins } =
+      data;
     const userDocRef = doc(db, "users", user.uid);
 
     let firestoreData: any = {};
@@ -151,13 +173,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       firestoreData.photoURL = photoURL;
       authData.photoURL = photoURL;
     }
-    if (avatarConfig) {
-      firestoreData.avatarConfig = avatarConfig;
-    }
-    // Save settings to Firestore
-    if (settings) {
-      firestoreData.settings = settings;
-    }
+    if (avatarConfig) firestoreData.avatarConfig = avatarConfig;
+    if (settings) firestoreData.settings = settings;
+    if (xp !== undefined) firestoreData.xp = xp;
+    if (level !== undefined) firestoreData.level = level;
+    if (coins !== undefined) firestoreData.coins = coins;
 
     if (Object.keys(authData).length > 0) {
       await updateProfileAuth(user, authData);
@@ -166,30 +186,33 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (Object.keys(firestoreData).length > 0) {
       await setDoc(userDocRef, firestoreData, { merge: true });
     }
-
-    setUser((prevUser) => {
-      if (!prevUser) return null;
-      return { ...prevUser, ...firestoreData } as UserData;
-    });
+    // No need to manually setUser here; the onSnapshot listener will handle it!
   };
 
-  // ... (signup, login, logout, signInWithGoogle remain the same)
   const signup = async (e: string, p: string, n: string) => {
     setLoading(true);
     const res = await createUserWithEmailAndPassword(auth, e, p);
     await updateProfileAuth(res.user, { displayName: n });
+    const newUser = getDefaultUserData(res.user, n);
+    const userDocRef = doc(db, "users", res.user.uid);
+    await setDoc(userDocRef, newUser, { merge: true });
   };
+
   const login = async (e: string, p: string) => {
     setLoading(true);
     await signInWithEmailAndPassword(auth, e, p);
   };
+
   const logout = async () => {
     setLoading(true);
     await signOut(auth);
   };
-  const signInWithGoogle = async () => {
+
+  const signInWithGoogle = async (): Promise<boolean> => {
     setLoading(true);
-    await signInWithPopup(auth, new GoogleAuthProvider());
+    const result = await signInWithPopup(auth, new GoogleAuthProvider());
+    const info = getAdditionalUserInfo(result);
+    return info?.isNewUser ?? false;
   };
 
   return (

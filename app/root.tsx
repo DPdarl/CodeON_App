@@ -9,6 +9,7 @@ import type { LinksFunction, MetaFunction } from "@remix-run/node";
 
 import "./tailwind.css";
 import { AuthProvider } from "./contexts/AuthContext";
+import { Toaster } from "sonner";
 
 export const links: LinksFunction = () => [
   { rel: "preconnect", href: "https://fonts.googleapis.com" },
@@ -23,7 +24,7 @@ export const links: LinksFunction = () => [
   },
   {
     rel: "icon",
-    href: "/CodeON_LOGODark.ico",
+    href: "/logo/CodeON_LOGODark.ico",
     type: "image/x-icon",
   },
   {
@@ -49,6 +50,8 @@ export function Layout({ children }: { children: React.ReactNode }) {
       </head>
       <body className="min-h-screen bg-background font-sans antialiased">
         <AuthProvider>{children}</AuthProvider>
+
+        <Toaster richColors position="top-center" />
         <ScrollRestoration />
         <Scripts />
       </body>

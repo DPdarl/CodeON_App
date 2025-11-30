@@ -9,7 +9,10 @@ import { DashboardTabs } from "~/components/dashboardmodule/DashboardTabs";
 import { DashboardHeader } from "~/components/dashboardmodule/DashboardHeader";
 
 export const meta: MetaFunction = () => {
-  return [{ title: "Dashboard | CodeON" }];
+  return [
+    { title: "Dashboard | CodeON" },
+    { name: "description", content: "Your CodeON dashboard" },
+  ];
 };
 
 export default function Dashboard() {
@@ -36,22 +39,46 @@ export default function Dashboard() {
     localStorage.theme = isDarkMode ? "dark" : "light";
   };
 
-  // ▼▼▼ SAVE LOGIC (Database Ready) ▼▼▼
-  const handleSaveAvatar = async (avatarConfig: any) => {
+  // Logout Logic
+  const handleLogout = async () => {
     try {
-      console.log("Saving to DB:", avatarConfig);
-      // This saves to Firestore AND updates the UI instantly
-      await updateProfile({ avatarConfig });
-      alert("Avatar saved successfully!");
+      await logout();
     } catch (error) {
-      console.error("Save failed:", error);
-      alert("Error saving avatar.");
+      console.error("Error logging out:", error);
     }
   };
 
-  // Layout Logic
-  const toggleSidebar = () => setSidebarCollapsed(!sidebarCollapsed);
-  const handleLogout = async () => await logout();
+  // Sidebar Toggle Logic
+  const toggleSidebar = () => {
+    setSidebarCollapsed(!sidebarCollapsed);
+  };
+
+  // Multiplayer Quiz Logic
+  const startMultiplayerQuiz = () => {
+    const gameId = Math.random().toString(36).substring(2, 8);
+    navigate(`/multiplayer/${gameId}`);
+  };
+
+  const joinMultiplayerQuiz = () => {
+    const gameCode = prompt("Enter game code:");
+    if (gameCode) {
+      navigate(`/multiplayer/${gameCode}`);
+    }
+  };
+
+  // Save Avatar Logic
+  const handleSaveAvatar = async (avatarConfig: any) => {
+    try {
+      await updateProfile({
+        avatarConfig: avatarConfig,
+      });
+      // You can add a toast here if you want global feedback
+    } catch (error) {
+      console.error("Error saving avatar:", error);
+    }
+  };
+
+  // Tab Change Logic
   const handleTabChange = (tab: string) => {
     if (tab === "logout") {
       handleLogout();
@@ -62,9 +89,8 @@ export default function Dashboard() {
 
   return (
     <PrivateRoute>
-      {/* ▼▼▼ LAYOUT FIX: h-screen + overflow-hidden ▼▼▼ */}
       <div className="flex h-screen overflow-hidden bg-gradient-to-br from-blue-50 to-indigo-100 dark:from-gray-900 dark:to-gray-800">
-        {/* Fixed Sidebar */}
+        {/* Sidebar Navigation */}
         <div
           className={`flex-shrink-0 transition-all duration-300 ${
             sidebarCollapsed ? "w-24" : "w-64"
@@ -79,7 +105,7 @@ export default function Dashboard() {
           />
         </div>
 
-        {/* Scrollable Content Area */}
+        {/* Main Content Area */}
         <div className="flex-1 flex flex-col overflow-y-auto transition-all duration-300">
           <DashboardHeader
             user={user}
@@ -94,13 +120,15 @@ export default function Dashboard() {
             onLogout={handleLogout}
           />
 
-          <main className="p-6">
+          <main className="p-6 z-0">
             <DashboardTabs
               activeTab={activeTab}
               user={user}
-              onSaveAvatar={handleSaveAvatar} // Pass the save function
-              onStartMultiplayerQuiz={() => {}}
-              onJoinMultiplayerQuiz={() => {}}
+              onSaveAvatar={handleSaveAvatar}
+              onStartMultiplayerQuiz={startMultiplayerQuiz}
+              onJoinMultiplayerQuiz={joinMultiplayerQuiz}
+              // Pass the function to change tabs (needed for "View Map" button)
+              onTabChange={handleTabChange}
             />
           </main>
         </div>

@@ -58,8 +58,12 @@ export default function SignUp() {
 
   const handleGoogleLogin = async () => {
     try {
-      await signInWithGoogle();
-      navigate("/onboarding");
+      const isNewUser = await signInWithGoogle();
+      if (isNewUser) {
+        navigate("/onboarding");
+      } else {
+        navigate("/dashboard");
+      }
     } catch (error) {
       console.error(error);
       setError("Failed to sign in with Google");
