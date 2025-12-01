@@ -18,12 +18,19 @@ import {
   signInWithPopup,
   getAdditionalUserInfo,
 } from "firebase/auth";
-import { getFirestore, doc, setDoc, onSnapshot } from "firebase/firestore"; // Import onSnapshot
+import {
+  getFirestore,
+  doc,
+  getDoc,
+  setDoc,
+  onSnapshot,
+} from "firebase/firestore";
 import app from "~/lib/firebase";
 
 const auth = getAuth(app);
 const db = getFirestore(app);
 
+// Updated UserData interface with Role
 export interface UserData extends User {
   avatarConfig?: any;
   settings?: {
@@ -39,6 +46,8 @@ export interface UserData extends User {
   hearts?: number;
   trophies?: number;
   league?: string;
+  joinedAt?: string;
+  role?: "superadmin" | "admin" | "user"; // New Role Field
 }
 
 interface AuthContextType {
@@ -60,6 +69,7 @@ interface AuthContextType {
     xp?: number;
     level?: number;
     coins?: number;
+    role?: "superadmin" | "admin" | "user"; // Allow updating role
   }) => Promise<void>;
 }
 
@@ -69,6 +79,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<UserData | null>(null);
   const [loading, setLoading] = useState(true);
 
+  // Helper to generate default data for ANY new user
   const getDefaultUserData = (
     firebaseUser: User,
     displayNameOverride?: string
@@ -77,6 +88,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     email: firebaseUser.email,
     displayName: displayNameOverride || firebaseUser.displayName,
     photoURL: firebaseUser.photoURL,
+    // --- Stats ---
     xp: 0,
     level: 1,
     streaks: 0,
@@ -84,6 +96,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     hearts: 5,
     trophies: 0,
     league: "Novice",
+    // --- Meta ---
+    joinedAt: new Date().toISOString(),
+    role: "user", // Default Role
+    // --- Settings ---
     settings: {
       theme: "system",
       reduceMotion: false,
@@ -106,7 +122,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     let unsubscribeSnapshot: (() => void) | null = null;
 
     const unsubscribeAuth = onAuthStateChanged(auth, async (firebaseUser) => {
-      // 1. Unsubscribe from previous user listener if it exists
       if (unsubscribeSnapshot) {
         unsubscribeSnapshot();
         unsubscribeSnapshot = null;
@@ -115,12 +130,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (firebaseUser) {
         const userDocRef = doc(db, "users", firebaseUser.uid);
 
-        // 2. Set up Real-time Listener
+        // Real-time listener for user data
         unsubscribeSnapshot = onSnapshot(
           userDocRef,
           async (docSnap) => {
             if (docSnap.exists()) {
-              // Real-time update
               setUser({ ...firebaseUser, ...docSnap.data() } as UserData);
             } else {
               // Create doc if missing (e.g. first Google login)
@@ -155,11 +169,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     xp?: number;
     level?: number;
     coins?: number;
+    role?: "superadmin" | "admin" | "user";
   }) => {
     if (!user) throw new Error("No user is signed in");
 
-    const { displayName, photoURL, avatarConfig, settings, xp, level, coins } =
-      data;
+    const {
+      displayName,
+      photoURL,
+      avatarConfig,
+      settings,
+      xp,
+      level,
+      coins,
+      role,
+    } = data;
     const userDocRef = doc(db, "users", user.uid);
 
     let firestoreData: any = {};
@@ -178,6 +201,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (xp !== undefined) firestoreData.xp = xp;
     if (level !== undefined) firestoreData.level = level;
     if (coins !== undefined) firestoreData.coins = coins;
+    if (role !== undefined) firestoreData.role = role;
 
     if (Object.keys(authData).length > 0) {
       await updateProfileAuth(user, authData);
@@ -186,13 +210,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (Object.keys(firestoreData).length > 0) {
       await setDoc(userDocRef, firestoreData, { merge: true });
     }
-    // No need to manually setUser here; the onSnapshot listener will handle it!
   };
 
   const signup = async (e: string, p: string, n: string) => {
     setLoading(true);
     const res = await createUserWithEmailAndPassword(auth, e, p);
+
+    // 1. Update Auth Profile
     await updateProfileAuth(res.user, { displayName: n });
+
+    // 2. Explicitly update Firestore with default data (role: 'user')
     const newUser = getDefaultUserData(res.user, n);
     const userDocRef = doc(db, "users", res.user.uid);
     await setDoc(userDocRef, newUser, { merge: true });

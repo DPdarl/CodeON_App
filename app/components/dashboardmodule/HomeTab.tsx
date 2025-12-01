@@ -4,7 +4,6 @@ import { motion } from "framer-motion";
 import {
   Trophy,
   Flame,
-  Zap,
   Star,
   Map,
   Code2,
@@ -13,7 +12,8 @@ import {
   ArrowRight,
   Brain,
   Loader2,
-  Play, // Added Play icon import (was missing in imports but used in JSX)
+  Play,
+  Crown, // Added Crown for League
 } from "lucide-react";
 import { Button } from "~/components/ui/button";
 import { Progress } from "~/components/ui/progress";
@@ -23,8 +23,7 @@ import { collection, getDocs, getFirestore } from "firebase/firestore";
 import app from "~/lib/firebase";
 import { Challenge } from "~/types/challenge.types";
 import { SelectionCarousel } from "./SelectionCarousel";
-import { PlayTab } from "./PlayTab";
-import { calculateProgress } from "~/lib/leveling-system"; // 1. Import XP Logic
+import { calculateProgress } from "~/lib/leveling-system";
 
 const db = getFirestore(app);
 
@@ -94,19 +93,19 @@ export function HomeTab({ onTabChange }: HomeTabProps) {
     fetchChallenges();
   }, []);
 
-  // 2. Calculate Stats using the new XP System
+  // 2. Calculate Stats
   const progressData = calculateProgress(user?.xp || 0);
 
   const stats = {
-    // Level & Bar Progress (for Hero Card)
+    // Level Info (Hero Section)
     level: progressData.currentLevel,
-    currentBarXP: progressData.currentXP, // XP earned in this level
-    maxBarXP: progressData.xpForNextLevel, // XP needed to finish this level
+    currentBarXP: progressData.currentXP,
+    maxBarXP: progressData.xpForNextLevel,
 
-    // Global Stats (for Grid)
-    totalXp: user?.xp || 0, // Lifetime XP
-    rank: user?.league || "Novice", // Real League from DB
+    // Competitive Stats (Grid)
     streak: user?.streaks || 0,
+    trophies: user?.trophies || 0, // Replaced XP
+    league: user?.league || "Novice", // Replaces Badges
   };
 
   const handleSelectChallenge = (challenge: Challenge) => {
@@ -145,8 +144,8 @@ export function HomeTab({ onTabChange }: HomeTabProps) {
             <div>
               <div className="flex items-center space-x-2 mb-2">
                 <span className="bg-white/20 backdrop-blur-md px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider flex items-center gap-1">
-                  <Trophy className="w-3 h-3" />
-                  Rank: {stats.rank}
+                  <Crown className="w-3 h-3" />
+                  {stats.league} League
                 </span>
               </div>
               <h1 className="text-3xl md:text-4xl font-extrabold mb-2 tracking-tight font-pixelify">
@@ -158,7 +157,7 @@ export function HomeTab({ onTabChange }: HomeTabProps) {
               </p>
             </div>
 
-            {/* Level / XP Card (UPDATED with Real Logic) */}
+            {/* Level / XP Card (Personal Progress) */}
             <div className="bg-black/20 backdrop-blur-sm rounded-2xl p-6 min-w-[280px] border border-white/10">
               <div className="flex justify-between items-end mb-2">
                 <span className="text-2xl font-black">Lvl {stats.level}</span>
@@ -166,7 +165,6 @@ export function HomeTab({ onTabChange }: HomeTabProps) {
                   {stats.currentBarXP}/{stats.maxBarXP} XP
                 </span>
               </div>
-              {/* Progress Bar now reflects progress WITHIN the current level */}
               <Progress
                 value={(stats.currentBarXP / stats.maxBarXP) * 100}
                 className="h-3 bg-black/30"
@@ -181,8 +179,9 @@ export function HomeTab({ onTabChange }: HomeTabProps) {
         </div>
       </motion.div>
 
-      {/* --- Stats Row (Inventory/Status) --- */}
+      {/* --- Stats Row (UPDATED: Competitive Stats) --- */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+        {/* 1. Streak */}
         <StatCard
           icon={Flame}
           label="Day Streak"
@@ -190,26 +189,29 @@ export function HomeTab({ onTabChange }: HomeTabProps) {
           color="text-orange-500"
           bgColor="bg-orange-50 dark:bg-orange-950/30"
         />
+        {/* 2. Trophies (Replaced XP) */}
         <StatCard
-          icon={Zap}
-          label="Total XP"
-          value={stats.totalXp.toLocaleString()}
+          icon={Trophy}
+          label="Total Trophies"
+          value={stats.trophies.toLocaleString()}
           color="text-yellow-500"
           bgColor="bg-yellow-50 dark:bg-yellow-950/30"
         />
+        {/* 3. League (Replaced Badges) */}
+        <StatCard
+          icon={Crown}
+          label="Current League"
+          value={stats.league}
+          color="text-purple-500"
+          bgColor="bg-purple-50 dark:bg-purple-950/30"
+        />
+        {/* 4. Challenges */}
         <StatCard
           icon={Star}
           label="Challenges"
           value={challenges.length.toString()}
           color="text-blue-500"
           bgColor="bg-blue-50 dark:bg-blue-950/30"
-        />
-        <StatCard
-          icon={Trophy}
-          label="Badges"
-          value="3"
-          color="text-purple-500"
-          bgColor="bg-purple-50 dark:bg-purple-950/30"
         />
       </div>
 
@@ -234,7 +236,6 @@ export function HomeTab({ onTabChange }: HomeTabProps) {
           </Button>
         </div>
 
-        {/* Load Carousel or Loading State */}
         {loading ? (
           <div className="flex justify-center py-20">
             <Loader2 className="h-10 w-10 animate-spin text-indigo-500" />

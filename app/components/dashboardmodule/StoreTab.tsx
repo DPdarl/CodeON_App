@@ -128,7 +128,11 @@ export function StoreTab() {
           </div>
           {/* User Coin Balance */}
           <div className="flex-shrink-0 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-full p-2 pr-6 shadow-md flex items-center gap-3">
-            <img src="/assets/icons/coin.png" alt="Coins" className="w-8 h-8" />
+            <img
+              src="/assets/icons/coinv2.png"
+              alt="Coins"
+              className="w-8 h-8"
+            />
             <div className="flex flex-col">
               <span className="text-xs text-gray-500 dark:text-gray-400 font-medium leading-none">
                 Your Coins
@@ -250,7 +254,7 @@ function PowerUpCard({
           {canAfford ? (
             <div className="flex items-center gap-2">
               <img
-                src="/assets/icons/coin.png"
+                src="/assets/icons/coinv2.png"
                 alt="Coin"
                 className="w-5 h-5"
               />
@@ -315,7 +319,11 @@ function CosmeticItemCard({
       >
         {canAfford ? (
           <div className="flex items-center gap-2">
-            <img src="/assets/icons/coin.png" alt="Coin" className="w-5 h-5" />
+            <img
+              src="/assets/icons/coinv2.png"
+              alt="Coin"
+              className="w-5 h-5"
+            />
             <span>{item.cost.toLocaleString()}</span>
           </div>
         ) : (

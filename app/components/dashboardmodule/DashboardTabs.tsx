@@ -1,10 +1,10 @@
 // app/components/dashboardmodule/DashboardTabs.tsx
-import { User } from "firebase/auth";
 import { HomeTab } from "./HomeTab";
 import { PlayTab } from "./PlayTab";
 import { LeaderboardTab } from "./LeaderboardTab";
-import { ProgressTab } from "./ProgressTab";
-import { StreakTab } from "./StreakTaB";
+// import { ProgressTab } from "./ProgressTab"; // <-- REMOVED
+import { QuestTab } from "./QuestTab"; // <-- ADDED
+import { StreakTab } from "./StreakTab";
 import { SettingsTab } from "./SettingsTab";
 import { AboutTab } from "./AboutTab";
 import { StoreTab } from "./StoreTab";
@@ -12,11 +12,10 @@ import { ProfileTab } from "./ProfileTab";
 
 interface DashboardTabsProps {
   activeTab: string;
-  user: any; // Using 'any' to support custom UserData type
+  user: any;
   onSaveAvatar: (avatarConfig: any) => Promise<void>;
   onStartMultiplayerQuiz: () => void;
   onJoinMultiplayerQuiz: () => void;
-  onTabChange: (tab: string) => void;
 }
 
 export function DashboardTabs({
@@ -25,37 +24,35 @@ export function DashboardTabs({
   onSaveAvatar,
   onStartMultiplayerQuiz,
   onJoinMultiplayerQuiz,
-  onTabChange,
 }: DashboardTabsProps) {
-  const renderActiveTab = () => {
-    switch (activeTab) {
-      case "home":
-        return <HomeTab onTabChange={onTabChange} />;
-      case "play":
-        return (
-          <PlayTab
-            onStartMultiplayerQuiz={onStartMultiplayerQuiz}
-            onJoinMultiplayerQuiz={onJoinMultiplayerQuiz}
-          />
-        );
-      case "leaderboard":
-        return <LeaderboardTab />;
-      case "progress":
-        return <ProgressTab />;
-      case "streak":
-        return <StreakTab />;
-      case "store":
-        return <StoreTab />;
-      case "profile":
-        return <ProfileTab user={user} onSaveAvatar={onSaveAvatar} />;
-      case "settings":
-        return <SettingsTab />;
-      case "about":
-        return <AboutTab />;
-      default:
-        return <HomeTab onTabChange={onTabChange} />;
-    }
-  };
+  return (
+    <>
+      {activeTab === "home" && (
+        <HomeTab
+          onTabChange={(tab) => {
+            /* logic to handle tab change */
+          }}
+        />
+      )}
+      {activeTab === "play" && (
+        <PlayTab
+          onStartMultiplayerQuiz={onStartMultiplayerQuiz}
+          onJoinMultiplayerQuiz={onJoinMultiplayerQuiz}
+        />
+      )}
+      {activeTab === "leaderboard" && <LeaderboardTab />}
 
-  return <>{renderActiveTab()}</>;
+      {/* ▼▼▼ REPLACED PROGRESS WITH QUESTS ▼▼▼ */}
+      {activeTab === "progress" && <QuestTab />}
+      {/* ▲▲▲ END REPLACEMENT ▲▲▲ */}
+
+      {activeTab === "streak" && <StreakTab />}
+      {activeTab === "store" && <StoreTab />}
+      {activeTab === "profile" && (
+        <ProfileTab user={user} onSaveAvatar={onSaveAvatar} />
+      )}
+      {activeTab === "settings" && <SettingsTab />}
+      {activeTab === "about" && <AboutTab />}
+    </>
+  );
 }

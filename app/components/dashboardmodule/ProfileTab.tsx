@@ -1,7 +1,7 @@
 // app/components/dashboardmodule/ProfileTab.tsx
 import { useState, useEffect } from "react";
 import { useAuth, type UserData } from "~/contexts/AuthContext";
-import { getUserRank } from "~/lib/leaderboard-logic"; // Import helper
+import { getUserRank } from "~/lib/leaderboard-logic";
 import {
   Card,
   CardHeader,
@@ -18,12 +18,12 @@ import { AvatarDisplay } from "./AvatarDisplay";
 import {
   User,
   Calendar,
-  Zap,
   Flame,
   Trophy,
   Sparkles,
   Medal,
-} from "lucide-react";
+  Crown,
+} from "lucide-react"; // Added Crown
 import { motion } from "framer-motion";
 import { Toaster, toast } from "sonner";
 
@@ -40,10 +40,10 @@ export function ProfileTab({ user, onSaveAvatar }: ProfileTabProps) {
   useEffect(() => {
     if (user?.displayName) setDisplayName(user.displayName);
 
-    // Fetch Rank on Mount
+    // Fetch Rank (Based on TROPHIES now, not XP)
     const fetchRank = async () => {
-      if (user?.xp !== undefined) {
-        const r = await getUserRank(user.xp);
+      if (user?.trophies !== undefined) {
+        const r = await getUserRank(user.trophies);
         setRealRank(r);
       }
     };
@@ -52,9 +52,8 @@ export function ProfileTab({ user, onSaveAvatar }: ProfileTabProps) {
 
   // Derived Stats
   const stats = {
-    totalXp: user?.xp || 0,
+    trophies: user?.trophies || 0, // Replaced XP
     streak: user?.streaks || 0,
-    // Use the stored league, or fallback to "Novice"
     league: user?.league || "Novice",
     rank: realRank ? `#${realRank}` : "Unranked",
   };
@@ -103,7 +102,7 @@ export function ProfileTab({ user, onSaveAvatar }: ProfileTabProps) {
               </div>
             </div>
 
-            {/* Rank Badge (Visual Flair) */}
+            {/* Rank Badge */}
             <div className="hidden sm:flex ml-auto flex-col items-end">
               <div className="text-sm text-gray-500">Global Rank</div>
               <div className="text-4xl font-black text-indigo-600 dark:text-indigo-400">
@@ -114,31 +113,35 @@ export function ProfileTab({ user, onSaveAvatar }: ProfileTabProps) {
         </Card>
       </motion.div>
 
-      {/* Stats Row */}
+      {/* Stats Row (UPDATED) */}
       <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ delay: 0.1 }}
         className="grid grid-cols-2 md:grid-cols-4 gap-4"
       >
+        {/* 1. Trophies (Was XP) */}
         <StatItem
-          icon={Zap}
-          value={stats.totalXp.toLocaleString()}
-          label="Total XP"
+          icon={Trophy}
+          value={stats.trophies.toLocaleString()}
+          label="Total Trophies"
           color="text-yellow-500"
         />
+        {/* 2. Streak */}
         <StatItem
           icon={Flame}
           value={stats.streak.toString()}
           label="Day Streak"
           color="text-orange-500"
         />
+        {/* 3. League (Icon Changed to Crown) */}
         <StatItem
-          icon={Trophy}
+          icon={Crown}
           value={stats.league}
           label="League"
           color="text-purple-500"
         />
+        {/* 4. Rank */}
         <StatItem
           icon={Medal}
           value={stats.rank}

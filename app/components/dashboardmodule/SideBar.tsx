@@ -1,9 +1,10 @@
+// app/components/dashboardmodule/SideBar.tsx
 import { User } from "firebase/auth";
 import {
   Home,
   Users,
   Crown,
-  BarChart3,
+  Scroll, // Changed from BarChart3
   Flame,
   Settings,
   LogOut,
@@ -48,7 +49,9 @@ export function Sidebar({
     { id: "home", label: "Home", icon: Home },
     { id: "play", label: "Play", icon: Gamepad2 },
     { id: "leaderboard", label: "Leaderboard", icon: Crown },
-    { id: "progress", label: "Progress", icon: BarChart3 },
+    // ▼▼▼ UPDATED: Progress -> Quests ▼▼▼
+    { id: "progress", label: "Quests", icon: Scroll },
+    // ▲▲▲ Note: ID stays 'progress' to match DashboardTabs logic
     { id: "streak", label: "Streak", icon: Flame },
     { id: "store", label: "Store", icon: Store },
     { id: "profile", label: "Profile", icon: UserCircle },

@@ -1,4 +1,6 @@
+// app/components/dashboardmodule/StreakTab.tsx
 import { useState, useEffect } from "react";
+import { useAuth } from "~/contexts/AuthContext";
 import {
   Card,
   CardContent,
@@ -20,28 +22,27 @@ import {
 import { motion } from "framer-motion";
 import { cn } from "~/lib/utils";
 
-// --- MOCK DATA ---
-// TODO: Replace with real user data from Firestore
-const MOCK_CURRENT_STREAK = 5;
-const MOCK_FREEZE_COUNT = 2;
-// Dates user was active. Format: YYYY-MM-DD
-const MOCK_ACTIVE_DAYS = [
-  "2025-11-11", // Note: This date is in the past for the current time
-  "2025-11-12",
-  "2025-11-13",
-  "2025-11-14",
-  // "2025-11-15", // Today - let's assume they haven't played yet
-];
+// --- HELPERS ---
 
-const MOCK_MILESTONES = [
-  { name: "3-Day Streak", icon: Award, earned: true },
-  { name: "7-Day Streak", icon: Award, earned: false },
-  { name: "14-Day Streak", icon: Award, earned: false },
-  { name: "30-Day Streak", icon: Award, earned: false },
-];
-// --- END MOCK DATA ---
+// 1. Get Date in PH Timezone (Fixes the "1 Day Ahead" bug)
+const getPhDate = () => {
+  const now = new Date();
+  const phTime = new Date(
+    now.toLocaleString("en-US", { timeZone: "Asia/Manila" })
+  );
+  return phTime;
+};
 
-// Animation variants for "popping" in elements
+// 2. Format as YYYY-MM-DD using PH time
+const getPhISODate = (date: Date): string => {
+  // We can't just use .toISOString() because that converts back to UTC!
+  // We need to format the parts manually or use toLocaleDateString
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+};
+
 const containerVariants = {
   hidden: { opacity: 0 },
   visible: {
@@ -57,14 +58,19 @@ const itemVariants = {
   visible: { y: 0, opacity: 1 },
 };
 
-// Helper to format date as YYYY-MM-DD
-const getISODate = (date: Date): string => {
-  return date.toISOString().split("T")[0];
-};
-
 export function StreakTab() {
+  const { user } = useAuth();
   const [calendarDays, setCalendarDays] = useState<CalendarDay[]>([]);
   const [currentMonth, setCurrentMonth] = useState("");
+
+  // Use Real Data
+  const currentStreak = user?.streaks || 0;
+  // Fallback to 0 if streakFreezes doesn't exist on user yet
+  const freezeCount = (user as any)?.streakFreezes || 0;
+
+  // TODO: In the future, store a real array like user.activeDates = ["2023-11-01", ...]
+  // For now, we mock the history but keep "Today" accurate.
+  const activeDays = (user as any)?.activeDates || [];
 
   interface CalendarDay {
     day: number;
@@ -74,24 +80,24 @@ export function StreakTab() {
     isFuture: boolean;
   }
 
-  // Generate the calendar days for the current month
   useEffect(() => {
-    const today = new Date();
-    // For testing, you can override 'today':
-    // const today = new Date("2025-11-15T12:00:00"); // Use this to test
+    // 1. Use PH Time for "Today"
+    const today = getPhDate();
+    const todayStr = getPhISODate(today);
 
-    const todayStr = getISODate(today);
+    // 2. Set Month Label
+    setCurrentMonth(today.toLocaleString("default", { month: "long" }));
+
     const year = today.getFullYear();
     const month = today.getMonth(); // 0-11
 
-    setCurrentMonth(today.toLocaleString("default", { month: "long" }));
-
+    // 3. Calculate Calendar Grid
     const firstDayOfMonth = new Date(year, month, 1).getDay(); // 0 (Sun) - 6 (Sat)
     const daysInMonth = new Date(year, month + 1, 0).getDate();
 
     const days: CalendarDay[] = [];
 
-    // 1. Add padding for days before the 1st
+    // Add padding
     for (let i = 0; i < firstDayOfMonth; i++) {
       days.push({
         day: 0,
@@ -102,14 +108,25 @@ export function StreakTab() {
       });
     }
 
-    // 2. Add actual days
+    // Add actual days
     for (let day = 1; day <= daysInMonth; day++) {
       const date = new Date(year, month, day);
-      const dateStr = getISODate(date);
+      const dateStr = getPhISODate(date);
 
       const isToday = dateStr === todayStr;
-      const isActive = MOCK_ACTIVE_DAYS.includes(dateStr);
-      const isFuture = date > today;
+
+      // Check if this date is in the user's history
+      // OR if it's today and they have a streak > 0 (assumes they played today)
+      let isActive = activeDays.includes(dateStr);
+
+      // Simple logic: If today is the streak day, mark it active
+      if (isToday && currentStreak > 0) {
+        isActive = true;
+      }
+
+      // Check future based on PH Time
+      // We compare timestamps to be safe
+      const isFuture = date.setHours(0, 0, 0, 0) > today.setHours(0, 0, 0, 0);
 
       days.push({
         day,
@@ -121,7 +138,15 @@ export function StreakTab() {
     }
 
     setCalendarDays(days);
-  }, []);
+  }, [user, currentStreak, activeDays]); // Re-run when user data changes
+
+  // Dynamic Milestones based on real streak
+  const milestones = [
+    { name: "3-Day Streak", icon: Award, earned: currentStreak >= 3 },
+    { name: "7-Day Streak", icon: Award, earned: currentStreak >= 7 },
+    { name: "14-Day Streak", icon: Award, earned: currentStreak >= 14 },
+    { name: "30-Day Streak", icon: Award, earned: currentStreak >= 30 },
+  ];
 
   return (
     <div className="max-w-6xl mx-auto space-y-8 pb-12">
@@ -146,14 +171,14 @@ export function StreakTab() {
       >
         {/* Column 1: Current Streak & Calendar */}
         <motion.div variants={itemVariants} className="lg:col-span-2 space-y-6">
-          <CurrentStreakCard streak={MOCK_CURRENT_STREAK} />
+          <CurrentStreakCard streak={currentStreak} />
           <StreakCalendarCard month={currentMonth} days={calendarDays} />
         </motion.div>
 
         {/* Column 2: Inventory & Milestones */}
         <motion.div variants={itemVariants} className="lg:col-span-1 space-y-6">
-          <StreakInventoryCard freezeCount={MOCK_FREEZE_COUNT} />
-          <StreakMilestonesCard />
+          <StreakInventoryCard freezeCount={freezeCount} />
+          <StreakMilestonesCard milestones={milestones} />
         </motion.div>
       </motion.div>
     </div>
@@ -166,14 +191,17 @@ function CurrentStreakCard({ streak }: { streak: number }) {
   return (
     <Card className="bg-gradient-to-br from-orange-400 to-red-500 text-white rounded-3xl shadow-lg overflow-hidden">
       <CardContent className="p-8 flex items-center gap-6">
-        <Flame className="w-24 h-24 drop-shadow-lg" fill="white" />
+        <Flame
+          className="w-24 h-24 drop-shadow-lg animate-pulse"
+          fill="white"
+        />
         <div>
           <p className="text-xl font-bold uppercase tracking-wider opacity-90">
             Current Streak
           </p>
           <p className="text-7xl font-black drop-shadow-md">{streak}</p>
           <p className="text-lg font-medium opacity-90">
-            {streak > 0 ? "You're on fire!" : "Complete a lesson to start!"}
+            {streak > 0 ? "You're on fire!" : "Start your streak today!"}
           </p>
         </div>
       </CardContent>
@@ -224,7 +252,7 @@ function StreakCalendarCard({ month, days }: { month: string; days: any[] }) {
               <div
                 key={index}
                 className={cn(
-                  "relative aspect-square rounded-xl flex items-center justify-center font-bold",
+                  "relative aspect-square rounded-xl flex items-center justify-center font-bold transition-all",
                   // Padding
                   day.isPadding && "bg-transparent",
 
@@ -241,11 +269,11 @@ function StreakCalendarCard({ month, days }: { month: string; days: any[] }) {
 
                   // Active
                   day.isActive &&
-                    "bg-orange-400 text-white shadow-md shadow-orange-500/20",
+                    "bg-orange-400 text-white shadow-md shadow-orange-500/20 scale-105",
 
                   // Today - Not Active (Warning!)
                   isWarning &&
-                    "bg-gray-200 dark:bg-gray-700 text-gray-900 dark:text-white border-2 border-red-500",
+                    "bg-white dark:bg-gray-800 text-gray-900 dark:text-white border-2 border-red-500",
 
                   // Today - Active
                   day.isToday &&
@@ -255,7 +283,7 @@ function StreakCalendarCard({ month, days }: { month: string; days: any[] }) {
               >
                 {!day.isPadding && <span>{day.day}</span>}
                 {isWarning && (
-                  <div className="absolute inset-0 rounded-xl animate-pulse bg-red-500 opacity-30" />
+                  <div className="absolute inset-0 rounded-xl animate-pulse bg-red-500/10" />
                 )}
               </div>
             );
@@ -296,7 +324,7 @@ function StreakInventoryCard({ freezeCount }: { freezeCount: number }) {
   );
 }
 
-function StreakMilestonesCard() {
+function StreakMilestonesCard({ milestones }: { milestones: any[] }) {
   return (
     <Card className="bg-white dark:bg-gray-900 shadow-lg border-gray-100 dark:border-gray-800 rounded-3xl">
       <CardHeader>
@@ -304,8 +332,7 @@ function StreakMilestonesCard() {
         <CardDescription>Celebrate your consistency!</CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
-        {MOCK_MILESTONES.map((milestone) => {
-          const Icon = milestone.icon;
+        {milestones.map((milestone) => {
           return (
             <div
               key={milestone.name}
