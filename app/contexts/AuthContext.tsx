@@ -6,32 +6,15 @@ import {
   useEffect,
   ReactNode,
 } from "react";
-import {
-  getAuth,
-  onAuthStateChanged,
-  User,
-  createUserWithEmailAndPassword,
-  signInWithEmailAndPassword,
-  signOut,
-  updateProfile as updateProfileAuth,
-  GoogleAuthProvider,
-  signInWithPopup,
-  getAdditionalUserInfo,
-} from "firebase/auth";
-import {
-  getFirestore,
-  doc,
-  getDoc,
-  setDoc,
-  onSnapshot,
-} from "firebase/firestore";
-import app from "~/lib/firebase";
+import { User } from "@supabase/supabase-js";
+import { supabase } from "~/lib/supabase";
 
-const auth = getAuth(app);
-const db = getFirestore(app);
-
-// Updated UserData interface with Role
-export interface UserData extends User {
+// Updated interface
+export interface UserData {
+  uid: string;
+  email?: string;
+  displayName: string;
+  photoURL?: string;
   avatarConfig?: any;
   settings?: {
     theme?: "light" | "dark" | "system";
@@ -47,30 +30,23 @@ export interface UserData extends User {
   trophies?: number;
   league?: string;
   joinedAt?: string;
-  role?: "superadmin" | "admin" | "user"; // New Role Field
+  role?: "superadmin" | "admin" | "user";
+  streakFreezes?: number;
+  hints?: number;
+  ownedCosmetics?: string[];
+  inventory?: string[]; // New Inventory Field
+  activeDates?: string[]; // Array of "YYYY-MM-DD" strings
+  badges?: string[]; // Array of badge IDs
 }
 
 interface AuthContextType {
   user: UserData | null;
   loading: boolean;
-  signup: (
-    email: string,
-    password: string,
-    displayName: string
-  ) => Promise<void>;
-  login: (email: string, password: string) => Promise<void>;
+  signup: (e: string, p: string, n: string) => Promise<void>;
+  login: (e: string, p: string) => Promise<void>;
   logout: () => Promise<void>;
   signInWithGoogle: () => Promise<boolean>;
-  updateProfile: (data: {
-    displayName?: string;
-    photoURL?: string;
-    avatarConfig?: any;
-    settings?: UserData["settings"];
-    xp?: number;
-    level?: number;
-    coins?: number;
-    role?: "superadmin" | "admin" | "user"; // Allow updating role
-  }) => Promise<void>;
+  updateProfile: (data: Partial<UserData>) => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -79,16 +55,76 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<UserData | null>(null);
   const [loading, setLoading] = useState(true);
 
-  // Helper to generate default data for ANY new user
-  const getDefaultUserData = (
-    firebaseUser: User,
-    displayNameOverride?: string
-  ) => ({
-    uid: firebaseUser.uid,
-    email: firebaseUser.email,
-    displayName: displayNameOverride || firebaseUser.displayName,
-    photoURL: firebaseUser.photoURL,
-    // --- Stats ---
+  // --- HELPER: Map Snake_Case DB -> CamelCase App ---
+  const mapUserFromDB = (dbUser: any): UserData => ({
+    uid: dbUser.id,
+    email: dbUser.email,
+    displayName: dbUser.display_name || "Coder",
+    photoURL: dbUser.photo_url,
+    avatarConfig: dbUser.avatar_config,
+    settings: dbUser.settings,
+    xp: dbUser.xp,
+    level: dbUser.level,
+    streaks: dbUser.streaks,
+    coins: dbUser.coins,
+    hearts: dbUser.hearts,
+    streakFreezes: dbUser.streak_freezes || 0,
+    hints: dbUser.hints || 0,
+    ownedCosmetics: dbUser.owned_cosmetics || [],
+    inventory: dbUser.inventory || [], // Map Inventory
+    trophies: dbUser.trophies,
+    league: dbUser.league,
+    joinedAt: dbUser.joined_at,
+    role: dbUser.role,
+    activeDates: dbUser.active_dates || [],
+    badges: dbUser.badges || [],
+  });
+
+  // --- HELPER: Map CamelCase App -> Snake_Case DB ---
+  const mapUserToDB = (appUser: Partial<UserData>) => {
+    const dbData: any = { ...appUser };
+
+    if (appUser.activeDates !== undefined) {
+      dbData.active_dates = appUser.activeDates;
+      delete appUser.activeDates;
+    }
+    if (appUser.badges !== undefined) {
+      dbData.badges = appUser.badges;
+      delete appUser.badges;
+    }
+    if (appUser.displayName !== undefined) {
+      dbData.display_name = appUser.displayName;
+      delete dbData.displayName;
+    }
+    if (appUser.photoURL !== undefined) {
+      dbData.photo_url = appUser.photoURL;
+      delete dbData.photoURL;
+    }
+    if (appUser.avatarConfig !== undefined) {
+      dbData.avatar_config = appUser.avatarConfig;
+      delete dbData.avatarConfig;
+    }
+    if (appUser.streakFreezes !== undefined) {
+      dbData.streak_freezes = appUser.streakFreezes;
+      delete dbData.streakFreezes;
+    }
+    if (appUser.ownedCosmetics !== undefined) {
+      dbData.owned_cosmetics = appUser.ownedCosmetics;
+      delete dbData.ownedCosmetics;
+    }
+    // Ensure inventory is passed through if updated
+    // (Supabase handles 'inventory' -> 'inventory' mapping automatically)
+
+    if (appUser.uid !== undefined) delete dbData.uid;
+
+    return dbData;
+  };
+
+  const getDefaultUserData = (authUser: User, nameOverride?: string) => ({
+    id: authUser.id,
+    email: authUser.email,
+    display_name: nameOverride || authUser.user_metadata?.full_name || "Coder",
+    photo_url: authUser.user_metadata?.avatar_url,
     xp: 0,
     level: 1,
     streaks: 0,
@@ -96,17 +132,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     hearts: 5,
     trophies: 0,
     league: "Novice",
-    // --- Meta ---
-    joinedAt: new Date().toISOString(),
-    role: "user", // Default Role
-    // --- Settings ---
+    joined_at: new Date().toISOString(),
+    role: "user",
+    streak_freezes: 0,
+    hints: 0,
+    inventory: [], // Default empty inventory
     settings: {
       theme: "system",
       reduceMotion: false,
       highContrast: false,
       soundEnabled: true,
     },
-    avatarConfig: {
+    avatar_config: {
       body: "male",
       hair: "default",
       eyes: "nonchalant",
@@ -118,128 +155,116 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     },
   });
 
-  useEffect(() => {
-    let unsubscribeSnapshot: (() => void) | null = null;
+  const fetchUserData = async (authUser: User) => {
+    try {
+      const { data, error } = await supabase
+        .from("users")
+        .select("*")
+        .eq("id", authUser.id)
+        .single();
 
-    const unsubscribeAuth = onAuthStateChanged(auth, async (firebaseUser) => {
-      if (unsubscribeSnapshot) {
-        unsubscribeSnapshot();
-        unsubscribeSnapshot = null;
+      if (error && error.code === "PGRST116") {
+        const newUser = getDefaultUserData(authUser);
+        await supabase.from("users").insert([newUser]);
+        setUser(mapUserFromDB(newUser));
+      } else if (data) {
+        setUser(mapUserFromDB(data));
       }
+    } catch (err) {
+      console.error("Error fetching user data:", err);
+    } finally {
+      setLoading(false);
+    }
+  };
 
-      if (firebaseUser) {
-        const userDocRef = doc(db, "users", firebaseUser.uid);
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (session?.user) fetchUserData(session.user);
+      else setLoading(false);
+    });
 
-        // Real-time listener for user data
-        unsubscribeSnapshot = onSnapshot(
-          userDocRef,
-          async (docSnap) => {
-            if (docSnap.exists()) {
-              setUser({ ...firebaseUser, ...docSnap.data() } as UserData);
-            } else {
-              // Create doc if missing (e.g. first Google login)
-              const newUser = getDefaultUserData(firebaseUser);
-              await setDoc(userDocRef, newUser, { merge: true });
-              setUser({ ...firebaseUser, ...newUser } as UserData);
-            }
-            setLoading(false);
-          },
-          (error) => {
-            console.error("Firestore Listener Error:", error);
-            setLoading(false);
-          }
-        );
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange(async (_event, session) => {
+      if (session?.user) {
+        if (user?.uid !== session.user.id) {
+          setLoading(true);
+          await fetchUserData(session.user);
+        }
       } else {
         setUser(null);
         setLoading(false);
       }
     });
 
-    return () => {
-      unsubscribeAuth();
-      if (unsubscribeSnapshot) unsubscribeSnapshot();
-    };
+    return () => subscription.unsubscribe();
   }, []);
 
-  const updateProfile = async (data: {
-    displayName?: string;
-    photoURL?: string;
-    avatarConfig?: any;
-    settings?: UserData["settings"];
-    xp?: number;
-    level?: number;
-    coins?: number;
-    role?: "superadmin" | "admin" | "user";
-  }) => {
+  const updateProfile = async (data: Partial<UserData>) => {
     if (!user) throw new Error("No user is signed in");
 
-    const {
-      displayName,
-      photoURL,
-      avatarConfig,
-      settings,
-      xp,
-      level,
-      coins,
-      role,
-    } = data;
-    const userDocRef = doc(db, "users", user.uid);
+    const dbUpdates = mapUserToDB(data);
 
-    let firestoreData: any = {};
-    let authData: any = {};
+    const { error } = await supabase
+      .from("users")
+      .update(dbUpdates)
+      .eq("id", user.uid);
 
-    if (displayName) {
-      firestoreData.displayName = displayName;
-      authData.displayName = displayName;
-    }
-    if (photoURL) {
-      firestoreData.photoURL = photoURL;
-      authData.photoURL = photoURL;
-    }
-    if (avatarConfig) firestoreData.avatarConfig = avatarConfig;
-    if (settings) firestoreData.settings = settings;
-    if (xp !== undefined) firestoreData.xp = xp;
-    if (level !== undefined) firestoreData.level = level;
-    if (coins !== undefined) firestoreData.coins = coins;
-    if (role !== undefined) firestoreData.role = role;
+    if (error) throw error;
 
-    if (Object.keys(authData).length > 0) {
-      await updateProfileAuth(user, authData);
-    }
-
-    if (Object.keys(firestoreData).length > 0) {
-      await setDoc(userDocRef, firestoreData, { merge: true });
-    }
+    setUser((prev) => (prev ? { ...prev, ...data } : null));
   };
 
+  // ... (signup, login, logout, signInWithGoogle implementation from previous steps remains the same)
   const signup = async (e: string, p: string, n: string) => {
     setLoading(true);
-    const res = await createUserWithEmailAndPassword(auth, e, p);
+    const { data, error } = await supabase.auth.signUp({
+      email: e,
+      password: p,
+      options: { data: { full_name: n } },
+    });
 
-    // 1. Update Auth Profile
-    await updateProfileAuth(res.user, { displayName: n });
+    if (error) {
+      setLoading(false);
+      throw error;
+    }
 
-    // 2. Explicitly update Firestore with default data (role: 'user')
-    const newUser = getDefaultUserData(res.user, n);
-    const userDocRef = doc(db, "users", res.user.uid);
-    await setDoc(userDocRef, newUser, { merge: true });
+    if (data.user) {
+      const newUser = getDefaultUserData(data.user, n);
+      await supabase.from("users").insert([newUser]);
+      setUser(mapUserFromDB(newUser));
+    }
+    setLoading(false);
   };
 
   const login = async (e: string, p: string) => {
     setLoading(true);
-    await signInWithEmailAndPassword(auth, e, p);
+    const { error } = await supabase.auth.signInWithPassword({
+      email: e,
+      password: p,
+    });
+    if (error) {
+      setLoading(false);
+      throw error;
+    }
   };
 
   const logout = async () => {
     setLoading(true);
-    await signOut(auth);
+    await supabase.auth.signOut();
   };
 
   const signInWithGoogle = async (): Promise<boolean> => {
     setLoading(true);
-    const result = await signInWithPopup(auth, new GoogleAuthProvider());
-    const info = getAdditionalUserInfo(result);
-    return info?.isNewUser ?? false;
+    const { error } = await supabase.auth.signInWithOAuth({
+      provider: "google",
+      options: { redirectTo: window.location.origin + "/dashboard" },
+    });
+    if (error) {
+      setLoading(false);
+      throw error;
+    }
+    return false;
   };
 
   return (

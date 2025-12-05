@@ -13,19 +13,18 @@ import {
   Brain,
   Loader2,
   Play,
-  Crown, // Added Crown for League
+  Crown,
 } from "lucide-react";
 import { Button } from "~/components/ui/button";
 import { Progress } from "~/components/ui/progress";
 import { useNavigate } from "@remix-run/react";
 import { useAuth } from "~/contexts/AuthContext";
-import { collection, getDocs, getFirestore } from "firebase/firestore";
-import app from "~/lib/firebase";
+import { supabase } from "~/lib/supabase";
 import { Challenge } from "~/types/challenge.types";
 import { SelectionCarousel } from "./SelectionCarousel";
 import { calculateProgress } from "~/lib/leveling-system";
-
-const db = getFirestore(app);
+import TrophyIcon from "../ui/TrophyIcon";
+import FlameIcon from "../ui/FlameIcon";
 
 // Helper to get colors based on language (Visuals)
 const getColorForLanguage = (lang: string) => {
@@ -73,16 +72,20 @@ export function HomeTab({ onTabChange }: HomeTabProps) {
   const [challenges, setChallenges] = useState<Challenge[]>([]);
   const [loading, setLoading] = useState(true);
 
-  // 1. Fetch Data from Firestore
+  // 1. Fetch Data from Supabase
   useEffect(() => {
     const fetchChallenges = async () => {
       try {
-        const querySnapshot = await getDocs(collection(db, "challenges"));
-        const data = querySnapshot.docs.map((doc) => ({
-          id: doc.id,
-          ...doc.data(),
-        })) as Challenge[];
-        setChallenges(data);
+        // CHANGED: Supabase query replaces Firestore getDocs
+        const { data, error } = await supabase.from("challenges").select("*");
+
+        if (error) {
+          throw error;
+        }
+
+        if (data) {
+          setChallenges(data as Challenge[]);
+        }
       } catch (error) {
         console.error("Error fetching challenges:", error);
       } finally {
@@ -104,8 +107,8 @@ export function HomeTab({ onTabChange }: HomeTabProps) {
 
     // Competitive Stats (Grid)
     streak: user?.streaks || 0,
-    trophies: user?.trophies || 0, // Replaced XP
-    league: user?.league || "Novice", // Replaces Badges
+    trophies: user?.trophies || 0,
+    league: user?.league || "Novice",
   };
 
   const handleSelectChallenge = (challenge: Challenge) => {
@@ -123,10 +126,8 @@ export function HomeTab({ onTabChange }: HomeTabProps) {
     },
   };
 
-  const itemVariants = {
-    hidden: { y: 20, opacity: 0 },
-    visible: { y: 0, opacity: 1 },
-  };
+  // Unused variant definition removed or kept if you plan to use it later
+  // const itemVariants = { ... }
 
   return (
     <div className="max-w-6xl mx-auto space-y-8 pb-12">
@@ -183,21 +184,22 @@ export function HomeTab({ onTabChange }: HomeTabProps) {
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         {/* 1. Streak */}
         <StatCard
-          icon={Flame}
+          icon={FlameIcon}
           label="Day Streak"
           value={stats.streak.toString()}
           color="text-orange-500"
           bgColor="bg-orange-50 dark:bg-orange-950/30"
+          iconClassName="h-6 w-5"
         />
-        {/* 2. Trophies (Replaced XP) */}
+        {/* 2. Trophies */}
         <StatCard
-          icon={Trophy}
+          icon={TrophyIcon}
           label="Total Trophies"
           value={stats.trophies.toLocaleString()}
           color="text-yellow-500"
           bgColor="bg-yellow-50 dark:bg-yellow-950/30"
         />
-        {/* 3. League (Replaced Badges) */}
+        {/* 3. League */}
         <StatCard
           icon={Crown}
           label="Current League"
@@ -251,7 +253,7 @@ export function HomeTab({ onTabChange }: HomeTabProps) {
               No challenges found in the database.
             </p>
             <p className="text-sm text-gray-400 mt-2">
-              (Try uploading them using the seed script!)
+              (Try adding some to your 'challenges' table!)
             </p>
           </div>
         )}
@@ -296,7 +298,7 @@ export function HomeTab({ onTabChange }: HomeTabProps) {
 
 function StatCard({ icon: Icon, label, value, color, bgColor }: any) {
   return (
-    <div className="bg-white dark:bg-gray-900 rounded-2xl p-4 border border-gray-100 dark:border-gray-800 shadow-sm dark:hover:shadow-white hover:shadow-md transition-shadow flex items-center gap-4">
+    <div className="bg-white dark:bg-gray-900 rounded-2xl p-4 border border-gray-100 dark:border-gray-800 shadow-sm dark:hover:shadow-white hover:shadow-md flex items-center gap-4 transition-transform hover:scale-105">
       <div className={`p-3 rounded-xl ${bgColor}`}>
         <Icon className={`w-5 h-5 ${color}`} />
       </div>

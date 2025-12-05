@@ -1,22 +1,14 @@
 // app/components/dashboardmodule/LeaderboardTab.tsx
 import { useState, useEffect } from "react";
-import app from "~/lib/firebase";
-import {
-  getFirestore,
-  collection,
-  query,
-  orderBy,
-  limit,
-  getDocs,
-} from "firebase/firestore";
 import { useAuth } from "~/contexts/AuthContext";
-// Removed standard Avatar imports as we are replacing them
-// import { Avatar, AvatarFallback, AvatarImage } from "~/components/ui/avatar";
+// CHANGED: Import Supabase client
+import { supabase } from "~/lib/supabase";
 import { Card } from "~/components/ui/card";
 import { Skeleton } from "~/components/ui/skeleton";
 import { Medal, Trophy, Award, Crown } from "lucide-react";
 import { motion } from "framer-motion";
-import { AvatarDisplay } from "./AvatarDisplay"; // Import Custom Avatar
+import { AvatarDisplay } from "./AvatarDisplay";
+import TrophyIcon from "../ui/TrophyIcon";
 
 interface LeaderboardUser {
   id: string;
@@ -26,10 +18,8 @@ interface LeaderboardUser {
   level: number;
   trophies: number;
   league: string;
-  avatarConfig?: any; // Added avatarConfig
+  avatarConfig?: any;
 }
-
-const db = getFirestore(app);
 
 export function LeaderboardTab() {
   const { user } = useAuth();
@@ -40,24 +30,27 @@ export function LeaderboardTab() {
     const fetchUsers = async () => {
       setLoading(true);
       try {
-        const usersRef = collection(db, "users");
-        const q = query(usersRef, orderBy("trophies", "desc"), limit(100));
+        // CHANGED: Supabase Query replacing Firestore
+        const { data, error } = await supabase
+          .from("users")
+          .select("*")
+          .order("trophies", { ascending: false })
+          .limit(100);
 
-        const querySnapshot = await getDocs(q);
-        const fetchedUsers: LeaderboardUser[] = [];
-        querySnapshot.forEach((doc) => {
-          const data = doc.data();
-          fetchedUsers.push({
-            id: doc.id,
-            displayName: data.displayName || "Anonymous User",
-            photoURL: data.photoURL || null,
-            xp: data.xp || 0,
-            level: data.level || 1,
-            trophies: data.trophies || 0,
-            league: data.league || "Novice",
-            avatarConfig: data.avatarConfig || null, // Fetch Config
-          });
-        });
+        if (error) throw error;
+
+        // Map Supabase data to local interface
+        // Note: Supabase returns raw objects, no need for .data() method
+        const fetchedUsers: LeaderboardUser[] = (data || []).map((u: any) => ({
+          id: u.id,
+          displayName: u.display_name || "Anonymous User", // snake_case fix
+          photoURL: u.photo_url || null, // snake_case fix
+          xp: u.xp || 0,
+          level: u.level || 1,
+          trophies: u.trophies || 0,
+          league: u.league || "Novice",
+          avatarConfig: u.avatar_config || null, // snake_case fix
+        }));
 
         setUsers(fetchedUsers);
       } catch (error) {
@@ -73,6 +66,7 @@ export function LeaderboardTab() {
   const topThree = users.slice(0, 3);
   const restOfUsers = users.slice(3);
 
+  // Note: user?.uid comes from AuthContext (which we mapped from Supabase user.id)
   const currentUserRank = users.findIndex((u) => u.id === user?.uid);
   const currentUserData =
     currentUserRank !== -1 ? users[currentUserRank] : null;
@@ -95,7 +89,7 @@ export function LeaderboardTab() {
         animate={{ opacity: 1, y: 0 }}
         className="text-center"
       >
-        <Trophy className="w-16 h-16 text-yellow-500 mx-auto drop-shadow-lg" />
+        <TrophyIcon className="w-20 h-20 text-yellow-500 mx-auto drop-shadow-lg" />
         <h1 className="text-4xl font-extrabold text-gray-900 dark:text-white mt-4 font-pixelify tracking-wide">
           Hall of Champions
         </h1>
@@ -260,7 +254,7 @@ function PodiumCard({ user, rank }: { user: LeaderboardUser; rank: number }) {
       </div>
 
       <div className="mt-4 bg-gray-900 dark:bg-white/10 rounded-xl px-4 py-2 text-xl font-black text-white flex items-center gap-2 shadow-inner">
-        <Trophy
+        <TrophyIcon
           className={`w-5 h-5 ${isFirst ? "text-yellow-400" : "text-gray-300"}`}
         />
         {user.trophies}
@@ -361,7 +355,7 @@ function UserRankRow({
               : "text-gray-900 dark:text-white"
           }`}
         >
-          <Trophy className="w-4 h-4 text-yellow-500 fill-current" />
+          <TrophyIcon className="w-4 h-4 text-yellow-500 fill-current" />
           {user.trophies}
         </div>
       </div>

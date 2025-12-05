@@ -7,10 +7,13 @@ import { Input } from "~/components/ui/input";
 import { Label } from "~/components/ui/label";
 import { Separator } from "~/components/ui/separator";
 import CodeOnLogo from "~/components/ui/CodeOnLogo";
+// 1. IMPORT THE TOGGLE
+import { ThemeToggle } from "~/components/ThemeToggle";
 import { Loader2, Mail, Lock, CheckCircle2 } from "lucide-react";
 import { motion } from "framer-motion";
 
 export default function Login() {
+  // ... existing state and logic ...
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
@@ -49,9 +52,14 @@ export default function Login() {
   };
 
   return (
-    <div className="min-h-screen w-full flex bg-white dark:bg-gray-900">
+    // 2. ADD 'relative' CLASS HERE so the absolute button positions correctly
+    <div className="min-h-screen w-full flex bg-white dark:bg-gray-900 relative transition-colors duration-300">
+      {/* 3. PLACE THE BUTTON HERE */}
+      <ThemeToggle />
+
       {/* --- Left Side: Visuals --- */}
       <div className="hidden lg:flex w-1/2 bg-gray-900 relative overflow-hidden items-center justify-center p-12">
+        {/* ... existing left side content ... */}
         <motion.div
           animate={{ scale: [1, 1.2, 1], rotate: [0, 90, 0] }}
           transition={{ duration: 20, repeat: Infinity, ease: "linear" }}
@@ -114,6 +122,7 @@ export default function Login() {
 
       {/* --- Right Side: Form --- */}
       <div className="w-full lg:w-1/2 flex items-center justify-center p-8">
+        {/* ... existing form content ... */}
         <motion.div
           initial={{ opacity: 0, x: 20 }}
           animate={{ opacity: 1, x: 0 }}

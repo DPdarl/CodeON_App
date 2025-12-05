@@ -23,7 +23,7 @@ import {
   Sparkles,
   Medal,
   Crown,
-} from "lucide-react"; // Added Crown
+} from "lucide-react";
 import { motion } from "framer-motion";
 import { Toaster, toast } from "sonner";
 
@@ -40,7 +40,7 @@ export function ProfileTab({ user, onSaveAvatar }: ProfileTabProps) {
   useEffect(() => {
     if (user?.displayName) setDisplayName(user.displayName);
 
-    // Fetch Rank (Based on TROPHIES now, not XP)
+    // Fetch Rank (Based on TROPHIES)
     const fetchRank = async () => {
       if (user?.trophies !== undefined) {
         const r = await getUserRank(user.trophies);
@@ -52,7 +52,7 @@ export function ProfileTab({ user, onSaveAvatar }: ProfileTabProps) {
 
   // Derived Stats
   const stats = {
-    trophies: user?.trophies || 0, // Replaced XP
+    trophies: user?.trophies || 0,
     streak: user?.streaks || 0,
     league: user?.league || "Novice",
     rank: realRank ? `#${realRank}` : "Unranked",
@@ -72,14 +72,13 @@ export function ProfileTab({ user, onSaveAvatar }: ProfileTabProps) {
     toast.success("Avatar updated! Looking good.");
   };
 
-  const creationDate = user?.metadata.creationTime
-    ? new Date(user.metadata.creationTime).toLocaleDateString()
+  // CHANGED: Use joinedAt from our custom UserData instead of Firebase metadata
+  const creationDate = user?.joinedAt
+    ? new Date(user.joinedAt).toLocaleDateString()
     : "N/A";
 
   return (
     <div className="max-w-6xl mx-auto space-y-8 pb-12 font-pixelify">
-      <Toaster position="top-center" />
-
       {/* Header */}
       <motion.div
         initial={{ opacity: 0, y: -20 }}
@@ -88,7 +87,7 @@ export function ProfileTab({ user, onSaveAvatar }: ProfileTabProps) {
         <Card className="bg-white dark:bg-gray-900 shadow-lg rounded-3xl overflow-hidden">
           <CardContent className="p-6 flex flex-col sm:flex-row items-center gap-6">
             <div className="w-24 h-24 rounded-full overflow-hidden border-4 border-indigo-500 bg-gray-100 dark:bg-gray-800 flex-shrink-0">
-              <AvatarDisplay config={(user as any)?.avatarConfig} headOnly />
+              <AvatarDisplay config={user?.avatarConfig} headOnly />
             </div>
             <div className="text-center sm:text-left">
               <h1 className="text-3xl font-extrabold text-gray-900 dark:text-white">
@@ -113,14 +112,14 @@ export function ProfileTab({ user, onSaveAvatar }: ProfileTabProps) {
         </Card>
       </motion.div>
 
-      {/* Stats Row (UPDATED) */}
+      {/* Stats Row */}
       <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ delay: 0.1 }}
         className="grid grid-cols-2 md:grid-cols-4 gap-4"
       >
-        {/* 1. Trophies (Was XP) */}
+        {/* 1. Trophies */}
         <StatItem
           icon={Trophy}
           value={stats.trophies.toLocaleString()}
@@ -134,7 +133,7 @@ export function ProfileTab({ user, onSaveAvatar }: ProfileTabProps) {
           label="Day Streak"
           color="text-orange-500"
         />
-        {/* 3. League (Icon Changed to Crown) */}
+        {/* 3. League */}
         <StatItem
           icon={Crown}
           value={stats.league}
@@ -194,7 +193,7 @@ export function ProfileTab({ user, onSaveAvatar }: ProfileTabProps) {
             <div className="mt-4">
               <CustomizeAvatar
                 user={user}
-                initialConfig={(user as any)?.avatarConfig}
+                initialConfig={user?.avatarConfig}
                 onSave={handleAvatarSaveWithToast}
               />
             </div>

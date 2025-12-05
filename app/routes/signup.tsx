@@ -2,11 +2,14 @@
 import { useState } from "react";
 import { Link, useNavigate } from "@remix-run/react";
 import { useAuth } from "~/contexts/AuthContext";
+import { supabase } from "~/lib/supabase"; // 1. Import Supabase directly
 import { Button } from "~/components/ui/button";
 import { Input } from "~/components/ui/input";
 import { Label } from "~/components/ui/label";
 import { Separator } from "~/components/ui/separator";
 import CodeOnLogo from "~/components/ui/CodeOnLogo";
+// 2. Kept ThemeToggle from your request
+import { ThemeToggle } from "~/components/ThemeToggle";
 import {
   Loader2,
   User,
@@ -26,7 +29,7 @@ export default function SignUp() {
   const [error, setError] = useState("");
   const [isLoading, setIsLoading] = useState(false);
 
-  const { signup, signInWithGoogle } = useAuth();
+  const { signInWithGoogle } = useAuth();
   const navigate = useNavigate();
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -46,10 +49,41 @@ export default function SignUp() {
     setIsLoading(true);
 
     try {
-      // Pass username as displayName
-      await signup(email, password, username);
-      navigate("/onboarding");
+      // 3. Direct Supabase Signup (Bypasses Context to avoid race conditions)
+      const { data, error } = await supabase.auth.signUp({
+        email,
+        password,
+        options: {
+          data: { full_name: username },
+        },
+      });
+
+      if (error) throw error;
+
+      // 4. Auto-Login Check
+      if (data.session) {
+        // Session exists! Wait briefly for AuthContext to sync, then redirect
+        setTimeout(() => {
+          navigate("/onboarding");
+        }, 500);
+      } else if (data.user) {
+        // If no session, fallback to manual login logic (rare if confirm is off)
+        const { data: loginData } = await supabase.auth.signInWithPassword({
+          email,
+          password,
+        });
+
+        if (loginData.session) {
+          setTimeout(() => {
+            navigate("/onboarding");
+          }, 500);
+        } else {
+          alert("Account created! Please log in.");
+          navigate("/login");
+        }
+      }
     } catch (err: any) {
+      console.error(err);
       setError(err.message || "Failed to create account");
     } finally {
       setIsLoading(false);
@@ -58,12 +92,8 @@ export default function SignUp() {
 
   const handleGoogleLogin = async () => {
     try {
-      const isNewUser = await signInWithGoogle();
-      if (isNewUser) {
-        navigate("/onboarding");
-      } else {
-        navigate("/dashboard");
-      }
+      await signInWithGoogle();
+      // Supabase redirects the window, no navigate needed
     } catch (error) {
       console.error(error);
       setError("Failed to sign in with Google");
@@ -71,7 +101,10 @@ export default function SignUp() {
   };
 
   return (
-    <div className="min-h-screen w-full flex bg-white dark:bg-gray-900">
+    <div className="min-h-screen w-full flex bg-white dark:bg-gray-900 relative transition-colors duration-300">
+      {/* Theme Toggle */}
+      <ThemeToggle />
+
       {/* Left Side: Visuals */}
       <div className="hidden lg:flex w-1/2 bg-gray-900 relative overflow-hidden items-center justify-center p-12">
         <motion.div
@@ -233,9 +266,19 @@ export default function SignUp() {
 
           <Button
             variant="outline"
-            className="w-full h-12"
+            className="w-full h-12 text-base font-medium border-2 hover:bg-gray-50 dark:hover:bg-gray-800"
             onClick={handleGoogleLogin}
           >
+            <svg
+              className="mr-3 h-5 w-5"
+              aria-hidden="true"
+              viewBox="0 0 488 512"
+            >
+              <path
+                fill="currentColor"
+                d="M488 261.8C488 403.3 391.1 504 248 504 110.8 504 0 393.2 0 256S110.8 8 248 8c66.8 0 123 24.5 166.3 64.9l-67.5 64.9C258.5 52.6 94.3 116.6 94.3 256c0 86.5 69.1 156.6 153.7 156.6 98.2 0 135-70.4 140.8-106.9H248v-85.3h236.1c2.3 12.7 3.9 24.9 3.9 41.4z"
+              ></path>
+            </svg>
             Google
           </Button>
 

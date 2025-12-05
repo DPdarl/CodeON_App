@@ -26,6 +26,9 @@ import {
   LogOut,
 } from "lucide-react";
 import { AvatarDisplay } from "./AvatarDisplay";
+import CodeOnLogo from "../ui/CodeOnLogo";
+import HeartIcon from "../ui/HeartIcon";
+import FlameIcon from "../ui/FlameIcon";
 
 interface StatItemProps {
   icon: React.ReactNode;
@@ -35,7 +38,7 @@ interface StatItemProps {
 function StatItem({ icon, value, label }: StatItemProps) {
   return (
     <div
-      className="flex items-center space-x-2 bg-gray-100 dark:bg-gray-800 px-3 py-1.5 rounded-full text-sm font-medium transition-transform hover:scale-105"
+      className="flex items-center gap-2 bg-gray-100 dark:bg-gray-800 px-3 py-1.5 rounded-full text-lg font-medium transition-transform hover:scale-105"
       title={label}
     >
       {icon}
@@ -70,10 +73,21 @@ export function DashboardHeader({
   const [showLogoutDialog, setShowLogoutDialog] = useState(false);
 
   const confirmLogout = () => {
+    // 1. Close the dialog visually
     setShowLogoutDialog(false);
-    onLogout();
-  };
 
+    // 2. Use a timeout to wait for the close animation
+    setTimeout(() => {
+      // 3. NUCLEAR OPTION: Manually remove the locks.
+      // This forces the browser to become interactive again,
+      // regardless of whether Radix finished its cleanup.
+      document.body.style.pointerEvents = "";
+      document.body.style.overflow = "";
+
+      // 4. Now perform the logout
+      onLogout();
+    }, 300); // Increased to 300ms to ensure animation clears
+  };
   return (
     <>
       <header className="border-b bg-white/80 dark:bg-gray-900/80 backdrop-blur-sm sticky top-0 z-10 transition-colors">
@@ -96,21 +110,19 @@ export function DashboardHeader({
           <div className="flex-1 flex justify-center">
             <div className="flex items-center space-x-4">
               <StatItem
-                icon={
-                  <Flame className="h-4 w-4 text-orange-500 fill-orange-500" />
-                }
+                icon={<FlameIcon className="h-6 w-5" />}
                 value={stats.streaks}
                 label="Streak"
               />
               <StatItem
-                icon={
-                  <CircleDollarSign className="h-4 w-4 text-yellow-500 fill-yellow-500" />
-                }
+                icon={<CodeOnLogo className="h-6 w-6" />}
                 value={stats.coins}
                 label="Coins"
               />
               <StatItem
-                icon={<Heart className="h-4 w-4 text-red-500 fill-red-500" />}
+                icon={
+                  <HeartIcon className="h-6  w-6 text-red-500 fill-red-500" />
+                }
                 value={stats.hearts}
                 label="Hearts"
               />
@@ -147,6 +159,8 @@ export function DashboardHeader({
                 </DropdownMenuItem>
                 <DropdownMenuSeparator />
                 <DropdownMenuItem
+                  // Add this onSelect handler
+                  onSelect={(e) => e.preventDefault()}
                   onClick={() => setShowLogoutDialog(true)}
                   className="cursor-pointer text-red-600 focus:text-red-600 focus:bg-red-50 dark:focus:bg-red-950/20"
                 >

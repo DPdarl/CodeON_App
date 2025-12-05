@@ -1,4 +1,3 @@
-// app/components/dashboardmodule/StreakTab.tsx
 import { useState, useEffect } from "react";
 import { useAuth } from "~/contexts/AuthContext";
 import {
@@ -11,32 +10,37 @@ import {
 } from "~/components/ui/card";
 import { Button } from "~/components/ui/button";
 import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+  DialogDescription,
+} from "~/components/ui/dialog";
+import {
   Flame,
   Calendar,
   Snowflake,
   Store,
   Award,
-  Lock,
   Check,
+  Lock,
+  Crown,
+  PartyPopper,
 } from "lucide-react";
-import { motion } from "framer-motion";
+import { motion, AnimatePresence } from "framer-motion";
 import { cn } from "~/lib/utils";
+import { STREAK_MILESTONES } from "~/lib/streak-logic"; // Import Logic
 
 // --- HELPERS ---
 
-// 1. Get Date in PH Timezone (Fixes the "1 Day Ahead" bug)
 const getPhDate = () => {
   const now = new Date();
-  const phTime = new Date(
-    now.toLocaleString("en-US", { timeZone: "Asia/Manila" })
-  );
-  return phTime;
+  const phTimeStr = now.toLocaleString("en-US", { timeZone: "Asia/Manila" });
+  return new Date(phTimeStr);
 };
 
-// 2. Format as YYYY-MM-DD using PH time
 const getPhISODate = (date: Date): string => {
-  // We can't just use .toISOString() because that converts back to UTC!
-  // We need to format the parts manually or use toLocaleDateString
   const year = date.getFullYear();
   const month = String(date.getMonth() + 1).padStart(2, "0");
   const day = String(date.getDate()).padStart(2, "0");
@@ -45,12 +49,7 @@ const getPhISODate = (date: Date): string => {
 
 const containerVariants = {
   hidden: { opacity: 0 },
-  visible: {
-    opacity: 1,
-    transition: {
-      staggerChildren: 0.1,
-    },
-  },
+  visible: { opacity: 1, transition: { staggerChildren: 0.1 } },
 };
 
 const itemVariants = {
@@ -60,72 +59,51 @@ const itemVariants = {
 
 export function StreakTab() {
   const { user } = useAuth();
-  const [calendarDays, setCalendarDays] = useState<CalendarDay[]>([]);
+  const [calendarDays, setCalendarDays] = useState<any[]>([]);
   const [currentMonth, setCurrentMonth] = useState("");
 
-  // Use Real Data
+  // Modal State
+  const [selectedMilestone, setSelectedMilestone] = useState<any | null>(null);
+
   const currentStreak = user?.streaks || 0;
-  // Fallback to 0 if streakFreezes doesn't exist on user yet
   const freezeCount = (user as any)?.streakFreezes || 0;
+  const activeDatesRaw = (user as any)?.activeDates;
 
-  // TODO: In the future, store a real array like user.activeDates = ["2023-11-01", ...]
-  // For now, we mock the history but keep "Today" accurate.
-  const activeDays = (user as any)?.activeDates || [];
-
-  interface CalendarDay {
-    day: number;
-    isPadding: boolean;
-    isToday: boolean;
-    isActive: boolean;
-    isFuture: boolean;
-  }
+  // Generate Dynamic Milestones List
+  const milestonesList = Object.entries(STREAK_MILESTONES)
+    .map(([days, reward]) => ({
+      days: parseInt(days),
+      ...reward,
+      earned: currentStreak >= parseInt(days),
+    }))
+    .sort((a, b) => a.days - b.days);
 
   useEffect(() => {
-    // 1. Use PH Time for "Today"
+    const activeDays = activeDatesRaw || [];
     const today = getPhDate();
     const todayStr = getPhISODate(today);
 
-    // 2. Set Month Label
     setCurrentMonth(today.toLocaleString("default", { month: "long" }));
 
     const year = today.getFullYear();
-    const month = today.getMonth(); // 0-11
-
-    // 3. Calculate Calendar Grid
-    const firstDayOfMonth = new Date(year, month, 1).getDay(); // 0 (Sun) - 6 (Sat)
+    const month = today.getMonth();
+    const firstDayOfMonth = new Date(year, month, 1).getDay();
     const daysInMonth = new Date(year, month + 1, 0).getDate();
 
-    const days: CalendarDay[] = [];
+    const days = [];
 
-    // Add padding
     for (let i = 0; i < firstDayOfMonth; i++) {
-      days.push({
-        day: 0,
-        isPadding: true,
-        isToday: false,
-        isActive: false,
-        isFuture: false,
-      });
+      days.push({ day: 0, isPadding: true });
     }
 
-    // Add actual days
     for (let day = 1; day <= daysInMonth; day++) {
       const date = new Date(year, month, day);
       const dateStr = getPhISODate(date);
-
       const isToday = dateStr === todayStr;
 
-      // Check if this date is in the user's history
-      // OR if it's today and they have a streak > 0 (assumes they played today)
       let isActive = activeDays.includes(dateStr);
+      if (isToday && currentStreak > 0) isActive = true;
 
-      // Simple logic: If today is the streak day, mark it active
-      if (isToday && currentStreak > 0) {
-        isActive = true;
-      }
-
-      // Check future based on PH Time
-      // We compare timestamps to be safe
       const isFuture = date.setHours(0, 0, 0, 0) > today.setHours(0, 0, 0, 0);
 
       days.push({
@@ -138,15 +116,7 @@ export function StreakTab() {
     }
 
     setCalendarDays(days);
-  }, [user, currentStreak, activeDays]); // Re-run when user data changes
-
-  // Dynamic Milestones based on real streak
-  const milestones = [
-    { name: "3-Day Streak", icon: Award, earned: currentStreak >= 3 },
-    { name: "7-Day Streak", icon: Award, earned: currentStreak >= 7 },
-    { name: "14-Day Streak", icon: Award, earned: currentStreak >= 14 },
-    { name: "30-Day Streak", icon: Award, earned: currentStreak >= 30 },
-  ];
+  }, [currentStreak, activeDatesRaw]);
 
   return (
     <div className="max-w-6xl mx-auto space-y-8 pb-12">
@@ -169,18 +139,83 @@ export function StreakTab() {
         initial="hidden"
         animate="visible"
       >
-        {/* Column 1: Current Streak & Calendar */}
         <motion.div variants={itemVariants} className="lg:col-span-2 space-y-6">
           <CurrentStreakCard streak={currentStreak} />
           <StreakCalendarCard month={currentMonth} days={calendarDays} />
         </motion.div>
 
-        {/* Column 2: Inventory & Milestones */}
         <motion.div variants={itemVariants} className="lg:col-span-1 space-y-6">
           <StreakInventoryCard freezeCount={freezeCount} />
-          <StreakMilestonesCard milestones={milestones} />
+          {/* Pass handler to open modal */}
+          <StreakMilestonesCard
+            milestones={milestonesList}
+            onViewMilestone={setSelectedMilestone}
+          />
         </motion.div>
       </motion.div>
+
+      {/* --- MILESTONE MODAL --- */}
+      <Dialog
+        open={!!selectedMilestone}
+        onOpenChange={(open) => !open && setSelectedMilestone(null)}
+      >
+        <DialogContent className="sm:max-w-sm text-center">
+          <DialogHeader>
+            <DialogTitle className="text-2xl font-bold flex flex-col items-center gap-2">
+              <div className="p-4 bg-yellow-100 dark:bg-yellow-900/30 rounded-full mb-2">
+                <TrophyIcon className="w-12 h-12 text-yellow-500" />
+              </div>
+              {selectedMilestone?.title}
+            </DialogTitle>
+            <DialogDescription className="text-center text-lg">
+              You hit a {selectedMilestone?.days} day streak!
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="py-6 space-y-4">
+            {/* Reward Box */}
+            <div className="flex items-center justify-center gap-4 p-4 bg-gray-50 dark:bg-gray-800 rounded-2xl border-2 border-dashed border-gray-200 dark:border-gray-700">
+              <div className="flex flex-col items-center">
+                <span className="text-xs uppercase font-bold text-gray-400">
+                  Reward
+                </span>
+                <div className="flex items-center gap-2 text-xl font-black text-yellow-500">
+                  <img
+                    src="/assets/icons/coinv2.png"
+                    className="w-6 h-6"
+                    alt="Coin"
+                  />
+                  +{selectedMilestone?.coins}
+                </div>
+              </div>
+
+              {selectedMilestone?.badge && (
+                <>
+                  <div className="w-[1px] h-10 bg-gray-300 dark:bg-gray-600" />
+                  <div className="flex flex-col items-center">
+                    <span className="text-xs uppercase font-bold text-gray-400">
+                      Badge
+                    </span>
+                    <div className="flex items-center gap-2 text-lg font-bold text-purple-500">
+                      <Award className="w-5 h-5" />
+                      Unlocked
+                    </div>
+                  </div>
+                </>
+              )}
+            </div>
+          </div>
+
+          <DialogFooter className="sm:justify-center">
+            <Button
+              className="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-xl"
+              onClick={() => setSelectedMilestone(null)}
+            >
+              Awesome!
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
@@ -189,20 +224,24 @@ export function StreakTab() {
 
 function CurrentStreakCard({ streak }: { streak: number }) {
   return (
-    <Card className="bg-gradient-to-br from-orange-400 to-red-500 text-white rounded-3xl shadow-lg overflow-hidden">
-      <CardContent className="p-8 flex items-center gap-6">
-        <Flame
-          className="w-24 h-24 drop-shadow-lg animate-pulse"
-          fill="white"
-        />
+    <Card className="bg-gradient-to-br from-orange-400 to-red-500 text-white rounded-3xl shadow-lg overflow-hidden relative">
+      {/* Background Pattern */}
+      <div className="absolute top-0 right-0 -mt-10 -mr-10 w-40 h-40 bg-white/10 rounded-full blur-3xl" />
+
+      <CardContent className="p-8 flex items-center gap-6 relative z-10">
+        <div className="p-4 bg-white/20 rounded-full backdrop-blur-sm shadow-inner">
+          <Flame className="w-16 h-16 drop-shadow-md animate-pulse text-white fill-white" />
+        </div>
         <div>
-          <p className="text-xl font-bold uppercase tracking-wider opacity-90">
+          <p className="text-sm font-bold uppercase tracking-wider opacity-80 mb-1">
             Current Streak
           </p>
-          <p className="text-7xl font-black drop-shadow-md">{streak}</p>
-          <p className="text-lg font-medium opacity-90">
-            {streak > 0 ? "You're on fire!" : "Start your streak today!"}
+          <p className="text-6xl font-black drop-shadow-sm leading-none mb-2">
+            {streak}
           </p>
+          <div className="inline-flex items-center px-3 py-1 rounded-full bg-white/20 text-xs font-bold backdrop-blur-sm">
+            {streak > 0 ? "🔥 You're on fire!" : "🌱 Start your streak today!"}
+          </div>
         </div>
       </CardContent>
     </Card>
@@ -211,8 +250,6 @@ function CurrentStreakCard({ streak }: { streak: number }) {
 
 function StreakCalendarCard({ month, days }: { month: string; days: any[] }) {
   const dayLabels = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
-
-  // Find "today's" status to show the message
   const today = days.find((d) => d.isToday);
   const isTodayActive = today?.isActive;
 
@@ -220,71 +257,61 @@ function StreakCalendarCard({ month, days }: { month: string; days: any[] }) {
     <Card className="bg-white dark:bg-gray-900 shadow-lg border-gray-100 dark:border-gray-800 rounded-3xl">
       <CardHeader>
         <CardTitle className="text-2xl font-bold flex items-center justify-between">
-          <span>{month} Calendar</span>
-          <Calendar className="w-6 h-6 text-gray-400" />
+          <span>{month}</span>
+          <div
+            className={`text-xs px-3 py-1 rounded-full font-bold flex items-center gap-1 ${
+              isTodayActive
+                ? "bg-green-100 text-green-600 dark:bg-green-900/30 dark:text-green-400"
+                : "bg-gray-100 text-gray-500 dark:bg-gray-800"
+            }`}
+          >
+            {isTodayActive ? (
+              <Check className="w-3 h-3" />
+            ) : (
+              <Calendar className="w-3 h-3" />
+            )}
+            {isTodayActive ? "Streak Saved" : "Pending"}
+          </div>
         </CardTitle>
-        <CardDescription>
-          {isTodayActive
-            ? "Great job! You've secured your streak for today."
-            : "Complete a challenge today to keep your streak!"}
-        </CardDescription>
       </CardHeader>
       <CardContent>
-        {/* Day Labels */}
         <div className="grid grid-cols-7 gap-2 mb-3">
           {dayLabels.map((label) => (
             <div
               key={label}
-              className="text-center text-xs font-bold text-gray-500 dark:text-gray-400 uppercase"
+              className="text-center text-[10px] font-bold text-gray-400 uppercase"
             >
               {label}
             </div>
           ))}
         </div>
 
-        {/* Calendar Grid */}
         <div className="grid grid-cols-7 gap-2">
           {days.map((day, index) => {
-            // The "Today" warning pulse
             const isWarning = day.isToday && !day.isActive;
-
             return (
               <div
                 key={index}
                 className={cn(
-                  "relative aspect-square rounded-xl flex items-center justify-center font-bold transition-all",
-                  // Padding
+                  "relative aspect-square rounded-xl flex items-center justify-center font-bold text-sm transition-all",
                   day.isPadding && "bg-transparent",
-
-                  // Future
                   day.isFuture &&
                     "bg-gray-50 dark:bg-gray-800/20 text-gray-300 dark:text-gray-700",
-
-                  // Past - Not Active
                   !day.isPadding &&
                     !day.isFuture &&
                     !day.isActive &&
                     !day.isToday &&
-                    "bg-gray-100 dark:bg-gray-800/50 text-gray-400 dark:text-gray-600",
-
-                  // Active
+                    "bg-gray-100 dark:bg-gray-800/50 text-gray-400",
                   day.isActive &&
-                    "bg-orange-400 text-white shadow-md shadow-orange-500/20 scale-105",
-
-                  // Today - Not Active (Warning!)
+                    "bg-orange-500 text-white shadow-md shadow-orange-500/20 scale-105 border-2 border-white dark:border-gray-900",
                   isWarning &&
-                    "bg-white dark:bg-gray-800 text-gray-900 dark:text-white border-2 border-red-500",
-
-                  // Today - Active
+                    "bg-transparent text-gray-900 dark:text-white border-2 border-dashed border-red-300 dark:border-red-700",
                   day.isToday &&
                     day.isActive &&
-                    "border-2 border-blue-500 dark:border-blue-400"
+                    "ring-2 ring-offset-2 ring-orange-500 dark:ring-offset-gray-900"
                 )}
               >
                 {!day.isPadding && <span>{day.day}</span>}
-                {isWarning && (
-                  <div className="absolute inset-0 rounded-xl animate-pulse bg-red-500/10" />
-                )}
               </div>
             );
           })}
@@ -296,74 +323,113 @@ function StreakCalendarCard({ month, days }: { month: string; days: any[] }) {
 
 function StreakInventoryCard({ freezeCount }: { freezeCount: number }) {
   return (
-    <Card className="bg-white dark:bg-gray-900 shadow-lg border-gray-100 dark:border-gray-800 rounded-3xl">
-      <CardHeader>
-        <CardTitle className="text-2xl font-bold">Inventory</CardTitle>
-        <CardDescription>Power-ups to protect your hard work.</CardDescription>
+    <Card className="bg-white dark:bg-gray-900 shadow-sm border border-gray-100 dark:border-gray-800 rounded-3xl">
+      <CardHeader className="pb-2">
+        <CardTitle className="text-lg font-bold">Power-Ups</CardTitle>
       </CardHeader>
-      <CardContent className="flex items-center gap-4">
-        <div className="p-3 rounded-xl bg-blue-100 dark:bg-blue-900/30">
-          <Snowflake className="w-8 h-8 text-blue-500" />
+      <CardContent>
+        <div className="flex items-center justify-between p-3 bg-blue-50 dark:bg-blue-900/20 rounded-2xl border border-blue-100 dark:border-blue-900/50">
+          <div className="flex items-center gap-3">
+            <div className="p-2 bg-white dark:bg-blue-900 rounded-xl shadow-sm">
+              <Snowflake className="w-6 h-6 text-blue-500" />
+            </div>
+            <div>
+              <div className="font-bold text-blue-900 dark:text-blue-100">
+                Streak Freeze
+              </div>
+              <div className="text-xs text-blue-600 dark:text-blue-300">
+                Auto-equips on miss
+              </div>
+            </div>
+          </div>
+          <div className="text-2xl font-black text-blue-600 dark:text-blue-400">
+            x{freezeCount}
+          </div>
         </div>
-        <div>
-          <p className="text-lg font-bold text-gray-900 dark:text-white">
-            Streak Freeze
-          </p>
-          <p className="text-sm text-gray-500 dark:text-gray-400">
-            You have {freezeCount} equipped.
-          </p>
-        </div>
-      </CardContent>
-      <CardFooter>
-        <Button className="w-full bg-indigo-600 hover:bg-indigo-700 dark:bg-indigo-500 dark:hover:bg-indigo-600 text-white font-bold rounded-xl">
-          <Store className="w-4 h-4 mr-2" />
-          Go to Store
+        <Button
+          variant="ghost"
+          className="w-full mt-2 text-indigo-600 hover:text-indigo-700 h-auto py-2 text-xs"
+        >
+          <Store className="w-3 h-3 mr-1" /> Get more in Store
         </Button>
-      </CardFooter>
+      </CardContent>
     </Card>
   );
 }
 
-function StreakMilestonesCard({ milestones }: { milestones: any[] }) {
+function StreakMilestonesCard({
+  milestones,
+  onViewMilestone,
+}: {
+  milestones: any[];
+  onViewMilestone: (m: any) => void;
+}) {
   return (
-    <Card className="bg-white dark:bg-gray-900 shadow-lg border-gray-100 dark:border-gray-800 rounded-3xl">
+    <Card className="bg-white dark:bg-gray-900 shadow-sm border border-gray-100 dark:border-gray-800 rounded-3xl">
       <CardHeader>
-        <CardTitle className="text-2xl font-bold">Milestones</CardTitle>
-        <CardDescription>Celebrate your consistency!</CardDescription>
+        <CardTitle className="text-lg font-bold">Next Goals</CardTitle>
       </CardHeader>
-      <CardContent className="space-y-4">
-        {milestones.map((milestone) => {
+      <CardContent className="space-y-3">
+        {milestones.map((milestone: any) => {
           return (
             <div
-              key={milestone.name}
+              key={milestone.days}
+              onClick={() => milestone.earned && onViewMilestone(milestone)}
               className={cn(
-                "flex items-center gap-3 p-3 rounded-xl transition-all",
+                "flex items-center justify-between p-3 rounded-xl transition-all border",
                 milestone.earned
-                  ? "bg-green-50 dark:bg-green-950/30"
-                  : "bg-gray-100 dark:bg-gray-800/50 opacity-60"
+                  ? "bg-yellow-50 dark:bg-yellow-900/20 border-yellow-200 dark:border-yellow-800 cursor-pointer hover:scale-[1.02]"
+                  : "bg-gray-50 dark:bg-gray-800/50 border-transparent opacity-70"
               )}
             >
-              <div
-                className={cn(
-                  "p-2 rounded-lg",
-                  milestone.earned
-                    ? "bg-green-100 dark:bg-green-900/30 text-green-600 dark:text-green-400"
-                    : "bg-gray-200 dark:bg-gray-700 text-gray-500"
-                )}
-              >
-                {milestone.earned ? (
-                  <Check className="w-5 h-5" />
-                ) : (
-                  <Lock className="w-5 h-5" />
-                )}
+              <div className="flex items-center gap-3">
+                <div
+                  className={cn(
+                    "p-2 rounded-lg",
+                    milestone.earned
+                      ? "bg-yellow-100 dark:bg-yellow-800 text-yellow-600 dark:text-yellow-400"
+                      : "bg-gray-200 dark:bg-gray-700 text-gray-400"
+                  )}
+                >
+                  {milestone.earned ? (
+                    <Crown className="w-5 h-5" />
+                  ) : (
+                    <Lock className="w-5 h-5" />
+                  )}
+                </div>
+                <div>
+                  <div
+                    className={cn(
+                      "font-bold text-sm",
+                      milestone.earned
+                        ? "text-yellow-900 dark:text-yellow-100"
+                        : "text-gray-500"
+                    )}
+                  >
+                    {milestone.days}-Day Streak
+                  </div>
+                  {milestone.earned && (
+                    <div className="text-[10px] font-bold text-yellow-600 uppercase">
+                      Completed
+                    </div>
+                  )}
+                </div>
               </div>
-              <span className="font-semibold text-gray-900 dark:text-white">
-                {milestone.name}
-              </span>
+
+              {/* Reward Pill */}
+              <div className="flex items-center gap-1 bg-white dark:bg-black/20 px-2 py-1 rounded-lg text-xs font-bold text-gray-500">
+                <img src="/assets/icons/coinv2.png" className="w-3 h-3" />
+                {milestone.coins}
+              </div>
             </div>
           );
         })}
       </CardContent>
     </Card>
   );
+}
+
+// Simple Trophy Icon for Modal
+function TrophyIcon({ className }: { className?: string }) {
+  return <TrophyIcon className={className} />;
 }

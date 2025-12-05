@@ -1,10 +1,9 @@
 // app/components/dashboardmodule/SideBar.tsx
-import { User } from "firebase/auth";
 import {
   Home,
   Users,
   Crown,
-  Scroll, // Changed from BarChart3
+  Scroll,
   Flame,
   Settings,
   LogOut,
@@ -25,12 +24,14 @@ import {
   DialogTitle,
 } from "~/components/ui/dialog";
 import { Button } from "~/components/ui/button";
+import { UserData } from "~/contexts/AuthContext";
 
 interface SidebarProps {
   activeTab: string;
   onTabChange: (tab: string) => void;
   onLogout: () => void;
-  user?: User | null;
+  // CHANGED: Updated type to UserData
+  user?: UserData | null;
   collapsed?: boolean;
 }
 
@@ -49,7 +50,7 @@ export function Sidebar({
     { id: "home", label: "Home", icon: Home },
     { id: "play", label: "Play", icon: Gamepad2 },
     { id: "leaderboard", label: "Leaderboard", icon: Crown },
-    // ▼▼▼ UPDATED: Progress -> Quests ▼▼▼
+    // ▼▼▼ Progress -> Quests ▼▼▼
     { id: "progress", label: "Quests", icon: Scroll },
     // ▲▲▲ Note: ID stays 'progress' to match DashboardTabs logic
     { id: "streak", label: "Streak", icon: Flame },
@@ -92,9 +93,13 @@ export function Sidebar({
     setIsMoreDropdownOpen(false);
   };
 
+  // Inside Sidebar.tsx
+
   const confirmLogout = () => {
     setShowLogoutDialog(false);
-    onLogout();
+    setTimeout(() => {
+      onLogout();
+    }, 100);
   };
 
   return (

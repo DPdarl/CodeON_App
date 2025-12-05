@@ -1,4 +1,4 @@
-// app/routes/onboarding.tsx
+import { useState } from "react";
 import { useNavigate } from "@remix-run/react";
 import { useAuth } from "~/contexts/AuthContext";
 import { CustomizeAvatar } from "~/components/dashboardmodule/CustomizeAvatar";
@@ -10,17 +10,19 @@ import confetti from "canvas-confetti";
 export default function Onboarding() {
   const { user, updateProfile } = useAuth();
   const navigate = useNavigate();
+  const [isSaving, setIsSaving] = useState(false);
 
   const handleSaveAvatar = async (avatarConfig: any) => {
+    if (isSaving) return;
+    setIsSaving(true);
+
     try {
       await updateProfile({ avatarConfig });
 
-      // 1. Play Sound
-      const audio = new Audio("/success.mp3"); // Make sure this file exists in public/
+      const audio = new Audio("/success.mp3");
       audio.volume = 0.5;
-      audio.play().catch(() => {}); // Catch errors if user hasn't interacted yet
+      audio.play().catch(() => {});
 
-      // 2. Fire Confetti
       confetti({
         particleCount: 100,
         spread: 70,
@@ -28,13 +30,13 @@ export default function Onboarding() {
         colors: ["#a855f7", "#ec4899", "#3b82f6"],
       });
 
-      // 3. Delay slightly for effect, then navigate
       setTimeout(() => {
         navigate("/dashboard");
       }, 1500);
     } catch (error) {
       console.error("Failed to save avatar:", error);
       alert("Something went wrong. Please try again.");
+      setIsSaving(false);
     }
   };
 
@@ -65,9 +67,9 @@ export default function Onboarding() {
           >
             <CustomizeAvatar
               user={user}
-              // @ts-ignore
               initialConfig={user?.avatarConfig}
               onSave={handleSaveAvatar}
+              saveLabel={isSaving ? "Saving..." : "Start Adventure"}
             />
           </motion.div>
         </div>

@@ -4,7 +4,7 @@ import { PlayTab } from "./PlayTab";
 import { LeaderboardTab } from "./LeaderboardTab";
 // import { ProgressTab } from "./ProgressTab"; // <-- REMOVED
 import { QuestTab } from "./QuestTab"; // <-- ADDED
-import { StreakTab } from "./StreakTab";
+import { StreakTab } from "./StreakTaB";
 import { SettingsTab } from "./SettingsTab";
 import { AboutTab } from "./AboutTab";
 import { StoreTab } from "./StoreTab";

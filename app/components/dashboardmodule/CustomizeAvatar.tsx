@@ -1,24 +1,49 @@
 // app/components/dashboardmodule/CustomizeAvatar.tsx
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "~/components/ui/card";
 import { Button } from "~/components/ui/button";
 import { Label } from "~/components/ui/label";
 import { cn } from "~/lib/utils";
-import { Wand2, User, Shirt, Smile } from "lucide-react";
+import { Wand2, User, Shirt, Smile, Footprints, Glasses } from "lucide-react";
 import { motion } from "framer-motion";
-import { User as AuthUser } from "firebase/auth";
 import { AvatarDisplay } from "./AvatarDisplay";
 
-// --- New Options with "none" added ---
+// ... (options arrays remain the same as previous correct version) ...
 const options = {
   body: ["male", "female"],
-  // Added "none" to hair, top, bottom, shoes
-  hair: ["none", "default", "style1", "style2"],
-  eyes: ["angry", "disgust", "eepy", "nonchalant", "shock", "sideeye"],
-  mouth: ["smile", "sad", "kissy", "cat", "small", "nonchalant"],
-  top: ["none", "tshirt", "sweater", "sando", "leatherjacket"],
+  hair: [
+    "none",
+    "default",
+    "HairDefaultM1",
+    "HairStyleM2",
+    "HairStyleM3",
+    "HairDefaultF2",
+    "HairStyleF1",
+    "HairStyleF3",
+  ],
+  eyes: [
+    "normal",
+    "angry",
+    "disgust",
+    "eepy",
+    "nonchalant",
+    "shock",
+    "sideeye",
+  ],
+  mouth: ["smile", "small", "sad", "kissy", "cat", "nonchalant"],
+  top: [
+    "none",
+    "tshirt",
+    "tshirtf",
+    "sando",
+    "sandof",
+    "sweater",
+    "sweaterf",
+    "leatherjacket",
+    "leatherjacketf",
+  ],
   bottom: ["none", "pants", "short", "skirt"],
-  shoes: ["none", "shoes", "boots", "slides", "fp"],
+  shoes: ["none", "shoes", "shoesf", "boots", "slides", "fp"],
   accessory: [
     "none",
     "glassesfull",
@@ -35,7 +60,7 @@ const options = {
 const defaultConfig = {
   body: "male",
   hair: "default",
-  eyes: "nonchalant",
+  eyes: "normal",
   mouth: "smile",
   top: "tshirt",
   bottom: "pants",
@@ -46,18 +71,27 @@ const defaultConfig = {
 interface CustomizeAvatarProps {
   initialConfig?: any;
   onSave: (config: any) => Promise<void>;
-  user: AuthUser | null;
+  user?: any;
+  // ▼▼▼ FIX: Added saveLabel to interface ▼▼▼
+  saveLabel?: string;
 }
 
 export function CustomizeAvatar({
-  initialConfig = defaultConfig,
+  initialConfig,
   onSave,
+  saveLabel = "Save Avatar",
 }: CustomizeAvatarProps) {
   const [avatarConfig, setAvatarConfig] = useState({
     ...defaultConfig,
     ...initialConfig,
   });
   const [isLoading, setIsLoading] = useState(false);
+
+  useEffect(() => {
+    if (initialConfig) {
+      setAvatarConfig((prev: any) => ({ ...prev, ...initialConfig }));
+    }
+  }, [initialConfig]);
 
   const setConfigValue = (key: string, value: string) => {
     setAvatarConfig((prev: any) => ({ ...prev, [key]: value }));
@@ -115,7 +149,7 @@ export function CustomizeAvatar({
 
             {/* Hair */}
             <OptionCard title="Hair" icon={User}>
-              <div className="grid grid-cols-3 sm:grid-cols-3 gap-3">
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
                 {options.hair.map((item) => (
                   <ItemSwatch
                     key={item}
@@ -204,7 +238,7 @@ export function CustomizeAvatar({
             </OptionCard>
 
             {/* Accessories */}
-            <OptionCard title="Accessories" icon={Wand2}>
+            <OptionCard title="Accessories" icon={Glasses}>
               <div className="grid grid-cols-3 sm:grid-cols-3 gap-3">
                 {options.accessory.map((item) => (
                   <ItemSwatch
@@ -217,13 +251,13 @@ export function CustomizeAvatar({
               </div>
             </OptionCard>
 
-            <div className="pt-4">
+            <div className="pt-4 pb-8">
               <Button
                 onClick={handleSave}
                 disabled={isLoading}
                 className="w-full h-12 rounded-xl font-bold text-lg bg-indigo-600 hover:bg-indigo-700 text-white"
               >
-                {isLoading ? "Saving..." : "Save Avatar"}
+                {isLoading ? "Saving..." : saveLabel}
               </Button>
             </div>
           </motion.div>
@@ -233,17 +267,7 @@ export function CustomizeAvatar({
   );
 }
 
-// --- Sub-components ---
-
-function OptionCard({
-  title,
-  icon: Icon,
-  children,
-}: {
-  title: string;
-  icon: any;
-  children: React.ReactNode;
-}) {
+function OptionCard({ title, icon: Icon, children }: any) {
   return (
     <Card className="bg-gray-50/50 dark:bg-gray-800/30 shadow-inner border-gray-200 dark:border-gray-700/50">
       <CardHeader className="pb-2">
@@ -257,15 +281,8 @@ function OptionCard({
   );
 }
 
-function ItemSwatch({
-  label,
-  isSelected,
-  onClick,
-}: {
-  label: string;
-  isSelected: boolean;
-  onClick: () => void;
-}) {
+function ItemSwatch({ label, isSelected, onClick }: any) {
+  const displayLabel = label.replace(/([A-Z])/g, " $1").trim();
   return (
     <button
       type="button"
@@ -276,10 +293,10 @@ function ItemSwatch({
           ? "border-indigo-500 bg-indigo-100 dark:bg-indigo-900/50 text-indigo-700 dark:text-indigo-200"
           : "bg-white dark:bg-gray-700 border-gray-200 dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-600 text-gray-600 dark:text-gray-300"
       )}
-      title={label}
+      title={displayLabel}
     >
-      <span className="text-xs font-bold capitalize truncate w-full">
-        {label.replace(/([A-Z])/g, " $1").trim()}
+      <span className="text-[10px] font-bold uppercase tracking-tight truncate w-full">
+        {displayLabel}
       </span>
     </button>
   );

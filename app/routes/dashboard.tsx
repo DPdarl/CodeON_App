@@ -18,8 +18,18 @@ export const meta: MetaFunction = () => {
 export default function Dashboard() {
   const { user, logout, updateProfile } = useAuth();
   const navigate = useNavigate();
+
+  // Default to 'home', but we will update this immediately on client load
   const [activeTab, setActiveTab] = useState("home");
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+
+  // --- NEW: Load saved tab from LocalStorage on mount ---
+  useEffect(() => {
+    const savedTab = localStorage.getItem("active_dashboard_tab");
+    if (savedTab) {
+      setActiveTab(savedTab);
+    }
+  }, []);
 
   // Theme Logic
   useEffect(() => {
@@ -42,6 +52,8 @@ export default function Dashboard() {
   // Logout Logic
   const handleLogout = async () => {
     try {
+      // Clear the saved tab so next login starts fresh at 'home'
+      localStorage.removeItem("active_dashboard_tab");
       await logout();
     } catch (error) {
       console.error("Error logging out:", error);
@@ -72,19 +84,23 @@ export default function Dashboard() {
       await updateProfile({
         avatarConfig: avatarConfig,
       });
-      // You can add a toast here if you want global feedback
     } catch (error) {
       console.error("Error saving avatar:", error);
     }
   };
 
-  // Tab Change Logic
+  // --- MODIFIED: Save to LocalStorage when tab changes ---
   const handleTabChange = (tab: string) => {
     if (tab === "logout") {
       handleLogout();
       return;
     }
+
+    // 1. Update State
     setActiveTab(tab);
+
+    // 2. Save to Browser Storage
+    localStorage.setItem("active_dashboard_tab", tab);
   };
 
   return (
@@ -127,8 +143,6 @@ export default function Dashboard() {
               onSaveAvatar={handleSaveAvatar}
               onStartMultiplayerQuiz={startMultiplayerQuiz}
               onJoinMultiplayerQuiz={joinMultiplayerQuiz}
-              // Pass the function to change tabs (needed for "View Map" button)
-              onTabChange={handleTabChange}
             />
           </main>
         </div>
