@@ -4,11 +4,12 @@ import { Card, CardContent, CardHeader, CardTitle } from "~/components/ui/card";
 import { Button } from "~/components/ui/button";
 import { Label } from "~/components/ui/label";
 import { cn } from "~/lib/utils";
-import { Wand2, User, Shirt, Smile, Footprints, Glasses } from "lucide-react";
+import { Wand2, User, Shirt, Smile, Glasses } from "lucide-react";
 import { motion } from "framer-motion";
 import { AvatarDisplay } from "./AvatarDisplay";
+import { toast } from "sonner";
 
-// ... (options arrays remain the same as previous correct version) ...
+// Options arrays (unchanged)
 const options = {
   body: ["male", "female"],
   hair: [
@@ -72,7 +73,6 @@ interface CustomizeAvatarProps {
   initialConfig?: any;
   onSave: (config: any) => Promise<void>;
   user?: any;
-  // ▼▼▼ FIX: Added saveLabel to interface ▼▼▼
   saveLabel?: string;
 }
 
@@ -87,20 +87,35 @@ export function CustomizeAvatar({
   });
   const [isLoading, setIsLoading] = useState(false);
 
+  // Sync with prop changes
   useEffect(() => {
     if (initialConfig) {
       setAvatarConfig((prev: any) => ({ ...prev, ...initialConfig }));
     }
   }, [initialConfig]);
 
+  // DIRTY CHECK: Compare current config with initial to see if changes exist
+  const hasChanges =
+    JSON.stringify(avatarConfig) !==
+    JSON.stringify({ ...defaultConfig, ...initialConfig });
+
   const setConfigValue = (key: string, value: string) => {
     setAvatarConfig((prev: any) => ({ ...prev, [key]: value }));
   };
 
   const handleSave = async () => {
+    if (!hasChanges) return;
+
     setIsLoading(true);
-    await onSave(avatarConfig);
-    setIsLoading(false);
+    try {
+      await onSave(avatarConfig);
+      // We don't toast here, parent handles it
+    } catch (error) {
+      console.error("Failed to save avatar:", error);
+      toast.error("Could not save avatar. Check your connection.");
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   return (
@@ -120,7 +135,7 @@ export function CustomizeAvatar({
             animate={{ opacity: 1, x: 0 }}
           >
             <div className="lg:sticky lg:top-28 flex flex-col items-center p-4 bg-gray-50 dark:bg-gray-800/50 rounded-2xl">
-              <div className="w-full h-[600px] rounded-2xl overflow-hidden bg-gray-200 dark:bg-gray-700 shadow-inner relative">
+              <div className="w-full h-[600px] rounded-2xl overflow-hidden bg-gray-200 dark:bg-gray-700 shadow-inner relative transition-all">
                 <AvatarDisplay config={avatarConfig} />
               </div>
             </div>
@@ -252,12 +267,23 @@ export function CustomizeAvatar({
             </OptionCard>
 
             <div className="pt-4 pb-8">
+              {/* Button with Loading and Dirty Check */}
               <Button
                 onClick={handleSave}
-                disabled={isLoading}
-                className="w-full h-12 rounded-xl font-bold text-lg bg-indigo-600 hover:bg-indigo-700 text-white"
+                disabled={isLoading || !hasChanges}
+                className={`w-full h-12 rounded-xl font-bold text-lg text-white transition-all
+                  ${
+                    hasChanges
+                      ? "bg-indigo-600 hover:bg-indigo-700 shadow-lg hover:shadow-xl hover:-translate-y-0.5"
+                      : "bg-gray-300 dark:bg-gray-700 text-gray-500 cursor-not-allowed"
+                  }
+                `}
               >
-                {isLoading ? "Saving..." : saveLabel}
+                {isLoading
+                  ? "Saving..."
+                  : !hasChanges
+                  ? "No Changes"
+                  : saveLabel}
               </Button>
             </div>
           </motion.div>
@@ -290,8 +316,8 @@ function ItemSwatch({ label, isSelected, onClick }: any) {
       className={cn(
         "h-12 rounded-xl border-2 shadow-sm transition-all flex items-center justify-center px-2 text-center",
         isSelected
-          ? "border-indigo-500 bg-indigo-100 dark:bg-indigo-900/50 text-indigo-700 dark:text-indigo-200"
-          : "bg-white dark:bg-gray-700 border-gray-200 dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-600 text-gray-600 dark:text-gray-300"
+          ? "border-indigo-500 bg-indigo-100 dark:bg-indigo-900/50 text-indigo-700 dark:text-indigo-200 scale-105"
+          : "bg-white dark:bg-gray-700 border-gray-200 dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-600 text-gray-600 dark:text-gray-300 hover:border-gray-300"
       )}
       title={displayLabel}
     >

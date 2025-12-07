@@ -4,6 +4,7 @@ import {
   useContext,
   useState,
   useEffect,
+  useRef,
   ReactNode,
 } from "react";
 import { User } from "@supabase/supabase-js";
@@ -34,9 +35,9 @@ export interface UserData {
   streakFreezes?: number;
   hints?: number;
   ownedCosmetics?: string[];
-  inventory?: string[]; // New Inventory Field
-  activeDates?: string[]; // Array of "YYYY-MM-DD" strings
-  badges?: string[]; // Array of badge IDs
+  inventory?: string[];
+  activeDates?: string[];
+  badges?: string[];
 }
 
 interface AuthContextType {
@@ -51,11 +52,42 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-export function AuthProvider({ children }: { children: ReactNode }) {
-  const [user, setUser] = useState<UserData | null>(null);
-  const [loading, setLoading] = useState(true);
+// Helper for delay
+const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
-  // --- HELPER: Map Snake_Case DB -> CamelCase App ---
+// CACHE KEY
+const USER_CACHE_KEY = "codeon_user_cache";
+
+export function AuthProvider({ children }: { children: ReactNode }) {
+  // 1. Initialize State from LocalStorage if available (Instant Load)
+  const [user, setUser] = useState<UserData | null>(() => {
+    if (typeof window !== "undefined") {
+      const cached = localStorage.getItem(USER_CACHE_KEY);
+      if (cached) {
+        try {
+          return JSON.parse(cached);
+        } catch (e) {
+          console.error("Cache parse error", e);
+        }
+      }
+    }
+    return null;
+  });
+
+  const [loading, setLoading] = useState(!user); // Only show loading if no cache
+  const userIdRef = useRef<string | null>(user?.uid || null);
+
+  useEffect(() => {
+    userIdRef.current = user?.uid || null;
+    // Update cache whenever user changes
+    if (user) {
+      localStorage.setItem(USER_CACHE_KEY, JSON.stringify(user));
+    } else if (user === null && !loading) {
+      localStorage.removeItem(USER_CACHE_KEY);
+    }
+  }, [user, loading]);
+
+  // --- Mappers ---
   const mapUserFromDB = (dbUser: any): UserData => ({
     uid: dbUser.id,
     email: dbUser.email,
@@ -71,7 +103,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     streakFreezes: dbUser.streak_freezes || 0,
     hints: dbUser.hints || 0,
     ownedCosmetics: dbUser.owned_cosmetics || [],
-    inventory: dbUser.inventory || [], // Map Inventory
+    inventory: dbUser.inventory || [],
     trophies: dbUser.trophies,
     league: dbUser.league,
     joinedAt: dbUser.joined_at,
@@ -80,10 +112,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     badges: dbUser.badges || [],
   });
 
-  // --- HELPER: Map CamelCase App -> Snake_Case DB ---
   const mapUserToDB = (appUser: Partial<UserData>) => {
     const dbData: any = { ...appUser };
-
+    // Remove app-specific fields before saving to DB
     if (appUser.activeDates !== undefined) {
       dbData.active_dates = appUser.activeDates;
       delete appUser.activeDates;
@@ -112,11 +143,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       dbData.owned_cosmetics = appUser.ownedCosmetics;
       delete dbData.ownedCosmetics;
     }
-    // Ensure inventory is passed through if updated
-    // (Supabase handles 'inventory' -> 'inventory' mapping automatically)
-
     if (appUser.uid !== undefined) delete dbData.uid;
-
     return dbData;
   };
 
@@ -136,7 +163,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     role: "user",
     streak_freezes: 0,
     hints: 0,
-    inventory: [], // Default empty inventory
+    inventory: [],
     settings: {
       theme: "system",
       reduceMotion: false,
@@ -155,7 +182,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     },
   });
 
-  const fetchUserData = async (authUser: User) => {
+  const fetchUserData = async (authUser: User, forceLoading = false) => {
+    if (forceLoading) setLoading(true);
+
     try {
       const { data, error } = await supabase
         .from("users")
@@ -168,54 +197,102 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         await supabase.from("users").insert([newUser]);
         setUser(mapUserFromDB(newUser));
       } else if (data) {
-        setUser(mapUserFromDB(data));
+        const mappedUser = mapUserFromDB(data);
+        setUser(mappedUser);
+        // Update Cache Immediately
+        localStorage.setItem(USER_CACHE_KEY, JSON.stringify(mappedUser));
       }
     } catch (err) {
       console.error("Error fetching user data:", err);
     } finally {
-      setLoading(false);
+      if (forceLoading) setLoading(false);
     }
   };
 
   useEffect(() => {
+    // 1. Initial Check
     supabase.auth.getSession().then(({ data: { session } }) => {
-      if (session?.user) fetchUserData(session.user);
-      else setLoading(false);
+      if (session?.user) {
+        // If we have cached data, don't show loading spinner, just refresh in background
+        const hasCache = !!user;
+        fetchUserData(session.user, !hasCache);
+      } else {
+        setLoading(false);
+      }
     });
 
+    // 2. Event Listener
     const {
       data: { subscription },
-    } = supabase.auth.onAuthStateChange(async (_event, session) => {
-      if (session?.user) {
-        if (user?.uid !== session.user.id) {
-          setLoading(true);
-          await fetchUserData(session.user);
-        }
-      } else {
+    } = supabase.auth.onAuthStateChange(async (event, session) => {
+      if (event === "SIGNED_OUT") {
         setUser(null);
+        localStorage.removeItem(USER_CACHE_KEY);
         setLoading(false);
+        return;
+      }
+
+      if (session?.user) {
+        const currentId = userIdRef.current;
+        const newId = session.user.id;
+
+        // If IDs differ, it's a real login change -> clear cache & load fresh
+        if (currentId !== newId) {
+          setUser(null); // Clear old user state first
+          await fetchUserData(session.user, true);
+        } else {
+          // Same user (refresh/focus) -> Silent background update
+          await fetchUserData(session.user, false);
+        }
       }
     });
 
     return () => subscription.unsubscribe();
   }, []);
 
+  // --- SMART UPDATE PROFILE ---
   const updateProfile = async (data: Partial<UserData>) => {
     if (!user) throw new Error("No user is signed in");
 
+    // 1. Optimistic Update: Update UI & Cache IMMEDIATELY
+    const updatedUser = { ...user, ...data };
+    setUser(updatedUser);
+    localStorage.setItem(USER_CACHE_KEY, JSON.stringify(updatedUser));
+
+    // 2. Prepare DB Updates
     const dbUpdates = mapUserToDB(data);
 
-    const { error } = await supabase
-      .from("users")
-      .update(dbUpdates)
-      .eq("id", user.uid);
+    // 3. Robust Retry Loop (Solves the "Connection Cut" save issue)
+    let attempt = 0;
+    const maxRetries = 5; // Try harder
+    let success = false;
 
-    if (error) throw error;
+    // Retry loop handles momentary disconnections
+    while (attempt < maxRetries && !success) {
+      try {
+        const { error } = await supabase
+          .from("users")
+          .update(dbUpdates)
+          .eq("id", user.uid);
 
-    setUser((prev) => (prev ? { ...prev, ...data } : null));
+        if (error) throw error;
+        success = true;
+      } catch (error) {
+        attempt++;
+        console.warn(`Profile save attempt ${attempt} failed. Retrying...`);
+        // Exponential backoff: wait 1s, 2s, 4s...
+        await wait(1000 * attempt);
+      }
+    }
+
+    if (!success) {
+      console.error("Final save failed. Data might be out of sync.");
+      // Optional: You could revert state here or show a toast "Save failed, retrying later"
+      // But keeping the optimistic state is usually better UX for minor glitches.
+      throw new Error("Connection failed. Please check internet.");
+    }
   };
 
-  // ... (signup, login, logout, signInWithGoogle implementation from previous steps remains the same)
   const signup = async (e: string, p: string, n: string) => {
     setLoading(true);
     const { data, error } = await supabase.auth.signUp({
@@ -223,16 +300,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       password: p,
       options: { data: { full_name: n } },
     });
-
     if (error) {
       setLoading(false);
       throw error;
     }
-
     if (data.user) {
       const newUser = getDefaultUserData(data.user, n);
       await supabase.from("users").insert([newUser]);
-      setUser(mapUserFromDB(newUser));
+      const mapped = mapUserFromDB(newUser);
+      setUser(mapped);
+      localStorage.setItem(USER_CACHE_KEY, JSON.stringify(mapped));
     }
     setLoading(false);
   };
@@ -251,6 +328,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const logout = async () => {
     setLoading(true);
+    localStorage.removeItem(USER_CACHE_KEY);
     await supabase.auth.signOut();
   };
 

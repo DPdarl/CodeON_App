@@ -2,8 +2,7 @@
 import { HomeTab } from "./HomeTab";
 import { PlayTab } from "./PlayTab";
 import { LeaderboardTab } from "./LeaderboardTab";
-// import { ProgressTab } from "./ProgressTab"; // <-- REMOVED
-import { QuestTab } from "./QuestTab"; // <-- ADDED
+import { QuestTab } from "./QuestTab";
 import { StreakTab } from "./StreakTaB";
 import { SettingsTab } from "./SettingsTab";
 import { AboutTab } from "./AboutTab";
@@ -26,7 +25,10 @@ export function DashboardTabs({
   onJoinMultiplayerQuiz,
 }: DashboardTabsProps) {
   return (
-    <>
+    <div className="w-full h-full relative">
+      {/* Reverted to Conditional Rendering (&&) 
+         This ensures components unmount/remount, triggering the animations.
+      */}
       {activeTab === "home" && (
         <HomeTab
           onTabChange={(tab) => {
@@ -42,17 +44,17 @@ export function DashboardTabs({
       )}
       {activeTab === "leaderboard" && <LeaderboardTab />}
 
-      {/* ▼▼▼ REPLACED PROGRESS WITH QUESTS ▼▼▼ */}
       {activeTab === "progress" && <QuestTab />}
-      {/* ▲▲▲ END REPLACEMENT ▲▲▲ */}
 
       {activeTab === "streak" && <StreakTab />}
       {activeTab === "store" && <StoreTab />}
+
       {activeTab === "profile" && (
         <ProfileTab user={user} onSaveAvatar={onSaveAvatar} />
       )}
+
       {activeTab === "settings" && <SettingsTab />}
       {activeTab === "about" && <AboutTab />}
-    </>
+    </div>
   );
 }

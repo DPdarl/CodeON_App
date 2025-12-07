@@ -1,7 +1,6 @@
 // app/components/dashboardmodule/LeaderboardTab.tsx
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useAuth } from "~/contexts/AuthContext";
-// CHANGED: Import Supabase client
 import { supabase } from "~/lib/supabase";
 import { Card } from "~/components/ui/card";
 import { Skeleton } from "~/components/ui/skeleton";
@@ -21,16 +20,36 @@ interface LeaderboardUser {
   avatarConfig?: any;
 }
 
+const LEADERBOARD_CACHE_KEY = "codeon_leaderboard_cache";
+const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
 export function LeaderboardTab() {
   const { user } = useAuth();
-  const [users, setUsers] = useState<LeaderboardUser[]>([]);
-  const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    const fetchUsers = async () => {
-      setLoading(true);
+  // 1. Initialize from Cache if available
+  const [users, setUsers] = useState<LeaderboardUser[]>(() => {
+    if (typeof window !== "undefined") {
+      const cached = localStorage.getItem(LEADERBOARD_CACHE_KEY);
+      if (cached) {
+        try {
+          return JSON.parse(cached);
+        } catch (e) {}
+      }
+    }
+    return [];
+  });
+
+  const [loading, setLoading] = useState(users.length === 0);
+
+  const fetchUsers = useCallback(async (isBackground = false) => {
+    if (!isBackground && users.length === 0) setLoading(true);
+
+    let attempt = 0;
+    const maxRetries = 3;
+    let success = false;
+
+    while (attempt < maxRetries && !success) {
       try {
-        // CHANGED: Supabase Query replacing Firestore
         const { data, error } = await supabase
           .from("users")
           .select("*")
@@ -39,34 +58,54 @@ export function LeaderboardTab() {
 
         if (error) throw error;
 
-        // Map Supabase data to local interface
-        // Note: Supabase returns raw objects, no need for .data() method
         const fetchedUsers: LeaderboardUser[] = (data || []).map((u: any) => ({
           id: u.id,
-          displayName: u.display_name || "Anonymous User", // snake_case fix
-          photoURL: u.photo_url || null, // snake_case fix
+          displayName: u.display_name || "Anonymous User",
+          photoURL: u.photo_url || null,
           xp: u.xp || 0,
           level: u.level || 1,
           trophies: u.trophies || 0,
           league: u.league || "Novice",
-          avatarConfig: u.avatar_config || null, // snake_case fix
+          avatarConfig: u.avatar_config || null,
         }));
 
         setUsers(fetchedUsers);
+        // Update Cache
+        localStorage.setItem(
+          LEADERBOARD_CACHE_KEY,
+          JSON.stringify(fetchedUsers)
+        );
+        success = true;
       } catch (error) {
-        console.error("Error fetching leaderboard:", error);
-      } finally {
-        setLoading(false);
+        attempt++;
+        console.warn(`Leaderboard fetch attempt ${attempt} failed.`);
+        if (attempt < maxRetries) await wait(1000);
       }
+    }
+
+    if (!isBackground) setLoading(false);
+  }, []); // Remove dependencies to keep stable
+
+  useEffect(() => {
+    // Initial Fetch (Background if we have data, Foreground if empty)
+    fetchUsers(users.length > 0);
+
+    // On Focus (Alt-Tab return)
+    const onFocus = () => {
+      setTimeout(() => {
+        if (document.visibilityState === "visible") {
+          fetchUsers(true); // Silent update
+        }
+      }, 500);
     };
 
-    fetchUsers();
-  }, []);
+    window.addEventListener("focus", onFocus);
+    return () => window.removeEventListener("focus", onFocus);
+  }, [fetchUsers]);
 
   const topThree = users.slice(0, 3);
   const restOfUsers = users.slice(3);
 
-  // Note: user?.uid comes from AuthContext (which we mapped from Supabase user.id)
   const currentUserRank = users.findIndex((u) => u.id === user?.uid);
   const currentUserData =
     currentUserRank !== -1 ? users[currentUserRank] : null;
@@ -185,8 +224,7 @@ export function LeaderboardTab() {
   );
 }
 
-// --- Sub-components ---
-
+// ... (Sub-components PodiumCard, UserRankRow, LeaderboardSkeleton remain exactly the same as previous steps)
 function PodiumCard({ user, rank }: { user: LeaderboardUser; rank: number }) {
   const isFirst = rank === 1;
   const isSecond = rank === 2;
@@ -212,7 +250,6 @@ function PodiumCard({ user, rank }: { user: LeaderboardUser; rank: number }) {
       }
     `}
     >
-      {/* Crown/Medal Icon */}
       <div
         className={`absolute -top-6 w-12 h-12 rounded-full flex items-center justify-center border-4 shadow-md z-10
         ${isFirst ? `bg-yellow-400 border-white dark:border-gray-900` : ""}
@@ -227,7 +264,6 @@ function PodiumCard({ user, rank }: { user: LeaderboardUser; rank: number }) {
         )}
       </div>
 
-      {/* AVATAR DISPLAY - Podium Size */}
       <div
         className={`mt-6 w-24 h-24 rounded-full overflow-hidden border-4 bg-gray-100 dark:bg-gray-800 flex-shrink-0 relative
           ${
@@ -274,7 +310,6 @@ function UserRankRow({
   isCurrentUser: boolean;
   isSticky?: boolean;
 }) {
-  // Logic: "You" card styles dynamically based on rank if on podium
   let bgColor = "bg-white dark:bg-gray-900";
   let borderColor = "border-gray-100 dark:border-gray-800";
   let highlightClass = "";
@@ -296,7 +331,6 @@ function UserRankRow({
       highlightClass =
         "ring-2 ring-orange-400 ring-offset-2 dark:ring-offset-gray-900";
     } else {
-      // Standard "You" card (Not podium)
       bgColor = "bg-indigo-50 dark:bg-indigo-950/50";
       borderColor = "border-indigo-200 dark:border-indigo-800";
     }
@@ -309,7 +343,6 @@ function UserRankRow({
       ${isSticky ? "shadow-2xl" : "shadow-sm"}
     `}
     >
-      {/* Rank */}
       <div
         className={`w-10 text-center text-lg font-black italic
         ${
@@ -322,9 +355,7 @@ function UserRankRow({
         #{rank}
       </div>
 
-      {/* User Info */}
       <div className="flex-1 flex items-center gap-3 ml-3 overflow-hidden">
-        {/* AVATAR DISPLAY - Row Size */}
         <div className="w-10 h-10 rounded-full overflow-hidden border border-gray-200 dark:border-gray-700 bg-gray-100 dark:bg-gray-800 flex-shrink-0 relative">
           <AvatarDisplay config={user.avatarConfig} headOnly />
         </div>
@@ -346,7 +377,6 @@ function UserRankRow({
         </div>
       </div>
 
-      {/* Trophy Count */}
       <div className="text-right pl-2">
         <div
           className={`flex items-center justify-end gap-1.5 text-base font-black ${
@@ -363,11 +393,9 @@ function UserRankRow({
   );
 }
 
-// Skeleton loading component
 function LeaderboardSkeleton() {
   return (
     <div className="space-y-8">
-      {/* Top 3 Skeleton */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         {[1, 2, 3].map((i) => (
           <div
@@ -384,7 +412,6 @@ function LeaderboardSkeleton() {
         ))}
       </div>
 
-      {/* List Skeleton */}
       <div className="space-y-3">
         {[...Array(5)].map((_, i) => (
           <div

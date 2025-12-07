@@ -25,7 +25,7 @@ import {
   Crown,
 } from "lucide-react";
 import { motion } from "framer-motion";
-import { Toaster, toast } from "sonner";
+import { toast } from "sonner"; // Ensure you have sonner installed or use your preferred toast lib
 
 interface ProfileTabProps {
   user: UserData | null;
@@ -37,14 +37,26 @@ export function ProfileTab({ user, onSaveAvatar }: ProfileTabProps) {
   const [displayName, setDisplayName] = useState(user?.displayName || "");
   const [realRank, setRealRank] = useState<number | null>(null);
 
+  // VALIDATION: Track if saving is in progress
+  const [isSaving, setIsSaving] = useState(false);
+
+  // VALIDATION: Check if name actually changed
+  const isProfileChanged =
+    displayName.trim() !== "" && displayName.trim() !== user?.displayName;
+
   useEffect(() => {
+    // Sync local state if user updates externally
     if (user?.displayName) setDisplayName(user.displayName);
 
-    // Fetch Rank (Based on TROPHIES)
+    // Fetch Rank (Safe Mode)
     const fetchRank = async () => {
       if (user?.trophies !== undefined) {
-        const r = await getUserRank(user.trophies);
-        setRealRank(r);
+        try {
+          const r = await getUserRank(user.trophies);
+          setRealRank(r);
+        } catch (e) {
+          console.warn("Could not fetch rank (offline?)", e);
+        }
       }
     };
     fetchRank();
@@ -59,20 +71,26 @@ export function ProfileTab({ user, onSaveAvatar }: ProfileTabProps) {
   };
 
   const handleProfileUpdate = async () => {
+    if (!isProfileChanged) return;
+
+    setIsSaving(true);
     try {
-      await updateProfile({ displayName });
+      // This calls the robust retry logic in AuthContext
+      await updateProfile({ displayName: displayName.trim() });
       toast.success("Profile updated successfully!");
     } catch (error) {
-      toast.error("Failed to update profile.");
+      toast.error("Failed to update profile. Please try again.");
+    } finally {
+      setIsSaving(false);
     }
   };
 
   const handleAvatarSaveWithToast = async (config: any) => {
+    // CustomizeAvatar handles its own loading state, but we wrap the toast here
     await onSaveAvatar(config);
     toast.success("Avatar updated! Looking good.");
   };
 
-  // CHANGED: Use joinedAt from our custom UserData instead of Firebase metadata
   const creationDate = user?.joinedAt
     ? new Date(user.joinedAt).toLocaleDateString()
     : "N/A";
@@ -119,28 +137,24 @@ export function ProfileTab({ user, onSaveAvatar }: ProfileTabProps) {
         transition={{ delay: 0.1 }}
         className="grid grid-cols-2 md:grid-cols-4 gap-4"
       >
-        {/* 1. Trophies */}
         <StatItem
           icon={Trophy}
           value={stats.trophies.toLocaleString()}
           label="Total Trophies"
           color="text-yellow-500"
         />
-        {/* 2. Streak */}
         <StatItem
           icon={Flame}
           value={stats.streak.toString()}
           label="Day Streak"
           color="text-orange-500"
         />
-        {/* 3. League */}
         <StatItem
           icon={Crown}
           value={stats.league}
           label="League"
           color="text-purple-500"
         />
-        {/* 4. Rank */}
         <StatItem
           icon={Medal}
           value={stats.rank}
@@ -164,6 +178,7 @@ export function ProfileTab({ user, onSaveAvatar }: ProfileTabProps) {
               <Sparkles className="w-4 h-4 mr-2" /> Edit Avatar
             </TabsTrigger>
           </TabsList>
+
           <TabsContent value="profile">
             <Card className="mt-4 bg-white dark:bg-gray-900 shadow-lg rounded-3xl">
               <CardHeader>
@@ -176,19 +191,30 @@ export function ProfileTab({ user, onSaveAvatar }: ProfileTabProps) {
                     id="displayName"
                     value={displayName}
                     onChange={(e) => setDisplayName(e.target.value)}
+                    placeholder="Enter your coder name"
                   />
                 </div>
               </CardContent>
               <CardFooter>
                 <Button
                   onClick={handleProfileUpdate}
-                  className="w-full font-bold rounded-xl"
+                  disabled={!isProfileChanged || isSaving}
+                  className={`w-full font-bold rounded-xl transition-all ${
+                    !isProfileChanged
+                      ? "bg-gray-200 text-gray-400 dark:bg-gray-800 dark:text-gray-500 cursor-not-allowed"
+                      : "bg-indigo-600 hover:bg-indigo-700 text-white shadow-md hover:shadow-lg"
+                  }`}
                 >
-                  Save Changes
+                  {isSaving
+                    ? "Saving..."
+                    : isProfileChanged
+                    ? "Save Changes"
+                    : "No Changes"}
                 </Button>
               </CardFooter>
             </Card>
           </TabsContent>
+
           <TabsContent value="avatar">
             <div className="mt-4">
               <CustomizeAvatar
@@ -206,7 +232,7 @@ export function ProfileTab({ user, onSaveAvatar }: ProfileTabProps) {
 
 function StatItem({ icon: Icon, value, label, color }: any) {
   return (
-    <div className="flex flex-col md:flex-row items-center md:items-start gap-3 p-4 bg-gray-50 dark:bg-gray-800/50 rounded-2xl border border-gray-100 dark:border-gray-800 shadow-sm">
+    <div className="flex flex-col md:flex-row items-center md:items-start gap-3 p-4 bg-gray-50 dark:bg-gray-800/50 rounded-2xl border border-gray-100 dark:border-gray-800 shadow-sm transition-transform hover:scale-[1.02]">
       <div className="p-3 bg-white dark:bg-gray-800 rounded-xl shadow-sm">
         <Icon className={`w-5 h-5 ${color}`} />
       </div>
