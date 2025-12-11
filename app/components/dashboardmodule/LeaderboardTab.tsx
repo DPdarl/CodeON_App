@@ -4,11 +4,27 @@ import { useAuth } from "~/contexts/AuthContext";
 import { supabase } from "~/lib/supabase";
 import { Card } from "~/components/ui/card";
 import { Skeleton } from "~/components/ui/skeleton";
-import { Medal, Trophy, Award, Crown } from "lucide-react";
-import { motion } from "framer-motion";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "~/components/ui/dialog";
+import {
+  Medal,
+  Trophy,
+  Award,
+  Crown,
+  Calendar,
+  Zap,
+  Shield,
+} from "lucide-react";
+import { motion, AnimatePresence } from "framer-motion";
 import { AvatarDisplay } from "./AvatarDisplay";
 import TrophyIcon from "../ui/TrophyIcon";
+import { Badge } from "~/components/ui/badge";
 
+// --- UPDATED INTERFACE ---
 interface LeaderboardUser {
   id: string;
   displayName: string | null;
@@ -18,6 +34,9 @@ interface LeaderboardUser {
   trophies: number;
   league: string;
   avatarConfig?: any;
+  joinedAt?: string; // Added for profile
+  badges?: string[]; // Added for profile
+  streaks?: number; // Added for profile
 }
 
 const LEADERBOARD_CACHE_KEY = "codeon_leaderboard_cache";
@@ -26,7 +45,11 @@ const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 export function LeaderboardTab() {
   const { user } = useAuth();
 
-  // 1. Initialize from Cache if available
+  // --- NEW: SELECTED USER STATE ---
+  const [selectedUser, setSelectedUser] = useState<LeaderboardUser | null>(
+    null
+  );
+
   const [users, setUsers] = useState<LeaderboardUser[]>(() => {
     if (typeof window !== "undefined") {
       const cached = localStorage.getItem(LEADERBOARD_CACHE_KEY);
@@ -41,64 +64,65 @@ export function LeaderboardTab() {
 
   const [loading, setLoading] = useState(users.length === 0);
 
-  const fetchUsers = useCallback(async (isBackground = false) => {
-    if (!isBackground && users.length === 0) setLoading(true);
+  const fetchUsers = useCallback(
+    async (isBackground = false) => {
+      if (!isBackground && users.length === 0) setLoading(true);
 
-    let attempt = 0;
-    const maxRetries = 3;
-    let success = false;
+      let attempt = 0;
+      const maxRetries = 3;
+      let success = false;
 
-    while (attempt < maxRetries && !success) {
-      try {
-        const { data, error } = await supabase
-          .from("users")
-          .select("*")
-          .order("trophies", { ascending: false })
-          .limit(100);
+      while (attempt < maxRetries && !success) {
+        try {
+          const { data, error } = await supabase
+            .from("users")
+            .select("*")
+            .order("trophies", { ascending: false })
+            .limit(100);
 
-        if (error) throw error;
+          if (error) throw error;
 
-        const fetchedUsers: LeaderboardUser[] = (data || []).map((u: any) => ({
-          id: u.id,
-          displayName: u.display_name || "Anonymous User",
-          photoURL: u.photo_url || null,
-          xp: u.xp || 0,
-          level: u.level || 1,
-          trophies: u.trophies || 0,
-          league: u.league || "Novice",
-          avatarConfig: u.avatar_config || null,
-        }));
+          // --- UPDATED MAPPER ---
+          const fetchedUsers: LeaderboardUser[] = (data || []).map(
+            (u: any) => ({
+              id: u.id,
+              displayName: u.display_name || "Anonymous User",
+              photoURL: u.photo_url || null,
+              xp: u.xp || 0,
+              level: u.level || 1,
+              trophies: u.trophies || 0,
+              league: u.league || "Novice",
+              avatarConfig: u.avatar_config || null,
+              joinedAt: u.joined_at, // Map new fields
+              badges: u.badges || [],
+              streaks: u.streaks || 0,
+            })
+          );
 
-        setUsers(fetchedUsers);
-        // Update Cache
-        localStorage.setItem(
-          LEADERBOARD_CACHE_KEY,
-          JSON.stringify(fetchedUsers)
-        );
-        success = true;
-      } catch (error) {
-        attempt++;
-        console.warn(`Leaderboard fetch attempt ${attempt} failed.`);
-        if (attempt < maxRetries) await wait(1000);
+          setUsers(fetchedUsers);
+          localStorage.setItem(
+            LEADERBOARD_CACHE_KEY,
+            JSON.stringify(fetchedUsers)
+          );
+          success = true;
+        } catch (error) {
+          attempt++;
+          if (attempt < maxRetries) await wait(1000);
+        }
       }
-    }
 
-    if (!isBackground) setLoading(false);
-  }, []); // Remove dependencies to keep stable
+      if (!isBackground) setLoading(false);
+    },
+    [users.length]
+  );
 
   useEffect(() => {
-    // Initial Fetch (Background if we have data, Foreground if empty)
     fetchUsers(users.length > 0);
-
-    // On Focus (Alt-Tab return)
     const onFocus = () => {
       setTimeout(() => {
-        if (document.visibilityState === "visible") {
-          fetchUsers(true); // Silent update
-        }
+        if (document.visibilityState === "visible") fetchUsers(true);
       }, 500);
     };
-
     window.addEventListener("focus", onFocus);
     return () => window.removeEventListener("focus", onFocus);
   }, [fetchUsers]);
@@ -150,26 +174,41 @@ export function LeaderboardTab() {
             initial="hidden"
             animate="visible"
           >
-            {/* 2nd Place */}
             <motion.div
               variants={itemVariants}
               className="md:mt-8 order-2 md:order-1"
             >
-              {topThree[1] && <PodiumCard user={topThree[1]} rank={2} />}
+              {topThree[1] && (
+                <PodiumCard
+                  user={topThree[1]}
+                  rank={2}
+                  onClick={() => setSelectedUser(topThree[1])} // Add Click
+                />
+              )}
             </motion.div>
 
-            {/* 1st Place */}
             <motion.div variants={itemVariants} className="order-1 md:order-2">
-              {topThree[0] && <PodiumCard user={topThree[0]} rank={1} />}
+              {topThree[0] && (
+                <PodiumCard
+                  user={topThree[0]}
+                  rank={1}
+                  onClick={() => setSelectedUser(topThree[0])} // Add Click
+                />
+              )}
             </motion.div>
 
-            {/* 3rd Place */}
             <motion.div variants={itemVariants} className="md:mt-8 order-3">
-              {topThree[2] && <PodiumCard user={topThree[2]} rank={3} />}
+              {topThree[2] && (
+                <PodiumCard
+                  user={topThree[2]}
+                  rank={3}
+                  onClick={() => setSelectedUser(topThree[2])} // Add Click
+                />
+              )}
             </motion.div>
           </motion.div>
 
-          {/* Rest of the Leaderboard (Ranks 4+) */}
+          {/* Rest of the Leaderboard */}
           <motion.div
             className="space-y-3"
             variants={containerVariants}
@@ -182,6 +221,7 @@ export function LeaderboardTab() {
                   user={leaderboardUser}
                   rank={index + 4}
                   isCurrentUser={leaderboardUser.id === user?.uid}
+                  onClick={() => setSelectedUser(leaderboardUser)} // Add Click
                 />
               </motion.div>
             ))}
@@ -189,20 +229,15 @@ export function LeaderboardTab() {
         </>
       )}
 
-      {/* No Users Found */}
       {!loading && users.length === 0 && (
         <Card className="p-8 text-center bg-white dark:bg-gray-900 border-gray-200 dark:border-gray-800">
           <Award className="w-12 h-12 text-gray-400 mx-auto" />
           <h3 className="text-xl font-semibold text-gray-700 dark:text-gray-300 mt-4">
             The Leaderboard is Empty
           </h3>
-          <p className="text-gray-500 dark:text-gray-400 mt-1">
-            Be the first to win a trophy!
-          </p>
         </Card>
       )}
 
-      {/* Current User's Sticky Rank */}
       {currentUserData && (
         <motion.div
           className="sticky bottom-6 z-20"
@@ -216,23 +251,140 @@ export function LeaderboardTab() {
               rank={currentUserRank + 1}
               isCurrentUser={true}
               isSticky={true}
+              onClick={() => setSelectedUser(currentUserData)}
             />
           </div>
         </motion.div>
       )}
+
+      {/* --- USER PROFILE MODAL --- */}
+      <UserProfileModal
+        user={selectedUser}
+        onClose={() => setSelectedUser(null)}
+      />
     </div>
   );
 }
 
-// ... (Sub-components PodiumCard, UserRankRow, LeaderboardSkeleton remain exactly the same as previous steps)
-function PodiumCard({ user, rank }: { user: LeaderboardUser; rank: number }) {
+// --- NEW COMPONENT: USER PROFILE MODAL ---
+function UserProfileModal({
+  user,
+  onClose,
+}: {
+  user: LeaderboardUser | null;
+  onClose: () => void;
+}) {
+  if (!user) return null;
+
+  return (
+    <Dialog open={!!user} onOpenChange={(open) => !open && onClose()}>
+      <DialogContent className="sm:max-w-md bg-white dark:bg-gray-900 border-gray-200 dark:border-gray-800 p-0 overflow-hidden rounded-3xl">
+        <DialogHeader className="p-6 pb-0">
+          <DialogTitle className="text-center text-xl font-bold font-pixelify">
+            Player Card
+          </DialogTitle>
+        </DialogHeader>
+
+        <div className="flex flex-col items-center p-6 space-y-6">
+          {/* Avatar Section */}
+          <div className="w-32 h-32 rounded-full overflow-hidden border-4 border-indigo-500 bg-gray-100 dark:bg-gray-800 shadow-xl relative">
+            <AvatarDisplay config={user.avatarConfig} headOnly />
+          </div>
+
+          <div className="text-center space-y-1">
+            <h2 className="text-2xl font-black text-gray-900 dark:text-white">
+              {user.displayName}
+            </h2>
+            <div className="flex items-center justify-center gap-2 text-sm text-gray-500 font-medium">
+              <span className="uppercase tracking-wider">
+                {user.league} League
+              </span>
+              <span>•</span>
+              <span className="text-indigo-500">Lvl {user.level}</span>
+            </div>
+          </div>
+
+          {/* Stats Grid */}
+          <div className="grid grid-cols-3 gap-3 w-full">
+            <div className="p-3 bg-gray-50 dark:bg-gray-800 rounded-2xl flex flex-col items-center justify-center gap-1 border border-gray-100 dark:border-gray-700">
+              <TrophyIcon className="w-5 h-5 text-yellow-500" />
+              <span className="text-lg font-bold">{user.trophies}</span>
+              <span className="text-[10px] uppercase text-gray-400 font-bold">
+                Trophies
+              </span>
+            </div>
+            <div className="p-3 bg-gray-50 dark:bg-gray-800 rounded-2xl flex flex-col items-center justify-center gap-1 border border-gray-100 dark:border-gray-700">
+              <Zap className="w-5 h-5 text-orange-500" />
+              <span className="text-lg font-bold">{user.streaks || 0}</span>
+              <span className="text-[10px] uppercase text-gray-400 font-bold">
+                Streak
+              </span>
+            </div>
+            <div className="p-3 bg-gray-50 dark:bg-gray-800 rounded-2xl flex flex-col items-center justify-center gap-1 border border-gray-100 dark:border-gray-700">
+              <Shield className="w-5 h-5 text-blue-500" />
+              <span className="text-lg font-bold">{user.xp}</span>
+              <span className="text-[10px] uppercase text-gray-400 font-bold">
+                Total XP
+              </span>
+            </div>
+          </div>
+
+          {/* Badges Section */}
+          <div className="w-full space-y-3">
+            <div className="text-xs font-bold uppercase text-gray-400 tracking-wider ml-1">
+              Badges Earned
+            </div>
+            {user.badges && user.badges.length > 0 ? (
+              <div className="flex flex-wrap gap-2">
+                {user.badges.map((badge, i) => (
+                  <Badge
+                    key={i}
+                    variant="secondary"
+                    className="px-3 py-1 text-xs"
+                  >
+                    {badge}
+                  </Badge>
+                ))}
+              </div>
+            ) : (
+              <div className="text-sm text-gray-400 italic bg-gray-50 dark:bg-gray-800/50 p-3 rounded-xl text-center">
+                No badges earned yet.
+              </div>
+            )}
+          </div>
+
+          {/* Footer Info */}
+          {user.joinedAt && (
+            <div className="flex items-center text-xs text-gray-400 gap-1 pt-2">
+              <Calendar className="w-3 h-3" />
+              Joined {new Date(user.joinedAt).toLocaleDateString()}
+            </div>
+          )}
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+// --- UPDATED SUB COMPONENTS ---
+
+function PodiumCard({
+  user,
+  rank,
+  onClick,
+}: {
+  user: LeaderboardUser;
+  rank: number;
+  onClick: () => void;
+}) {
   const isFirst = rank === 1;
   const isSecond = rank === 2;
   const isThird = rank === 3;
 
   return (
     <div
-      className={`relative rounded-3xl p-6 flex flex-col items-center text-center shadow-lg transition-all hover:scale-[1.03]
+      onClick={onClick}
+      className={`relative rounded-3xl p-6 flex flex-col items-center text-center shadow-lg transition-all hover:scale-[1.03] cursor-pointer group
       ${
         isFirst
           ? "bg-gradient-to-b from-yellow-50 to-white dark:from-yellow-900/20 dark:to-gray-900 border-2 border-yellow-400"
@@ -250,6 +402,7 @@ function PodiumCard({ user, rank }: { user: LeaderboardUser; rank: number }) {
       }
     `}
     >
+      {/* Rank Badge */}
       <div
         className={`absolute -top-6 w-12 h-12 rounded-full flex items-center justify-center border-4 shadow-md z-10
         ${isFirst ? `bg-yellow-400 border-white dark:border-gray-900` : ""}
@@ -264,8 +417,9 @@ function PodiumCard({ user, rank }: { user: LeaderboardUser; rank: number }) {
         )}
       </div>
 
+      {/* Avatar */}
       <div
-        className={`mt-6 w-24 h-24 rounded-full overflow-hidden border-4 bg-gray-100 dark:bg-gray-800 flex-shrink-0 relative
+        className={`mt-6 w-24 h-24 rounded-full overflow-hidden border-4 bg-gray-100 dark:bg-gray-800 flex-shrink-0 relative transition-transform group-hover:scale-105
           ${
             isFirst
               ? "border-yellow-400 ring-4 ring-yellow-400/20"
@@ -276,7 +430,7 @@ function PodiumCard({ user, rank }: { user: LeaderboardUser; rank: number }) {
         <AvatarDisplay config={user.avatarConfig} headOnly />
       </div>
 
-      <h3 className="text-xl font-bold text-gray-900 dark:text-white mt-4 truncate w-full px-2">
+      <h3 className="text-xl font-bold text-gray-900 dark:text-white mt-4 truncate w-full px-2 group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors">
         {user.displayName}
       </h3>
 
@@ -304,11 +458,13 @@ function UserRankRow({
   rank,
   isCurrentUser,
   isSticky = false,
+  onClick,
 }: {
   user: LeaderboardUser;
   rank: number;
   isCurrentUser: boolean;
   isSticky?: boolean;
+  onClick: () => void;
 }) {
   let bgColor = "bg-white dark:bg-gray-900";
   let borderColor = "border-gray-100 dark:border-gray-800";
@@ -338,19 +494,18 @@ function UserRankRow({
 
   return (
     <div
-      className={`flex items-center p-4 rounded-xl transition-all border
+      onClick={onClick}
+      className={`flex items-center p-4 rounded-xl transition-all border cursor-pointer hover:shadow-md hover:scale-[1.01] active:scale-[0.99]
       ${bgColor} ${borderColor} ${highlightClass}
       ${isSticky ? "shadow-2xl" : "shadow-sm"}
     `}
     >
       <div
-        className={`w-10 text-center text-lg font-black italic
-        ${
+        className={`w-10 text-center text-lg font-black italic ${
           rank <= 3
             ? "text-gray-900 dark:text-white scale-110"
             : "text-gray-400 dark:text-gray-500"
-        }
-      `}
+        }`}
       >
         #{rank}
       </div>
@@ -362,7 +517,7 @@ function UserRankRow({
 
         <div className="min-w-0">
           <div className="flex items-center gap-2">
-            <div className="text-sm font-bold text-gray-900 dark:text-white truncate">
+            <div className="text-sm font-bold text-gray-900 dark:text-white truncate hover:text-indigo-500 transition-colors">
               {user.displayName} {isCurrentUser && "(You)"}
             </div>
             {rank === 1 && (
@@ -411,7 +566,6 @@ function LeaderboardSkeleton() {
           </div>
         ))}
       </div>
-
       <div className="space-y-3">
         {[...Array(5)].map((_, i) => (
           <div

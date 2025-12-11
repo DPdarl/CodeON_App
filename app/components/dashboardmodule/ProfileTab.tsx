@@ -1,4 +1,3 @@
-// app/components/dashboardmodule/ProfileTab.tsx
 import { useState, useEffect } from "react";
 import { useAuth, type UserData } from "~/contexts/AuthContext";
 import { getUserRank } from "~/lib/leaderboard-logic";
@@ -15,6 +14,7 @@ import { Label } from "~/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "~/components/ui/tabs";
 import { CustomizeAvatar } from "./CustomizeAvatar";
 import { AvatarDisplay } from "./AvatarDisplay";
+import { Skeleton } from "~/components/ui/skeleton";
 import {
   User,
   Calendar,
@@ -25,7 +25,7 @@ import {
   Crown,
 } from "lucide-react";
 import { motion } from "framer-motion";
-import { toast } from "sonner"; // Ensure you have sonner installed or use your preferred toast lib
+import { toast } from "sonner";
 
 interface ProfileTabProps {
   user: UserData | null;
@@ -34,66 +34,75 @@ interface ProfileTabProps {
 
 export function ProfileTab({ user, onSaveAvatar }: ProfileTabProps) {
   const { updateProfile } = useAuth();
+
+  // Initialize directly from props to ensure instant render
   const [displayName, setDisplayName] = useState(user?.displayName || "");
   const [realRank, setRealRank] = useState<number | null>(null);
 
-  // VALIDATION: Track if saving is in progress
   const [isSaving, setIsSaving] = useState(false);
 
-  // VALIDATION: Check if name actually changed
   const isProfileChanged =
     displayName.trim() !== "" && displayName.trim() !== user?.displayName;
 
   useEffect(() => {
-    // Sync local state if user updates externally
+    let isMounted = true;
+
+    // 1. Sync display name if prop updates
     if (user?.displayName) setDisplayName(user.displayName);
 
-    // Fetch Rank (Safe Mode)
-    const fetchRank = async () => {
+    // 2. Fetch Rank in background (Does NOT block UI)
+    const loadData = async () => {
       if (user?.trophies !== undefined) {
         try {
           const r = await getUserRank(user.trophies);
-          setRealRank(r);
+          if (isMounted) setRealRank(r);
         } catch (e) {
-          console.warn("Could not fetch rank (offline?)", e);
+          console.warn("Could not fetch rank", e);
         }
       }
     };
-    fetchRank();
-  }, [user]);
 
-  // Derived Stats
-  const stats = {
-    trophies: user?.trophies || 0,
-    streak: user?.streaks || 0,
-    league: user?.league || "Novice",
-    rank: realRank ? `#${realRank}` : "Unranked",
-  };
+    loadData();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [user]);
 
   const handleProfileUpdate = async () => {
     if (!isProfileChanged) return;
-
     setIsSaving(true);
     try {
-      // This calls the robust retry logic in AuthContext
       await updateProfile({ displayName: displayName.trim() });
       toast.success("Profile updated successfully!");
     } catch (error) {
-      toast.error("Failed to update profile. Please try again.");
+      toast.error("Failed to update profile.");
     } finally {
       setIsSaving(false);
     }
   };
 
   const handleAvatarSaveWithToast = async (config: any) => {
-    // CustomizeAvatar handles its own loading state, but we wrap the toast here
     await onSaveAvatar(config);
     toast.success("Avatar updated! Looking good.");
   };
 
-  const creationDate = user?.joinedAt
+  // Only show Skeleton if we truly have NO user data (rare case)
+  if (!user) {
+    return <ProfileSkeleton />;
+  }
+
+  const creationDate = user.joinedAt
     ? new Date(user.joinedAt).toLocaleDateString()
     : "N/A";
+
+  const stats = {
+    trophies: user.trophies || 0,
+    streak: user.streaks || 0,
+    league: user.league || "Novice",
+    // Show dots or 'Unranked' while rank loads
+    rank: realRank ? `#${realRank}` : "...",
+  };
 
   return (
     <div className="max-w-6xl mx-auto space-y-8 pb-12 font-pixelify">
@@ -105,14 +114,14 @@ export function ProfileTab({ user, onSaveAvatar }: ProfileTabProps) {
         <Card className="bg-white dark:bg-gray-900 shadow-lg rounded-3xl overflow-hidden">
           <CardContent className="p-6 flex flex-col sm:flex-row items-center gap-6">
             <div className="w-24 h-24 rounded-full overflow-hidden border-4 border-indigo-500 bg-gray-100 dark:bg-gray-800 flex-shrink-0">
-              <AvatarDisplay config={user?.avatarConfig} headOnly />
+              <AvatarDisplay config={user.avatarConfig} headOnly />
             </div>
-            <div className="text-center sm:text-left">
+            <div className="text-center sm:text-left flex-1">
               <h1 className="text-3xl font-extrabold text-gray-900 dark:text-white">
-                {user?.displayName || "New Coder"}
+                {user.displayName || "New Coder"}
               </h1>
               <p className="text-lg text-gray-600 dark:text-gray-400">
-                {user?.email}
+                {user.email}
               </p>
               <div className="flex items-center justify-center sm:justify-start text-sm text-gray-500 mt-2">
                 <Calendar className="w-4 h-4 mr-2" /> Joined: {creationDate}
@@ -219,7 +228,7 @@ export function ProfileTab({ user, onSaveAvatar }: ProfileTabProps) {
             <div className="mt-4">
               <CustomizeAvatar
                 user={user}
-                initialConfig={user?.avatarConfig}
+                initialConfig={user.avatarConfig}
                 onSave={handleAvatarSaveWithToast}
               />
             </div>
@@ -229,6 +238,8 @@ export function ProfileTab({ user, onSaveAvatar }: ProfileTabProps) {
     </div>
   );
 }
+
+// --- SUB-COMPONENTS ---
 
 function StatItem({ icon: Icon, value, label, color }: any) {
   return (
@@ -243,6 +254,47 @@ function StatItem({ icon: Icon, value, label, color }: any) {
         <div className="text-[10px] md:text-xs font-bold uppercase tracking-wider text-gray-500 dark:text-gray-400">
           {label}
         </div>
+      </div>
+    </div>
+  );
+}
+
+// --- SKELETON FALLBACK ---
+function ProfileSkeleton() {
+  return (
+    <div className="max-w-6xl mx-auto space-y-8 pb-12">
+      <div className="bg-white dark:bg-gray-900 shadow-lg rounded-3xl p-6 flex flex-col sm:flex-row items-center gap-6">
+        <Skeleton className="w-24 h-24 rounded-full" />
+        <div className="space-y-2 flex-1 w-full sm:w-auto text-center sm:text-left">
+          <Skeleton className="h-8 w-48 mx-auto sm:mx-0" />
+          <Skeleton className="h-4 w-64 mx-auto sm:mx-0" />
+          <Skeleton className="h-4 w-32 mx-auto sm:mx-0" />
+        </div>
+        <div className="hidden sm:block">
+          <Skeleton className="h-12 w-24" />
+        </div>
+      </div>
+
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+        {[...Array(4)].map((_, i) => (
+          <div
+            key={i}
+            className="p-4 bg-gray-50 dark:bg-gray-800/50 rounded-2xl border border-gray-100 dark:border-gray-800 h-24 flex items-center gap-3"
+          >
+            <Skeleton className="w-10 h-10 rounded-xl" />
+            <div className="space-y-2">
+              <Skeleton className="w-16 h-6" />
+              <Skeleton className="w-20 h-3" />
+            </div>
+          </div>
+        ))}
+      </div>
+
+      <div className="w-full space-y-6">
+        <div className="flex justify-center">
+          <Skeleton className="h-12 w-full max-w-sm rounded-xl" />
+        </div>
+        <Skeleton className="h-[400px] w-full rounded-3xl" />
       </div>
     </div>
   );

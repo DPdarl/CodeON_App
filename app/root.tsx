@@ -24,12 +24,12 @@ export const links: LinksFunction = () => [
   },
   {
     rel: "icon",
-    href: "/CodeON_LOGODark.ico",
+    href: "/coinv2.ico", // This now works because the file is in 'public'
     type: "image/x-icon",
   },
   {
     rel: "shortcut icon",
-    href: "/logo/CodeON_LOGODark.ico",
+    href: "/coinv2.ico",
   },
   {
     rel: "stylesheet",

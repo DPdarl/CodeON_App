@@ -1,12 +1,106 @@
 // app/routes/dashboard.tsx
-import { useAuth } from "~/contexts/AuthContext";
-import { PrivateRoute } from "~/components/PrivateRoute";
 import { useEffect, useState } from "react";
-import { useNavigate } from "@remix-run/react";
+import {
+  useNavigate,
+  useLoaderData,
+  type ClientLoaderFunctionArgs,
+  type ShouldRevalidateFunction,
+} from "@remix-run/react";
 import type { MetaFunction } from "@remix-run/node";
 import { Sidebar } from "~/components/dashboardmodule/SideBar";
 import { DashboardTabs } from "~/components/dashboardmodule/DashboardTabs";
 import { DashboardHeader } from "~/components/dashboardmodule/DashboardHeader";
+import { PrivateRoute } from "~/components/PrivateRoute";
+import { useAuth, type UserData } from "~/contexts/AuthContext";
+import { supabase } from "~/lib/supabase";
+import { Skeleton } from "~/components/ui/skeleton";
+
+// ... (Keep your existing clientLoader code exactly as is) ...
+export async function clientLoader({ request }: ClientLoaderFunctionArgs) {
+  const {
+    data: { session },
+  } = await supabase.auth.getSession();
+  if (!session) return { user: null };
+
+  const { data: dbUser, error } = await supabase
+    .from("users")
+    .select("*")
+    .eq("id", session.user.id)
+    .single();
+
+  if (error || !dbUser) return { user: null };
+
+  const mappedUser: UserData = {
+    uid: dbUser.id,
+    email: dbUser.email,
+    displayName: dbUser.display_name || "Coder",
+    photoURL: dbUser.photo_url,
+    avatarConfig: dbUser.avatar_config,
+    settings: dbUser.settings,
+    xp: dbUser.xp,
+    level: dbUser.level,
+    streaks: dbUser.streaks,
+    coins: dbUser.coins,
+    hearts: dbUser.hearts,
+    streakFreezes: dbUser.streak_freezes || 0,
+    hints: dbUser.hints || 0,
+    ownedCosmetics: dbUser.owned_cosmetics || [],
+    inventory: dbUser.inventory || [],
+    trophies: dbUser.trophies,
+    league: dbUser.league,
+    joinedAt: dbUser.joined_at,
+    role: dbUser.role,
+    activeDates: dbUser.active_dates || [],
+    badges: dbUser.badges || [],
+  };
+
+  return { user: mappedUser };
+}
+
+clientLoader.hydrate = true;
+
+// --- 1. NEW: STOP AUTO-RELOADING ON TAB SWITCH ---
+export const shouldRevalidate: ShouldRevalidateFunction = ({
+  actionResult,
+  defaultShouldRevalidate,
+  formMethod,
+}) => {
+  // Only revalidate if we explicitly submitted a form (mutation)
+  // This prevents "focusRevalidation" (switching tabs) from firing
+  if (formMethod === "GET") {
+    return false;
+  }
+  return defaultShouldRevalidate;
+};
+
+// ... (Keep HydrateFallback exactly as is) ...
+export function HydrateFallback() {
+  return (
+    <div className="flex h-screen overflow-hidden bg-gradient-to-br from-blue-50 to-indigo-100 dark:from-gray-900 dark:to-gray-800">
+      <div className="w-64 h-screen border-r border-white/20 bg-white/50 dark:bg-gray-800/50 p-4 space-y-4 hidden md:block">
+        <Skeleton className="h-10 w-32 mb-8" />
+        <Skeleton className="h-10 w-full" />
+        <Skeleton className="h-10 w-full" />
+        <Skeleton className="h-10 w-full" />
+        <Skeleton className="h-10 w-full" />
+      </div>
+      <div className="flex-1 flex flex-col p-6 space-y-6">
+        <div className="flex justify-between items-center">
+          <Skeleton className="h-8 w-48" />
+          <div className="flex space-x-3">
+            <Skeleton className="h-10 w-10 rounded-full" />
+            <Skeleton className="h-10 w-10 rounded-full" />
+          </div>
+        </div>
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 pt-6">
+          <Skeleton className="h-48 w-full rounded-xl" />
+          <Skeleton className="h-48 w-full rounded-xl" />
+          <Skeleton className="h-48 w-full rounded-xl" />
+        </div>
+      </div>
+    </div>
+  );
+}
 
 export const meta: MetaFunction = () => {
   return [
@@ -16,19 +110,33 @@ export const meta: MetaFunction = () => {
 };
 
 export default function Dashboard() {
-  const { user, logout, updateProfile } = useAuth();
+  const { user: loaderUser } = useLoaderData<typeof clientLoader>();
+  const { user: contextUser, logout, updateProfile, syncUser } = useAuth();
   const navigate = useNavigate();
 
-  // Default to 'home', but we will update this immediately on client load
+  // --- 2. UPDATE SYNC LOGIC ---
+  const loaderUserString = JSON.stringify(loaderUser);
+  const contextUserString = JSON.stringify(contextUser);
+
+  useEffect(() => {
+    // We strictly trust the loader ONLY if it's genuinely different and valid.
+    // Because we added shouldRevalidate, this will now only fire on initial load
+    // or explicit navigations, NOT on Alt-Tab.
+    if (loaderUser && loaderUserString !== contextUserString) {
+      console.log("Syncing fresh loader data...");
+      syncUser(loaderUser);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loaderUserString, syncUser]);
+
+  const activeUser = contextUser || loaderUser;
+
   const [activeTab, setActiveTab] = useState("home");
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
 
-  // --- NEW: Load saved tab from LocalStorage on mount ---
   useEffect(() => {
     const savedTab = localStorage.getItem("active_dashboard_tab");
-    if (savedTab) {
-      setActiveTab(savedTab);
-    }
+    if (savedTab) setActiveTab(savedTab);
   }, []);
 
   // Theme Logic
@@ -49,23 +157,18 @@ export default function Dashboard() {
     localStorage.theme = isDarkMode ? "dark" : "light";
   };
 
-  // Logout Logic
   const handleLogout = async () => {
     try {
-      // Clear the saved tab so next login starts fresh at 'home'
       localStorage.removeItem("active_dashboard_tab");
       await logout();
+      navigate("/login");
     } catch (error) {
       console.error("Error logging out:", error);
     }
   };
 
-  // Sidebar Toggle Logic
-  const toggleSidebar = () => {
-    setSidebarCollapsed(!sidebarCollapsed);
-  };
+  const toggleSidebar = () => setSidebarCollapsed(!sidebarCollapsed);
 
-  // Multiplayer Quiz Logic
   const startMultiplayerQuiz = () => {
     const gameId = Math.random().toString(36).substring(2, 8);
     navigate(`/multiplayer/${gameId}`);
@@ -73,40 +176,29 @@ export default function Dashboard() {
 
   const joinMultiplayerQuiz = () => {
     const gameCode = prompt("Enter game code:");
-    if (gameCode) {
-      navigate(`/multiplayer/${gameCode}`);
-    }
+    if (gameCode) navigate(`/multiplayer/${gameCode}`);
   };
 
-  // Save Avatar Logic
   const handleSaveAvatar = async (avatarConfig: any) => {
     try {
-      await updateProfile({
-        avatarConfig: avatarConfig,
-      });
+      await updateProfile({ avatarConfig });
     } catch (error) {
       console.error("Error saving avatar:", error);
     }
   };
 
-  // --- MODIFIED: Save to LocalStorage when tab changes ---
   const handleTabChange = (tab: string) => {
     if (tab === "logout") {
       handleLogout();
       return;
     }
-
-    // 1. Update State
     setActiveTab(tab);
-
-    // 2. Save to Browser Storage
     localStorage.setItem("active_dashboard_tab", tab);
   };
 
   return (
     <PrivateRoute>
       <div className="flex h-screen overflow-hidden bg-gradient-to-br from-blue-50 to-indigo-100 dark:from-gray-900 dark:to-gray-800">
-        {/* Sidebar Navigation */}
         <div
           className={`flex-shrink-0 transition-all duration-300 ${
             sidebarCollapsed ? "w-24" : "w-64"
@@ -116,21 +208,20 @@ export default function Dashboard() {
             activeTab={activeTab}
             onTabChange={handleTabChange}
             onLogout={handleLogout}
-            user={user}
+            user={activeUser}
             collapsed={sidebarCollapsed}
           />
         </div>
 
-        {/* Main Content Area */}
         <div className="flex-1 flex flex-col overflow-y-auto transition-all duration-300">
           <DashboardHeader
-            user={user}
+            user={activeUser}
             sidebarCollapsed={sidebarCollapsed}
             onToggleSidebar={toggleSidebar}
             stats={{
-              streaks: user?.streaks || 0,
-              coins: user?.coins || 0,
-              hearts: user?.hearts || 5,
+              streaks: activeUser?.streaks || 0,
+              coins: activeUser?.coins || 0,
+              hearts: activeUser?.hearts || 5,
             }}
             onSwitchTheme={handleSwitchTheme}
             onLogout={handleLogout}
@@ -139,7 +230,7 @@ export default function Dashboard() {
           <main className="p-6 z-0">
             <DashboardTabs
               activeTab={activeTab}
-              user={user}
+              user={activeUser}
               onSaveAvatar={handleSaveAvatar}
               onStartMultiplayerQuiz={startMultiplayerQuiz}
               onJoinMultiplayerQuiz={joinMultiplayerQuiz}
