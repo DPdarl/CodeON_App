@@ -1,7 +1,5 @@
 // app/types/challenge.types.ts
 export interface Challenge {
-  category: (language: any) => unknown;
-  language(language: any): unknown;
   id: string;
   title: string;
   description: string;
@@ -9,8 +7,12 @@ export interface Challenge {
   starterCode: string;
   hint: string;
   solution: string;
-  requiredVersion?: string; // Optional
 
+  // FIXED: Changed from method signature to string property
+  category: string;
+  language: string;
+
+  requiredVersion?: string;
   difficulty: "Easy" | "Medium" | "Hard";
   xp: number;
 }

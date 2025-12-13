@@ -14,6 +14,8 @@ import {
   Loader2,
   Play,
   Crown,
+  Zap, // Added for Test Button
+  Sparkles, // Added for UI
 } from "lucide-react";
 import { Button } from "~/components/ui/button";
 import { Progress } from "~/components/ui/progress";
@@ -25,6 +27,10 @@ import { SelectionCarousel } from "./SelectionCarousel";
 import { calculateProgress } from "~/lib/leveling-system";
 import TrophyIcon from "../ui/TrophyIcon";
 import FlameIcon from "../ui/FlameIcon";
+
+// --- NEW IMPORTS FOR GAME LOGIC ---
+import { useGameProgress } from "~/hooks/useGameProgress";
+import { LevelUpModal } from "./LevelUpModal";
 
 // Helper to get colors based on language (Visuals)
 const getColorForLanguage = (lang: string) => {
@@ -45,23 +51,6 @@ const getColorForLanguage = (lang: string) => {
   }
 };
 
-// Helper to get icons based on language (Visuals)
-const getIconForLanguage = (lang: string) => {
-  switch (lang.toLowerCase()) {
-    case "python":
-      return Terminal;
-    case "javascript":
-      return Code2;
-    case "react":
-      return Cpu;
-    case "csharp":
-    case "c#":
-      return Code2;
-    default:
-      return Brain;
-  }
-};
-
 interface HomeTabProps {
   onTabChange: (tab: string) => void;
 }
@@ -72,11 +61,13 @@ export function HomeTab({ onTabChange }: HomeTabProps) {
   const [challenges, setChallenges] = useState<Challenge[]>([]);
   const [loading, setLoading] = useState(true);
 
+  // --- CONNECT GAME LOGIC HOOK ---
+  const { grantXP, levelUpModal, isProcessing } = useGameProgress();
+
   // 1. Fetch Data from Supabase
   useEffect(() => {
     const fetchChallenges = async () => {
       try {
-        // CHANGED: Supabase query replaces Firestore getDocs
         const { data, error } = await supabase.from("challenges").select("*");
 
         if (error) {
@@ -126,11 +117,16 @@ export function HomeTab({ onTabChange }: HomeTabProps) {
     },
   };
 
-  // Unused variant definition removed or kept if you plan to use it later
-  // const itemVariants = { ... }
-
   return (
     <div className="max-w-6xl mx-auto space-y-8 pb-12">
+      {/* --- LEVEL UP MODAL --- */}
+      <LevelUpModal
+        isOpen={levelUpModal.isOpen}
+        newLevel={levelUpModal.newLevel}
+        rewards={levelUpModal.rewards}
+        onClose={levelUpModal.close}
+      />
+
       {/* --- Hero / Welcome Section --- */}
       <motion.div
         initial={{ opacity: 0, y: -20 }}
@@ -152,18 +148,48 @@ export function HomeTab({ onTabChange }: HomeTabProps) {
               <h1 className="text-3xl md:text-4xl font-extrabold mb-2 tracking-tight font-pixelify">
                 Welcome back, {user?.displayName || "Traveler"}!
               </h1>
-              <p className="text-indigo-100 max-w-lg text-lg">
-                Ready to continue your coding adventure? The world of code
-                awaits your command.
+              <p className="text-indigo-100 max-w-lg text-lg flex items-center gap-2">
+                <Flame className="w-5 h-5 text-orange-300 fill-orange-400" />
+                You're on a{" "}
+                <span className="font-bold text-yellow-300">
+                  {stats.streak} day streak
+                </span>
+                .
               </p>
+
+              {/* --- TEST BUTTON FOR DEMO --- */}
+              <div className="mt-6 flex flex-wrap gap-4 items-center">
+                <Button
+                  onClick={() => grantXP(100)}
+                  disabled={isProcessing}
+                  variant="secondary"
+                  size="sm"
+                  className="bg-white/20 hover:bg-white/30 text-white border-0 transition-all active:scale-95"
+                >
+                  {isProcessing ? (
+                    <span className="animate-pulse">Adding...</span>
+                  ) : (
+                    <>
+                      <Zap className="w-4 h-4 mr-2 text-yellow-300 fill-yellow-300" />{" "}
+                      Test: Give 100 XP
+                    </>
+                  )}
+                </Button>
+                <span className="text-[10px] text-indigo-200 opacity-70">
+                  * Click to test Level Up & Leaderboard
+                </span>
+              </div>
             </div>
 
             {/* Level / XP Card (Personal Progress) */}
             <div className="bg-black/20 backdrop-blur-sm rounded-2xl p-6 min-w-[280px] border border-white/10">
               <div className="flex justify-between items-end mb-2">
-                <span className="text-2xl font-black">Lvl {stats.level}</span>
+                <span className="text-2xl font-black flex items-center gap-2">
+                  Level {stats.level}
+                  <Sparkles className="w-4 h-4 text-yellow-300" />
+                </span>
                 <span className="text-sm text-indigo-200 font-mono">
-                  {stats.currentBarXP}/{stats.maxBarXP} XP
+                  {Math.round(stats.currentBarXP)}/{stats.maxBarXP} XP
                 </span>
               </div>
               <Progress
@@ -172,7 +198,7 @@ export function HomeTab({ onTabChange }: HomeTabProps) {
                 indicatorClassName="bg-gradient-to-r from-yellow-300 to-yellow-500"
               />
               <p className="text-xs text-indigo-200 mt-3 text-right">
-                {stats.maxBarXP - stats.currentBarXP} XP to Level{" "}
+                {Math.round(stats.maxBarXP - stats.currentBarXP)} XP to Level{" "}
                 {stats.level + 1}
               </p>
             </div>
@@ -180,7 +206,7 @@ export function HomeTab({ onTabChange }: HomeTabProps) {
         </div>
       </motion.div>
 
-      {/* --- Stats Row (UPDATED: Competitive Stats) --- */}
+      {/* --- Stats Row (Competitive Stats) --- */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         {/* 1. Streak */}
         <StatCard

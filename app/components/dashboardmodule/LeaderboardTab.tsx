@@ -18,13 +18,29 @@ import {
   Calendar,
   Zap,
   Shield,
+  Info, // Added Info icon
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { AvatarDisplay } from "./AvatarDisplay";
 import TrophyIcon from "../ui/TrophyIcon";
 import { Badge } from "~/components/ui/badge";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "~/components/ui/tooltip";
 
-// --- UPDATED INTERFACE ---
+// --- LEAGUE DATA CONSTANT ---
+export const LEAGUES = [
+  { name: "Novice", minXp: 0, color: "text-gray-500" },
+  { name: "Bronze", minXp: 500, color: "text-orange-600" },
+  { name: "Silver", minXp: 2000, color: "text-slate-400" },
+  { name: "Gold", minXp: 5000, color: "text-yellow-500" },
+  { name: "Platinum", minXp: 10000, color: "text-cyan-400" },
+  { name: "Diamond", minXp: 25000, color: "text-indigo-400" },
+];
+
 interface LeaderboardUser {
   id: string;
   displayName: string | null;
@@ -34,9 +50,9 @@ interface LeaderboardUser {
   trophies: number;
   league: string;
   avatarConfig?: any;
-  joinedAt?: string; // Added for profile
-  badges?: string[]; // Added for profile
-  streaks?: number; // Added for profile
+  joinedAt?: string;
+  badges?: string[];
+  streaks?: number;
 }
 
 const LEADERBOARD_CACHE_KEY = "codeon_leaderboard_cache";
@@ -44,8 +60,6 @@ const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
 export function LeaderboardTab() {
   const { user } = useAuth();
-
-  // --- NEW: SELECTED USER STATE ---
   const [selectedUser, setSelectedUser] = useState<LeaderboardUser | null>(
     null
   );
@@ -82,7 +96,6 @@ export function LeaderboardTab() {
 
           if (error) throw error;
 
-          // --- UPDATED MAPPER ---
           const fetchedUsers: LeaderboardUser[] = (data || []).map(
             (u: any) => ({
               id: u.id,
@@ -93,7 +106,7 @@ export function LeaderboardTab() {
               trophies: u.trophies || 0,
               league: u.league || "Novice",
               avatarConfig: u.avatar_config || null,
-              joinedAt: u.joined_at, // Map new fields
+              joinedAt: u.joined_at,
               badges: u.badges || [],
               streaks: u.streaks || 0,
             })
@@ -116,6 +129,7 @@ export function LeaderboardTab() {
     [users.length]
   );
 
+  // Initial Fetch
   useEffect(() => {
     fetchUsers(users.length > 0);
     const onFocus = () => {
@@ -126,6 +140,37 @@ export function LeaderboardTab() {
     window.addEventListener("focus", onFocus);
     return () => window.removeEventListener("focus", onFocus);
   }, [fetchUsers]);
+
+  // --- REAL-TIME LOCAL UPDATE ---
+  // If the current user levels up (via HomeTab), update their entry in the leaderboard list immediately.
+  useEffect(() => {
+    if (user && users.length > 0) {
+      setUsers((prevUsers) => {
+        const index = prevUsers.findIndex((u) => u.id === user.uid);
+        if (index !== -1) {
+          // Check if stats are different
+          if (
+            prevUsers[index].xp !== user.xp ||
+            prevUsers[index].level !== user.level
+          ) {
+            const newUsers = [...prevUsers];
+            newUsers[index] = {
+              ...newUsers[index],
+              xp: user.xp || 0,
+              level: user.level || 1,
+              // Update league locally based on XP if needed
+              league:
+                LEAGUES.slice()
+                  .reverse()
+                  .find((l) => (user.xp || 0) >= l.minXp)?.name || "Novice",
+            };
+            return newUsers;
+          }
+        }
+        return prevUsers;
+      });
+    }
+  }, [user]); // Re-run whenever AuthContext user changes
 
   const topThree = users.slice(0, 3);
   const restOfUsers = users.slice(3);
@@ -156,9 +201,49 @@ export function LeaderboardTab() {
         <h1 className="text-4xl font-extrabold text-gray-900 dark:text-white mt-4 font-pixelify tracking-wide">
           Hall of Champions
         </h1>
-        <p className="text-lg text-gray-600 dark:text-gray-400 mt-2">
-          Ranked by Trophies earned in the Arena
-        </p>
+
+        {/* Subtitle with Info Icon */}
+        <div className="flex items-center justify-center gap-2 mt-2">
+          <p className="text-lg text-gray-600 dark:text-gray-400">
+            Ranked by Trophies earned in the Arena
+          </p>
+
+          <TooltipProvider delayDuration={0}>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <div className="p-1 rounded-full hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors cursor-help">
+                  <Info className="w-5 h-5 text-gray-400 hover:text-indigo-500" />
+                </div>
+              </TooltipTrigger>
+              <TooltipContent
+                side="bottom"
+                className="p-4 bg-white dark:bg-gray-950 border-gray-200 dark:border-gray-800 shadow-xl rounded-2xl w-64"
+              >
+                <div className="space-y-3">
+                  <div className="flex items-center gap-2 border-b pb-2 mb-2 dark:border-gray-800">
+                    <Award className="w-4 h-4 text-indigo-500" />
+                    <h4 className="font-bold text-sm">League System</h4>
+                  </div>
+                  <div className="space-y-2">
+                    {LEAGUES.map((league) => (
+                      <div
+                        key={league.name}
+                        className="flex items-center justify-between text-xs"
+                      >
+                        <span className={`font-bold ${league.color}`}>
+                          {league.name}
+                        </span>
+                        <span className="text-muted-foreground font-mono">
+                          {league.minXp.toLocaleString()}+ XP
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
+        </div>
       </motion.div>
 
       {/* Loading Skeleton */}
@@ -182,7 +267,7 @@ export function LeaderboardTab() {
                 <PodiumCard
                   user={topThree[1]}
                   rank={2}
-                  onClick={() => setSelectedUser(topThree[1])} // Add Click
+                  onClick={() => setSelectedUser(topThree[1])}
                 />
               )}
             </motion.div>
@@ -192,7 +277,7 @@ export function LeaderboardTab() {
                 <PodiumCard
                   user={topThree[0]}
                   rank={1}
-                  onClick={() => setSelectedUser(topThree[0])} // Add Click
+                  onClick={() => setSelectedUser(topThree[0])}
                 />
               )}
             </motion.div>
@@ -202,7 +287,7 @@ export function LeaderboardTab() {
                 <PodiumCard
                   user={topThree[2]}
                   rank={3}
-                  onClick={() => setSelectedUser(topThree[2])} // Add Click
+                  onClick={() => setSelectedUser(topThree[2])}
                 />
               )}
             </motion.div>
@@ -221,7 +306,7 @@ export function LeaderboardTab() {
                   user={leaderboardUser}
                   rank={index + 4}
                   isCurrentUser={leaderboardUser.id === user?.uid}
-                  onClick={() => setSelectedUser(leaderboardUser)} // Add Click
+                  onClick={() => setSelectedUser(leaderboardUser)}
                 />
               </motion.div>
             ))}
@@ -238,6 +323,7 @@ export function LeaderboardTab() {
         </Card>
       )}
 
+      {/* User's Sticky Rank (Bottom) */}
       {currentUserData && (
         <motion.div
           className="sticky bottom-6 z-20"
@@ -266,7 +352,7 @@ export function LeaderboardTab() {
   );
 }
 
-// --- NEW COMPONENT: USER PROFILE MODAL ---
+// ... (Sub-components PodiumCard, UserRankRow, etc. remain the same as previous version)
 function UserProfileModal({
   user,
   onClose,
@@ -286,7 +372,6 @@ function UserProfileModal({
         </DialogHeader>
 
         <div className="flex flex-col items-center p-6 space-y-6">
-          {/* Avatar Section */}
           <div className="w-32 h-32 rounded-full overflow-hidden border-4 border-indigo-500 bg-gray-100 dark:bg-gray-800 shadow-xl relative">
             <AvatarDisplay config={user.avatarConfig} headOnly />
           </div>
@@ -304,7 +389,6 @@ function UserProfileModal({
             </div>
           </div>
 
-          {/* Stats Grid */}
           <div className="grid grid-cols-3 gap-3 w-full">
             <div className="p-3 bg-gray-50 dark:bg-gray-800 rounded-2xl flex flex-col items-center justify-center gap-1 border border-gray-100 dark:border-gray-700">
               <TrophyIcon className="w-5 h-5 text-yellow-500" />
@@ -329,7 +413,6 @@ function UserProfileModal({
             </div>
           </div>
 
-          {/* Badges Section */}
           <div className="w-full space-y-3">
             <div className="text-xs font-bold uppercase text-gray-400 tracking-wider ml-1">
               Badges Earned
@@ -353,7 +436,6 @@ function UserProfileModal({
             )}
           </div>
 
-          {/* Footer Info */}
           {user.joinedAt && (
             <div className="flex items-center text-xs text-gray-400 gap-1 pt-2">
               <Calendar className="w-3 h-3" />
@@ -366,8 +448,7 @@ function UserProfileModal({
   );
 }
 
-// --- UPDATED SUB COMPONENTS ---
-
+// ... Keep PodiumCard, UserRankRow, LeaderboardSkeleton as they were
 function PodiumCard({
   user,
   rank,
@@ -402,7 +483,6 @@ function PodiumCard({
       }
     `}
     >
-      {/* Rank Badge */}
       <div
         className={`absolute -top-6 w-12 h-12 rounded-full flex items-center justify-center border-4 shadow-md z-10
         ${isFirst ? `bg-yellow-400 border-white dark:border-gray-900` : ""}
@@ -417,7 +497,6 @@ function PodiumCard({
         )}
       </div>
 
-      {/* Avatar */}
       <div
         className={`mt-6 w-24 h-24 rounded-full overflow-hidden border-4 bg-gray-100 dark:bg-gray-800 flex-shrink-0 relative transition-transform group-hover:scale-105
           ${

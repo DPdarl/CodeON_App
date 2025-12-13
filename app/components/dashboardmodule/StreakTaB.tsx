@@ -1,13 +1,7 @@
+// app/components/dashboardmodule/StreakTab.tsx
 import { useState, useEffect } from "react";
 import { useAuth } from "~/contexts/AuthContext";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-  CardFooter,
-} from "~/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "~/components/ui/card";
 import { Button } from "~/components/ui/button";
 import {
   Dialog,
@@ -26,13 +20,13 @@ import {
   Check,
   Lock,
   Crown,
-  PartyPopper,
+  Zap, // Added for test button
 } from "lucide-react";
-import { motion, AnimatePresence } from "framer-motion";
+import { motion } from "framer-motion";
 import { cn } from "~/lib/utils";
-import { STREAK_MILESTONES } from "~/lib/streak-logic"; // Import Logic
+import { STREAK_MILESTONES, calculateStreakUpdate } from "~/lib/streak-logic"; // Connected Logic
 
-// --- HELPERS ---
+// --- HELPERS (Visuals only) ---
 
 const getPhDate = () => {
   const now = new Date();
@@ -58,9 +52,10 @@ const itemVariants = {
 };
 
 export function StreakTab() {
-  const { user } = useAuth();
+  const { user, updateProfile } = useAuth();
   const [calendarDays, setCalendarDays] = useState<any[]>([]);
   const [currentMonth, setCurrentMonth] = useState("");
+  const [isProcessing, setIsProcessing] = useState(false);
 
   // Modal State
   const [selectedMilestone, setSelectedMilestone] = useState<any | null>(null);
@@ -78,6 +73,7 @@ export function StreakTab() {
     }))
     .sort((a, b) => a.days - b.days);
 
+  // --- LOGIC INTEGRATION: Calendar Generation ---
   useEffect(() => {
     const activeDays = activeDatesRaw || [];
     const today = getPhDate();
@@ -102,7 +98,9 @@ export function StreakTab() {
       const isToday = dateStr === todayStr;
 
       let isActive = activeDays.includes(dateStr);
-      if (isToday && currentStreak > 0) isActive = true;
+      // Visual fix: If local streak > 0 and it's today, assume active visually
+      if (isToday && currentStreak > 0 && activeDays.includes(todayStr))
+        isActive = true;
 
       const isFuture = date.setHours(0, 0, 0, 0) > today.setHours(0, 0, 0, 0);
 
@@ -118,18 +116,73 @@ export function StreakTab() {
     setCalendarDays(days);
   }, [currentStreak, activeDatesRaw]);
 
+  // --- HANDLER: Manual Test Button ---
+  const handleTestStreak = async () => {
+    if (!user || isProcessing) return;
+    setIsProcessing(true);
+
+    try {
+      console.log("--- Running Streak Logic ---");
+      const result = calculateStreakUpdate(user);
+      console.log("Result:", result);
+
+      if (result.shouldUpdate) {
+        // Update DB via Context
+        await updateProfile({
+          streaks: result.newStreak,
+          activeDates: result.newActiveDates,
+          coins: result.newCoins,
+          streakFreezes: result.newFreezes,
+          badges: result.newBadges,
+        });
+
+        const msg =
+          result.messages.length > 0
+            ? result.messages.join("\n")
+            : "Streak maintained!";
+        alert(`✅ Success!\n${msg}`);
+      } else {
+        console.log("No update needed (Already active today)");
+        alert("📅 You have already extended your streak today!");
+      }
+    } catch (error) {
+      console.error("Streak Test Failed:", error);
+      alert("❌ Error updating streak. Check console.");
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
   return (
     <div className="max-w-6xl mx-auto space-y-8 pb-12">
       {/* Header */}
       <motion.div
         initial={{ opacity: 0, y: -20 }}
         animate={{ opacity: 1, y: 0 }}
-        className="flex items-center gap-3"
+        className="flex items-center justify-between gap-3"
       >
-        <Flame className="w-8 h-8 text-orange-500" />
-        <h1 className="text-4xl font-extrabold text-gray-900 dark:text-white">
-          Your Streak
-        </h1>
+        <div className="flex items-center gap-3">
+          <Flame className="w-8 h-8 text-orange-500" />
+          <h1 className="text-4xl font-extrabold text-gray-900 dark:text-white">
+            Your Streak
+          </h1>
+        </div>
+
+        {/* TEST BUTTON */}
+        <Button
+          variant="outline"
+          onClick={handleTestStreak}
+          disabled={isProcessing}
+          className="gap-2 border-orange-200 bg-orange-50 text-orange-600 hover:bg-orange-100 hover:text-orange-700 dark:border-orange-900 dark:bg-orange-950/30 dark:text-orange-400"
+        >
+          {isProcessing ? (
+            <span className="animate-pulse">Processing...</span>
+          ) : (
+            <>
+              <Zap className="w-4 h-4 fill-current" /> Test Streak
+            </>
+          )}
+        </Button>
       </motion.div>
 
       {/* Main Grid */}
@@ -146,7 +199,6 @@ export function StreakTab() {
 
         <motion.div variants={itemVariants} className="lg:col-span-1 space-y-6">
           <StreakInventoryCard freezeCount={freezeCount} />
-          {/* Pass handler to open modal */}
           <StreakMilestonesCard
             milestones={milestonesList}
             onViewMilestone={setSelectedMilestone}
@@ -250,27 +302,27 @@ function CurrentStreakCard({ streak }: { streak: number }) {
 
 function StreakCalendarCard({ month, days }: { month: string; days: any[] }) {
   const dayLabels = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
-  const today = days.find((d) => d.isToday);
-  const isTodayActive = today?.isActive;
 
   return (
     <Card className="bg-white dark:bg-gray-900 shadow-lg border-gray-100 dark:border-gray-800 rounded-3xl">
       <CardHeader>
         <CardTitle className="text-2xl font-bold flex items-center justify-between">
           <span>{month}</span>
+          {/* Note: This simplistic check assumes if ANY day is active, streak is saved. 
+              Ideally, check if *today* is active. */}
           <div
             className={`text-xs px-3 py-1 rounded-full font-bold flex items-center gap-1 ${
-              isTodayActive
+              days.find((d) => d.isToday)?.isActive
                 ? "bg-green-100 text-green-600 dark:bg-green-900/30 dark:text-green-400"
                 : "bg-gray-100 text-gray-500 dark:bg-gray-800"
             }`}
           >
-            {isTodayActive ? (
+            {days.find((d) => d.isToday)?.isActive ? (
               <Check className="w-3 h-3" />
             ) : (
               <Calendar className="w-3 h-3" />
             )}
-            {isTodayActive ? "Streak Saved" : "Pending"}
+            {days.find((d) => d.isToday)?.isActive ? "Streak Saved" : "Pending"}
           </div>
         </CardTitle>
       </CardHeader>
@@ -431,5 +483,5 @@ function StreakMilestonesCard({
 
 // Simple Trophy Icon for Modal
 function TrophyIcon({ className }: { className?: string }) {
-  return <TrophyIcon className={className} />;
+  return <Award className={className} />;
 }

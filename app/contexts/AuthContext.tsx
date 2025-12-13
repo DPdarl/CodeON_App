@@ -33,7 +33,7 @@ export interface UserData {
   trophies?: number;
   league?: string;
   joinedAt?: string;
-  role?: "superadmin" | "admin" | "user";
+  role?: "superadmin" | "admin" | "user" | "instructor";
   streakFreezes?: number;
   hints?: number;
   ownedCosmetics?: string[];

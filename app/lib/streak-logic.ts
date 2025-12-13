@@ -1,7 +1,8 @@
 // app/lib/streak-logic.ts
 import { UserData } from "~/contexts/AuthContext";
 
-// --- CONFIGURATION ---
+/* -------------------------------- CONFIG -------------------------------- */
+
 export const STREAK_MILESTONES: Record<
   number,
   { coins: number; badge?: string; title?: string }
@@ -13,14 +14,23 @@ export const STREAK_MILESTONES: Record<
   100: { coins: 1000, badge: "century-club", title: "Century Club" },
 };
 
-// --- HELPERS ---
-// Get current PH date as YYYY-MM-DD string
+/* ----------------------------- DATE HELPERS ------------------------------ */
+
+// PH calendar day (Duolingo-style)
 export const getPhDateString = () => {
   const now = new Date();
   return new Date(now.toLocaleString("en-US", { timeZone: "Asia/Manila" }))
     .toISOString()
     .split("T")[0];
 };
+
+const diffInDays = (a: string, b: string) => {
+  const d1 = new Date(a);
+  const d2 = new Date(b);
+  return Math.round((d2.getTime() - d1.getTime()) / (1000 * 60 * 60 * 24));
+};
+
+/* ----------------------------- RESULT TYPE ------------------------------ */
 
 export interface StreakUpdateResult {
   shouldUpdate: boolean;
@@ -29,80 +39,71 @@ export interface StreakUpdateResult {
   newCoins: number;
   newFreezes: number;
   newBadges: string[];
-  messages: string[]; // Feedback for the user (e.g., "Streak Freeze Used!")
+  messages: string[];
 }
 
-/**
- * Calculates the new state of the user's streak after playing a game.
- * Call this when a user successfully completes a challenge.
- */
+/* --------------------------- MAIN STREAK LOGIC --------------------------- */
+
 export function calculateStreakUpdate(user: UserData): StreakUpdateResult {
   const today = getPhDateString();
-  const activeDates = user.activeDates || [];
-  const lastActive =
-    activeDates.length > 0 ? activeDates[activeDates.length - 1] : null;
+  const activeDates = user.activeDates ?? [];
+  const lastActive = activeDates.at(-1) ?? null;
 
-  // Default Result (No changes)
   const result: StreakUpdateResult = {
     shouldUpdate: false,
-    newStreak: user.streaks || 0,
+    newStreak: user.streaks ?? 0,
     newActiveDates: [...activeDates],
-    newCoins: user.coins || 0,
-    newFreezes: user.streakFreezes || 0,
-    newBadges: user.badges || [],
+    newCoins: user.coins ?? 0,
+    newFreezes: user.streakFreezes ?? 0,
+    newBadges: user.badges ?? [],
     messages: [],
   };
 
-  // 1. If already played today, do nothing
-  if (lastActive === today) {
-    return result;
-  }
+  /* 1️⃣ Already played today */
+  if (lastActive === today) return result;
 
-  // 2. Mark today as active
   result.shouldUpdate = true;
   result.newActiveDates.push(today);
 
-  // 3. Calculate Date Difference
-  let daysDiff = 1; // Default to 1 if first time
-  if (lastActive) {
-    const lastDate = new Date(lastActive);
-    const currDate = new Date(today);
-    const diffTime = Math.abs(currDate.getTime() - lastDate.getTime());
-    daysDiff = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-  }
-
-  // 4. Logic Check
-  if (daysDiff === 1) {
-    // PERFECT: Played yesterday, streak continues
-    result.newStreak += 1;
-  } else if (daysDiff === 2) {
-    // MISSED 1 DAY: Check for Freeze
-    if (result.newFreezes > 0) {
-      result.newFreezes -= 1;
-      result.newStreak += 1; // Freeze saves the streak and increments it!
-      result.messages.push("❄️ Streak Freeze Used! Your streak is safe.");
-    } else {
-      result.newStreak = 1; // Reset :(
-      result.messages.push("Streak Reset! Stay consistent to earn rewards.");
-    }
-  } else {
-    // MISSED > 1 DAY: Hard Reset (Freezes usually only cover 1 day gap)
+  /* 2️⃣ First ever activity */
+  if (!lastActive) {
     result.newStreak = 1;
-    result.messages.push("Streak Started! Good luck.");
+    result.messages.push("🔥 Streak Started!");
+    return rewardMilestone(result);
   }
 
-  // 5. Check Milestones & Rewards
-  const milestone = STREAK_MILESTONES[result.newStreak];
-  if (milestone) {
-    result.newCoins += milestone.coins;
-    result.messages.push(
-      `🎉 ${milestone.title} Reached! +${milestone.coins} Coins`
-    );
+  const dayGap = diffInDays(lastActive, today);
 
-    if (milestone.badge && !result.newBadges.includes(milestone.badge)) {
-      result.newBadges.push(milestone.badge);
-      result.messages.push(`🏅 Badge Unlocked: ${milestone.title}`);
-    }
+  /* 3️⃣ Duolingo Rules */
+  if (dayGap === 1) {
+    // Normal continuation
+    result.newStreak += 1;
+  } else if (dayGap === 2 && result.newFreezes > 0) {
+    // Missed 1 day → Freeze saves streak (NO increment on missed day)
+    result.newFreezes -= 1;
+    result.newStreak += 1;
+    result.messages.push("❄️ Streak Freeze Used!");
+  } else {
+    // Hard reset
+    result.newStreak = 1;
+    result.messages.push("💔 Streak Reset. New streak started!");
+  }
+
+  return rewardMilestone(result);
+}
+
+/* --------------------------- MILESTONE REWARD --------------------------- */
+
+function rewardMilestone(result: StreakUpdateResult): StreakUpdateResult {
+  const milestone = STREAK_MILESTONES[result.newStreak];
+  if (!milestone) return result;
+
+  result.newCoins += milestone.coins;
+  result.messages.push(`🎉 ${milestone.title}! +${milestone.coins} Coins`);
+
+  if (milestone.badge && !result.newBadges.includes(milestone.badge)) {
+    result.newBadges.push(milestone.badge);
+    result.messages.push(`🏅 Badge Unlocked: ${milestone.title}`);
   }
 
   return result;
