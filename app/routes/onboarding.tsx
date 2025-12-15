@@ -1,4 +1,5 @@
-import { useState } from "react";
+// app/routes/onboarding.tsx
+import { useState, useEffect } from "react";
 import { useNavigate } from "@remix-run/react";
 import { useAuth } from "~/contexts/AuthContext";
 import { CustomizeAvatar } from "~/components/dashboardmodule/CustomizeAvatar";
@@ -6,36 +7,55 @@ import { PrivateRoute } from "~/components/PrivateRoute";
 import CodeOnLogo from "~/components/ui/CodeOnLogo";
 import { motion } from "framer-motion";
 import confetti from "canvas-confetti";
+import { toast } from "sonner"; // Assuming you have this, otherwise use alert
 
 export default function Onboarding() {
   const { user, updateProfile } = useAuth();
   const navigate = useNavigate();
   const [isSaving, setIsSaving] = useState(false);
 
+  // Redirect if ALREADY onboarded (Double check)
+  useEffect(() => {
+    if (user?.isOnboarded) {
+      navigate("/dashboard");
+    }
+  }, [user, navigate]);
+
   const handleSaveAvatar = async (avatarConfig: any) => {
     if (isSaving) return;
     setIsSaving(true);
 
     try {
-      await updateProfile({ avatarConfig });
+      console.log("Saving profile...");
+
+      // 1. Attempt DB Update
+      await updateProfile({
+        avatarConfig,
+        isOnboarded: true,
+      });
+
+      // 2. Success Feedback
+      console.log("Profile saved! Redirecting...");
 
       const audio = new Audio("/success.mp3");
       audio.volume = 0.5;
       audio.play().catch(() => {});
 
       confetti({
-        particleCount: 100,
+        particleCount: 150,
         spread: 70,
         origin: { y: 0.6 },
         colors: ["#a855f7", "#ec4899", "#3b82f6"],
       });
 
+      // 3. Delay slightly for effect, then Force Navigation
       setTimeout(() => {
-        navigate("/dashboard");
-      }, 1500);
-    } catch (error) {
+        // Force a hard navigation to ensure loaders re-run
+        window.location.href = "/dashboard";
+      }, 1000);
+    } catch (error: any) {
       console.error("Failed to save avatar:", error);
-      alert("Something went wrong. Please try again.");
+      alert(`Save failed: ${error.message || "Unknown error"}`);
       setIsSaving(false);
     }
   };
@@ -69,7 +89,7 @@ export default function Onboarding() {
               user={user}
               initialConfig={user?.avatarConfig}
               onSave={handleSaveAvatar}
-              saveLabel={isSaving ? "Saving..." : "Start Adventure"}
+              saveLabel={isSaving ? "Finalizing..." : "Start Adventure"}
             />
           </motion.div>
         </div>

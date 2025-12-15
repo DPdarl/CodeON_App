@@ -1,3 +1,4 @@
+// app/components/dashboardmodule/ProfileTab.tsx
 import { useState, useEffect } from "react";
 import { useAuth, type UserData } from "~/contexts/AuthContext";
 import { getUserRank } from "~/lib/leaderboard-logic";
@@ -23,9 +24,13 @@ import {
   Sparkles,
   Medal,
   Crown,
+  Check,
+  Mail,
+  Shield,
+  Loader2,
 } from "lucide-react";
 import { motion } from "framer-motion";
-import { toast } from "sonner";
+import { toast } from "sonner"; // Ensure sonner is installed or replace with alert
 
 interface ProfileTabProps {
   user: UserData | null;
@@ -33,13 +38,13 @@ interface ProfileTabProps {
 }
 
 export function ProfileTab({ user, onSaveAvatar }: ProfileTabProps) {
-  const { updateProfile } = useAuth();
+  const { updateProfile, linkGoogleAccount } = useAuth();
 
-  // Initialize directly from props to ensure instant render
+  // Initialize state
   const [displayName, setDisplayName] = useState(user?.displayName || "");
   const [realRank, setRealRank] = useState<number | null>(null);
-
   const [isSaving, setIsSaving] = useState(false);
+  const [isLinking, setIsLinking] = useState(false);
 
   const isProfileChanged =
     displayName.trim() !== "" && displayName.trim() !== user?.displayName;
@@ -47,10 +52,8 @@ export function ProfileTab({ user, onSaveAvatar }: ProfileTabProps) {
   useEffect(() => {
     let isMounted = true;
 
-    // 1. Sync display name if prop updates
     if (user?.displayName) setDisplayName(user.displayName);
 
-    // 2. Fetch Rank in background (Does NOT block UI)
     const loadData = async () => {
       if (user?.trophies !== undefined) {
         try {
@@ -87,10 +90,19 @@ export function ProfileTab({ user, onSaveAvatar }: ProfileTabProps) {
     toast.success("Avatar updated! Looking good.");
   };
 
-  // Only show Skeleton if we truly have NO user data (rare case)
-  if (!user) {
-    return <ProfileSkeleton />;
-  }
+  const handleLinkGoogle = async () => {
+    setIsLinking(true);
+    try {
+      await linkGoogleAccount();
+      // Redirect happens automatically
+    } catch (error) {
+      console.error(error);
+      toast.error("Failed to bind Google account.");
+      setIsLinking(false);
+    }
+  };
+
+  if (!user) return <ProfileSkeleton />;
 
   const creationDate = user.joinedAt
     ? new Date(user.joinedAt).toLocaleDateString()
@@ -100,7 +112,6 @@ export function ProfileTab({ user, onSaveAvatar }: ProfileTabProps) {
     trophies: user.trophies || 0,
     streak: user.streaks || 0,
     league: user.league || "Novice",
-    // Show dots or 'Unranked' while rank loads
     rank: realRank ? `#${realRank}` : "...",
   };
 
@@ -120,8 +131,8 @@ export function ProfileTab({ user, onSaveAvatar }: ProfileTabProps) {
               <h1 className="text-3xl font-extrabold text-gray-900 dark:text-white">
                 {user.displayName || "New Coder"}
               </h1>
-              <p className="text-lg text-gray-600 dark:text-gray-400">
-                {user.email}
+              <p className="text-lg text-gray-600 dark:text-gray-400 font-mono">
+                ID: {user.studentId || "Student"}
               </p>
               <div className="flex items-center justify-center sm:justify-start text-sm text-gray-500 mt-2">
                 <Calendar className="w-4 h-4 mr-2" /> Joined: {creationDate}
@@ -189,39 +200,123 @@ export function ProfileTab({ user, onSaveAvatar }: ProfileTabProps) {
           </TabsList>
 
           <TabsContent value="profile">
-            <Card className="mt-4 bg-white dark:bg-gray-900 shadow-lg rounded-3xl">
-              <CardHeader>
-                <CardTitle>Your Details</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="space-y-2">
-                  <Label htmlFor="displayName">Display Name</Label>
-                  <Input
-                    id="displayName"
-                    value={displayName}
-                    onChange={(e) => setDisplayName(e.target.value)}
-                    placeholder="Enter your coder name"
-                  />
-                </div>
-              </CardContent>
-              <CardFooter>
-                <Button
-                  onClick={handleProfileUpdate}
-                  disabled={!isProfileChanged || isSaving}
-                  className={`w-full font-bold rounded-xl transition-all ${
-                    !isProfileChanged
-                      ? "bg-gray-200 text-gray-400 dark:bg-gray-800 dark:text-gray-500 cursor-not-allowed"
-                      : "bg-indigo-600 hover:bg-indigo-700 text-white shadow-md hover:shadow-lg"
-                  }`}
-                >
-                  {isSaving
-                    ? "Saving..."
-                    : isProfileChanged
-                    ? "Save Changes"
-                    : "No Changes"}
-                </Button>
-              </CardFooter>
-            </Card>
+            <div className="grid gap-6 mt-4">
+              {/* Personal Info Card */}
+              <Card className="bg-white dark:bg-gray-900 shadow-lg rounded-3xl">
+                <CardHeader>
+                  <CardTitle>Your Details</CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="studentId">Student ID (Read-only)</Label>
+                    <div className="relative">
+                      <Shield className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
+                      <Input
+                        id="studentId"
+                        value={user.studentId || "N/A"}
+                        disabled
+                        className="pl-9 bg-gray-50 dark:bg-gray-800"
+                      />
+                    </div>
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="displayName">Display Name</Label>
+                    <Input
+                      id="displayName"
+                      value={displayName}
+                      onChange={(e) => setDisplayName(e.target.value)}
+                      placeholder="Enter your coder name"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="email">Email</Label>
+                    <Input
+                      id="email"
+                      value={user.email || ""}
+                      disabled
+                      className="bg-gray-50 dark:bg-gray-800"
+                    />
+                  </div>
+                </CardContent>
+                <CardFooter>
+                  <Button
+                    onClick={handleProfileUpdate}
+                    disabled={!isProfileChanged || isSaving}
+                    className={`w-full font-bold rounded-xl transition-all ${
+                      !isProfileChanged
+                        ? "bg-gray-200 text-gray-400 dark:bg-gray-800 dark:text-gray-500 cursor-not-allowed"
+                        : "bg-indigo-600 hover:bg-indigo-700 text-white shadow-md hover:shadow-lg"
+                    }`}
+                  >
+                    {isSaving ? (
+                      <>
+                        <Loader2 className="w-4 h-4 mr-2 animate-spin" />{" "}
+                        Saving...
+                      </>
+                    ) : (
+                      "Save Changes"
+                    )}
+                  </Button>
+                </CardFooter>
+              </Card>
+
+              {/* Account Security Card (Google Bind) */}
+              <Card className="bg-white dark:bg-gray-900 shadow-lg rounded-3xl border-t-4 border-t-blue-500">
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <Shield className="w-5 h-5 text-blue-500" /> Account
+                    Security
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="flex items-center justify-between p-4 border rounded-xl bg-gray-50 dark:bg-gray-800/50">
+                    <div className="flex items-center gap-4">
+                      <div className="p-3 bg-white dark:bg-gray-700 rounded-full shadow-sm">
+                        <svg className="w-6 h-6" viewBox="0 0 488 512">
+                          <path
+                            fill="currentColor"
+                            d="M488 261.8C488 403.3 391.1 504 248 504 110.8 504 0 393.2 0 256S110.8 8 248 8c66.8 0 123 24.5 166.3 64.9l-67.5 64.9C258.5 52.6 94.3 116.6 94.3 256c0 86.5 69.1 156.6 153.7 156.6 98.2 0 135-70.4 140.8-106.9H248v-85.3h236.1c2.3 12.7 3.9 24.9 3.9 41.4z"
+                          />
+                        </svg>
+                      </div>
+                      <div>
+                        <h4 className="font-bold text-gray-900 dark:text-white">
+                          Google Account
+                        </h4>
+                        <p className="text-sm text-gray-500">
+                          {user?.googleBound
+                            ? "Your account is linked successfully."
+                            : "Link your Google account for easier login."}
+                        </p>
+                      </div>
+                    </div>
+
+                    {user?.googleBound ? (
+                      <Button
+                        variant="outline"
+                        disabled
+                        className="text-green-600 border-green-200 bg-green-50 dark:bg-green-900/20 dark:border-green-800"
+                      >
+                        <Check className="w-4 h-4 mr-2" /> Linked
+                      </Button>
+                    ) : (
+                      <Button
+                        onClick={handleLinkGoogle}
+                        disabled={isLinking}
+                        variant="outline"
+                        className="hover:bg-blue-50 dark:hover:bg-blue-900/20 border-blue-200 text-blue-600"
+                      >
+                        {isLinking ? (
+                          <Loader2 className="w-4 h-4 animate-spin" />
+                        ) : (
+                          "Bind Account"
+                        )}
+                      </Button>
+                    )}
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
           </TabsContent>
 
           <TabsContent value="avatar">
@@ -238,8 +333,6 @@ export function ProfileTab({ user, onSaveAvatar }: ProfileTabProps) {
     </div>
   );
 }
-
-// --- SUB-COMPONENTS ---
 
 function StatItem({ icon: Icon, value, label, color }: any) {
   return (
@@ -259,7 +352,6 @@ function StatItem({ icon: Icon, value, label, color }: any) {
   );
 }
 
-// --- SKELETON FALLBACK ---
 function ProfileSkeleton() {
   return (
     <div className="max-w-6xl mx-auto space-y-8 pb-12">
@@ -274,7 +366,6 @@ function ProfileSkeleton() {
           <Skeleton className="h-12 w-24" />
         </div>
       </div>
-
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         {[...Array(4)].map((_, i) => (
           <div
@@ -289,11 +380,8 @@ function ProfileSkeleton() {
           </div>
         ))}
       </div>
-
       <div className="w-full space-y-6">
-        <div className="flex justify-center">
-          <Skeleton className="h-12 w-full max-w-sm rounded-xl" />
-        </div>
+        <Skeleton className="h-12 w-full max-w-sm rounded-xl mx-auto" />
         <Skeleton className="h-[400px] w-full rounded-3xl" />
       </div>
     </div>

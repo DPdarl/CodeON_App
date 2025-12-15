@@ -1,3 +1,4 @@
+// app/root.tsx
 import {
   Links,
   Meta,
@@ -6,7 +7,7 @@ import {
   ScrollRestoration,
 } from "@remix-run/react";
 import type { LinksFunction, MetaFunction } from "@remix-run/node";
-import { Toaster } from "sonner"; // 1. IMPORT IS HERE
+import { Toaster } from "sonner";
 
 import "./tailwind.css";
 import { AuthProvider } from "./contexts/AuthContext";
@@ -24,7 +25,7 @@ export const links: LinksFunction = () => [
   },
   {
     rel: "icon",
-    href: "/coinv2.ico", // This now works because the file is in 'public'
+    href: "/coinv2.ico",
     type: "image/x-icon",
   },
   {
@@ -47,11 +48,32 @@ export function Layout({ children }: { children: React.ReactNode }) {
         <meta name="viewport" content="width=device-width, initial-scale=1" />
         <Meta />
         <Links />
+
+        {/* --- THEME SCRIPT FIX: Prevents Light Mode Flash --- */}
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `
+              (function() {
+                try {
+                  var localTheme = localStorage.getItem('theme');
+                  var supportDarkMode = window.matchMedia('(prefers-color-scheme: dark)').matches;
+                  
+                  if (localTheme === 'dark' || (!localTheme && supportDarkMode)) {
+                    document.documentElement.classList.add('dark');
+                  } else {
+                    document.documentElement.classList.remove('dark');
+                  }
+                } catch (e) {
+                  console.error('Theme script error:', e);
+                }
+              })();
+            `,
+          }}
+        />
       </head>
-      <body className="min-h-screen bg-background font-sans antialiased">
+      <body className="min-h-screen bg-background font-sans antialiased text-foreground">
         <AuthProvider>{children}</AuthProvider>
 
-        {/* 2. COMPONENT IS HERE */}
         <Toaster position="bottom-center" richColors />
 
         <ScrollRestoration />

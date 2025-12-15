@@ -12,13 +12,15 @@ import {
 import { User } from "@supabase/supabase-js";
 import { supabase } from "~/lib/supabase";
 
-// Updated interface
 export interface UserData {
   uid: string;
   email?: string;
+  studentId?: string;
+  section?: string;
   displayName: string;
   photoURL?: string;
   avatarConfig?: any;
+  isOnboarded?: boolean;
   settings?: {
     theme?: "light" | "dark" | "system";
     reduceMotion?: boolean;
@@ -40,21 +42,21 @@ export interface UserData {
   inventory?: string[];
   activeDates?: string[];
   badges?: string[];
+  googleBound?: boolean;
 }
 
 interface AuthContextType {
   user: UserData | null;
   loading: boolean;
-  signup: (e: string, p: string, n: string) => Promise<void>;
-  login: (e: string, p: string) => Promise<void>;
+  loginWithStudentId: (studentId: string, p: string) => Promise<void>;
   logout: () => Promise<void>;
   signInWithGoogle: () => Promise<boolean>;
+  linkGoogleAccount: () => Promise<void>;
   updateProfile: (data: Partial<UserData>) => Promise<void>;
   syncUser: (data: UserData) => void;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
-const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 const USER_CACHE_KEY = "codeon_user_cache";
 
 export function AuthProvider({ children }: { children: ReactNode }) {
@@ -88,9 +90,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     (dbUser: any): UserData => ({
       uid: dbUser.id,
       email: dbUser.email,
+      studentId: dbUser.student_id,
+      section: dbUser.section,
       displayName: dbUser.display_name || "Coder",
       photoURL: dbUser.photo_url,
       avatarConfig: dbUser.avatar_config,
+      isOnboarded: dbUser.is_onboarded || false,
       settings: dbUser.settings,
       xp: dbUser.xp,
       level: dbUser.level,
@@ -107,19 +112,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       role: dbUser.role,
       activeDates: dbUser.active_dates || [],
       badges: dbUser.badges || [],
+      googleBound: !!dbUser.google_provider_id,
     }),
     []
   );
 
+  // --- FIX: RESTORED MAPPING LOGIC ---
   const mapUserToDB = useCallback((appUser: Partial<UserData>) => {
     const dbData: any = { ...appUser };
-    if (appUser.activeDates !== undefined) {
-      dbData.active_dates = appUser.activeDates;
-      delete dbData.activeDates;
-    }
-    if (appUser.badges !== undefined) {
-      dbData.badges = appUser.badges;
-      delete dbData.badges;
+
+    // 1. Map camelCase to snake_case for DB
+    if (appUser.isOnboarded !== undefined) {
+      dbData.is_onboarded = appUser.isOnboarded;
+      delete dbData.isOnboarded;
     }
     if (appUser.displayName !== undefined) {
       dbData.display_name = appUser.displayName;
@@ -141,48 +146,22 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       dbData.owned_cosmetics = appUser.ownedCosmetics;
       delete dbData.ownedCosmetics;
     }
+    if (appUser.activeDates !== undefined) {
+      dbData.active_dates = appUser.activeDates;
+      delete dbData.activeDates;
+    }
+    if (appUser.section !== undefined) {
+      dbData.section = appUser.section;
+      delete dbData.section;
+    }
+
+    // 2. Remove fields that don't exist in DB or are read-only
     if (dbData.uid) delete dbData.uid;
+    delete dbData.googleBound;
+    delete dbData.studentId;
+
     return dbData;
   }, []);
-
-  const getDefaultUserData = useCallback(
-    (authUser: User, nameOverride?: string) => ({
-      id: authUser.id,
-      email: authUser.email,
-      display_name:
-        nameOverride || authUser.user_metadata?.full_name || "Coder",
-      photo_url: authUser.user_metadata?.avatar_url,
-      xp: 0,
-      level: 1,
-      streaks: 0,
-      coins: 0,
-      hearts: 5,
-      trophies: 0,
-      league: "Novice",
-      joined_at: new Date().toISOString(),
-      role: "user",
-      streak_freezes: 0,
-      hints: 0,
-      inventory: [],
-      settings: {
-        theme: "system",
-        reduceMotion: false,
-        highContrast: false,
-        soundEnabled: true,
-      },
-      avatar_config: {
-        body: "male",
-        hair: "default",
-        eyes: "nonchalant",
-        mouth: "smile",
-        top: "tshirt",
-        bottom: "pants",
-        shoes: "shoes",
-        accessory: "none",
-      },
-    }),
-    []
-  );
 
   const fetchUserData = useCallback(
     async (authUser: User, forceLoading = false) => {
@@ -193,13 +172,22 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           .select("*")
           .eq("id", authUser.id)
           .single();
-        if (error && error.code === "PGRST116") {
-          const newUser = getDefaultUserData(authUser);
-          await supabase.from("users").insert([newUser]);
-          setUser(mapUserFromDB(newUser));
-        } else if (data) {
+
+        if (data) {
+          const { data: identities } = await supabase.auth.getUser();
+          const isGoogleBound = identities.user?.identities?.some(
+            (id) => id.provider === "google"
+          );
+
           const mappedUser = mapUserFromDB(data);
+          mappedUser.googleBound = isGoogleBound;
           setUser(mappedUser);
+        } else {
+          console.error(
+            "User authenticated but no record found in public.users"
+          );
+          await supabase.auth.signOut();
+          setUser(null);
         }
       } catch (err) {
         console.error("Error fetching user data:", err);
@@ -207,7 +195,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         if (forceLoading) setLoading(false);
       }
     },
-    [getDefaultUserData, mapUserFromDB]
+    [mapUserFromDB]
   );
 
   useEffect(() => {
@@ -230,20 +218,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         return;
       }
       if (session?.user) {
-        const currentId = userIdRef.current;
-        const newId = session.user.id;
-        if (currentId !== newId) {
-          setUser(null);
-          await fetchUserData(session.user, true);
-        } else {
-          await fetchUserData(session.user, false);
-        }
+        await fetchUserData(session.user, false);
       }
     });
     return () => subscription.unsubscribe();
   }, []);
 
-  // --- STABLE ACTIONS ---
+  // --- ACTIONS ---
+
   const syncUser = useCallback((data: UserData) => {
     setUser(data);
     localStorage.setItem(USER_CACHE_KEY, JSON.stringify(data));
@@ -263,62 +245,47 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
       // 2. DB Update
       const dbUpdates = mapUserToDB(data);
-      let attempt = 0;
-      const maxRetries = 3;
-      let success = false;
-      while (attempt < maxRetries && !success) {
-        try {
-          const { error } = await supabase
-            .from("users")
-            .update(dbUpdates)
-            .eq("id", userIdRef.current);
-          if (error) throw error;
-          success = true;
-        } catch (error) {
-          attempt++;
-          if (attempt >= maxRetries) throw error;
-          await wait(1000 * attempt);
-        }
+
+      const { error } = await supabase
+        .from("users")
+        .update(dbUpdates)
+        .eq("id", userIdRef.current);
+
+      if (error) {
+        console.error("DB Update Failed:", error.message);
+        throw error;
       }
     },
     [mapUserToDB]
   );
 
-  const signup = useCallback(
-    async (e: string, p: string, n: string) => {
+  const loginWithStudentId = useCallback(
+    async (studentId: string, p: string) => {
       setLoading(true);
-      const { data, error } = await supabase.auth.signUp({
-        email: e,
-        password: p,
-        options: { data: { full_name: n } },
-      });
-      if (error) {
-        setLoading(false);
-        throw error;
-      }
-      if (data.user) {
-        const newUser = getDefaultUserData(data.user, n);
-        await supabase.from("users").insert([newUser]);
-        const mapped = mapUserFromDB(newUser);
-        setUser(mapped);
-        localStorage.setItem(USER_CACHE_KEY, JSON.stringify(mapped));
-      }
-      setLoading(false);
-    },
-    [getDefaultUserData, mapUserFromDB]
-  );
+      try {
+        const { data: userRecord, error: findError } = await supabase
+          .from("users")
+          .select("email")
+          .eq("student_id", studentId)
+          .single();
 
-  const login = useCallback(async (e: string, p: string) => {
-    setLoading(true);
-    const { error } = await supabase.auth.signInWithPassword({
-      email: e,
-      password: p,
-    });
-    if (error) {
-      setLoading(false);
-      throw error;
-    }
-  }, []);
+        if (findError || !userRecord) {
+          throw new Error("Student ID not found.");
+        }
+
+        const { error } = await supabase.auth.signInWithPassword({
+          email: userRecord.email,
+          password: p,
+        });
+
+        if (error) throw error;
+      } catch (err) {
+        setLoading(false);
+        throw err;
+      }
+    },
+    []
+  );
 
   const logout = useCallback(async () => {
     setLoading(true);
@@ -330,8 +297,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setLoading(true);
     const { error } = await supabase.auth.signInWithOAuth({
       provider: "google",
-      options: { redirectTo: window.location.origin + "/dashboard" },
+      options: {
+        redirectTo: window.location.origin + "/dashboard",
+        queryParams: {
+          access_type: "offline",
+          prompt: "consent",
+        },
+      },
     });
+
     if (error) {
       setLoading(false);
       throw error;
@@ -339,25 +313,34 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return false;
   }, []);
 
-  // Memoize the value to prevent unnecessary re-renders in children
+  const linkGoogleAccount = useCallback(async () => {
+    const { error } = await supabase.auth.linkIdentity({
+      provider: "google",
+      options: {
+        redirectTo: window.location.origin + "/dashboard?linked=true",
+      },
+    });
+    if (error) throw error;
+  }, []);
+
   const value = useMemo(
     () => ({
       user,
       loading,
-      signup,
-      login,
+      loginWithStudentId,
       logout,
       signInWithGoogle,
+      linkGoogleAccount,
       updateProfile,
       syncUser,
     }),
     [
       user,
       loading,
-      signup,
-      login,
+      loginWithStudentId,
       logout,
       signInWithGoogle,
+      linkGoogleAccount,
       updateProfile,
       syncUser,
     ]

@@ -1,7 +1,7 @@
 // app/components/dashboardmodule/SideBar.tsx
 import {
   Home,
-  Users,
+  Users, // Used for Student Management
   Crown,
   Scroll,
   Flame,
@@ -12,6 +12,10 @@ import {
   UserCircle,
   MoreHorizontal,
   Info,
+  GraduationCap, // Student Management
+  UserCog, // Instructor Management
+  ShieldAlert, // Admin Management
+  FileText, // User Reports
 } from "lucide-react";
 import CodeOnLogo from "~/components/ui/CodeOnLogo";
 import { useState, useRef, useEffect } from "react";
@@ -30,7 +34,6 @@ interface SidebarProps {
   activeTab: string;
   onTabChange: (tab: string) => void;
   onLogout: () => void;
-  // CHANGED: Updated type to UserData
   user?: UserData | null;
   collapsed?: boolean;
 }
@@ -46,23 +49,68 @@ export function Sidebar({
   const [showLogoutDialog, setShowLogoutDialog] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
 
-  const navigationItems = [
-    { id: "home", label: "Home", icon: Home },
-    { id: "play", label: "Play", icon: Gamepad2 },
-    { id: "leaderboard", label: "Leaderboard", icon: Crown },
-    // ▼▼▼ Progress -> Quests ▼▼▼
-    { id: "progress", label: "Quests", icon: Scroll },
-    // ▲▲▲ Note: ID stays 'progress' to match DashboardTabs logic
-    { id: "streak", label: "Streak", icon: Flame },
-    { id: "store", label: "Store", icon: Store },
-    { id: "profile", label: "Profile", icon: UserCircle },
-    { id: "more", label: "More", icon: MoreHorizontal, hasDropdown: true },
+  // --- NAVIGATION CONFIGURATION ---
+  // Define allowed roles for RBAC
+  const ALL_ROLES = ["superadmin", "admin", "instructor", "user"];
+  const STAFF_ROLES = ["superadmin", "admin", "instructor"];
+  const ADMIN_ROLES = ["superadmin", "admin"];
+  const SUPER_ONLY = ["superadmin"];
+
+  const allNavItems = [
+    // Standard Tabs
+    { id: "home", label: "Home", icon: Home, roles: ALL_ROLES },
+    { id: "play", label: "Play", icon: Gamepad2, roles: ALL_ROLES },
+    { id: "leaderboard", label: "Leaderboard", icon: Crown, roles: ALL_ROLES },
+    { id: "progress", label: "Quests", icon: Scroll, roles: ALL_ROLES },
+    { id: "streak", label: "Streak", icon: Flame, roles: ALL_ROLES },
+    { id: "store", label: "Store", icon: Store, roles: ALL_ROLES },
+
+    // Management Tabs (RBAC)
+    {
+      id: "student-management",
+      label: "Students",
+      icon: GraduationCap,
+      roles: STAFF_ROLES,
+    },
+    {
+      id: "instructor-management",
+      label: "Instructors",
+      icon: UserCog,
+      roles: ADMIN_ROLES,
+    },
+    {
+      id: "admin-management",
+      label: "Admins",
+      icon: ShieldAlert,
+      roles: SUPER_ONLY,
+    },
+    {
+      id: "user-reports",
+      label: "Reports",
+      icon: FileText,
+      roles: STAFF_ROLES,
+    },
+
+    // Standard User Tabs
+    { id: "profile", label: "Profile", icon: UserCircle, roles: ALL_ROLES },
+    {
+      id: "more",
+      label: "More",
+      icon: MoreHorizontal,
+      hasDropdown: true,
+      roles: ALL_ROLES,
+    },
   ];
+
+  // Filter items based on user role
+  const userRole = user?.role || "user";
+  const navigationItems = allNavItems.filter((item) =>
+    item.roles.includes(userRole)
+  );
 
   const moreOptions = [
     { id: "settings", label: "Settings", icon: Settings },
     { id: "about", label: "About", icon: Info },
-    // Special ID "logout-trigger" to differentiate logic
     { id: "logout-trigger", label: "Logout", icon: LogOut },
   ];
 
@@ -93,8 +141,6 @@ export function Sidebar({
     setIsMoreDropdownOpen(false);
   };
 
-  // Inside Sidebar.tsx
-
   const confirmLogout = () => {
     setShowLogoutDialog(false);
     setTimeout(() => {
@@ -110,16 +156,16 @@ export function Sidebar({
         }`}
       >
         {/* Logo Section */}
-        <div className="p-4 border-b">
-          <div className="flex items-center space-x-3">
-            <CodeOnLogo className="h-8 w-8" />
+        <div className="px-3 py-6 border-b">
+          <div className="flex items-center  ">
+            <CodeOnLogo className="h-8 w-8 mx-3" />
             {!collapsed && (
               <div className="flex flex-col">
                 <h1 className="text-xl font-bold leading-tight font-pixelify dark:text-white">
                   CodeON
                 </h1>
-                <span className="text-xs text-muted-foreground leading-tight">
-                  Learn & Compete
+                <span className="text-xs text-muted-foreground leading-tight capitalize">
+                  {userRole} View
                 </span>
               </div>
             )}
@@ -127,7 +173,7 @@ export function Sidebar({
         </div>
 
         {/* Main Navigation */}
-        <div className="flex-1 py-4 overflow-y-auto">
+        <div className="flex-1 py-4 overflow-y-auto custom-scrollbar">
           <nav className="space-y-1 px-3">
             {navigationItems.map((item) => {
               const Icon = item.icon;
@@ -154,8 +200,10 @@ export function Sidebar({
                     }
                     title={collapsed ? item.label : ""}
                   >
-                    <Icon className="h-5 w-5" />
-                    {!collapsed && <span>{item.label}</span>}
+                    <Icon className="h-5 w-5 flex-shrink-0" />
+                    {!collapsed && (
+                      <span className="truncate">{item.label}</span>
+                    )}
 
                     {/* Tooltip for collapsed state */}
                     {collapsed && (

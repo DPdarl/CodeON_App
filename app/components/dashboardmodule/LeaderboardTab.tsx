@@ -162,7 +162,7 @@ export function LeaderboardTab() {
               league:
                 LEAGUES.slice()
                   .reverse()
-                  .find((l) => (user.xp || 0) >= l.minXp)?.name || "Novice",
+                  .find((l) => (user.xp || 0) >= l.minXp)?.name || "",
             };
             return newUsers;
           }

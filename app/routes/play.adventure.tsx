@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useNavigate } from "@remix-run/react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
@@ -21,6 +21,7 @@ import {
   CheckCircle,
   Map as MapIcon,
   Gamepad2,
+  Loader2,
 } from "lucide-react";
 import { cn } from "~/lib/utils";
 import { Button } from "~/components/ui/button";
@@ -34,110 +35,76 @@ import {
   TooltipTrigger,
 } from "~/components/ui/tooltip";
 
-// --- CONSTANTS (Matches your original UI) ---
-const NODE_HEIGHT = 160; // h-40
-const NODE_GAP = 32; // gap-8
+// --- LOGIC IMPORTS ---
+import { supabase } from "~/lib/supabase";
+import { useAuth } from "~/contexts/AuthContext";
+import { useGameProgress } from "~/hooks/useGameProgress";
+import {
+  QuizActivity,
+  BuildingBlocksActivity,
+  MatchingActivity,
+} from "~/components/dashboardmodule/ActivityComponents";
+import confetti from "canvas-confetti";
 
-// --- DATA: ROADMAP CHAPTERS ---
-const roadmapChapters = [
+// --- CONSTANTS ---
+const NODE_HEIGHT = 160;
+const NODE_GAP = 32;
+
+// --- VISUAL TEMPLATE (Keeps your UI style strict) ---
+// We map DB data to these visual slots based on order_index
+const CHAPTER_VISUALS = [
   {
     id: 1,
-    title: "Understanding C# & .NET",
-    description: "The Recipe & The Kitchen. Learn how they work together.",
-    lessonType: "Article",
-    activityType: "Identify the Concept",
     icon: Terminal,
     color: "bg-blue-500",
+    activityLabel: "Identify the Concept",
   },
-  {
-    id: 2,
-    title: "Basic Syntax",
-    description: "Writing your first sentences in code.",
-    lessonType: "Article",
-    activityType: "Code Builder",
-    icon: Code,
-    color: "bg-emerald-500",
-  },
-  {
-    id: 3,
-    title: "Variables & Data",
-    description: "Storing information in boxes.",
-    lessonType: "Article",
-    activityType: "Hybrid",
-    icon: Box,
-    color: "bg-indigo-500",
-  },
-  {
-    id: 4,
-    title: "Operators",
-    description: "Math and logic magic.",
-    lessonType: "Article",
-    activityType: "Math Ops Rush",
-    icon: Cpu,
-    color: "bg-orange-500",
-  },
+  { id: 2, icon: Code, color: "bg-emerald-500", activityLabel: "Code Builder" },
+  { id: 3, icon: Box, color: "bg-indigo-500", activityLabel: "Hybrid" },
+  { id: 4, icon: Cpu, color: "bg-orange-500", activityLabel: "Math Ops Rush" },
   {
     id: 5,
-    title: "Control Structures",
-    description: "Making decisions with code.",
-    lessonType: "Article",
-    activityType: "Flow Control Runner",
     icon: Layers,
     color: "bg-purple-500",
+    activityLabel: "Flow Control Runner",
   },
   {
     id: 6,
-    title: "Methods",
-    description: "Creating your own superpowers.",
-    lessonType: "Article",
-    activityType: "Method Maker",
     icon: PlayCircle,
     color: "bg-pink-500",
+    activityLabel: "Method Maker",
   },
   {
     id: 7,
-    title: "Classes & Objects",
-    description: "Blueprints for building anything.",
-    lessonType: "Article",
-    activityType: "Object Creator",
     icon: Braces,
     color: "bg-cyan-500",
+    activityLabel: "Object Creator",
   },
   {
     id: 8,
-    title: "OOP Pillars",
-    description: "The 4 rules of robust coding.",
-    lessonType: "Article",
-    activityType: "Concept Match",
     icon: Database,
     color: "bg-teal-500",
+    activityLabel: "Concept Match",
   },
   {
     id: 9,
-    title: "Arrays & Collections",
-    description: "Managing lists of data.",
-    lessonType: "Article",
-    activityType: "Predict the Output",
     icon: Layers,
     color: "bg-yellow-500",
+    activityLabel: "Predict the Output",
   },
   {
     id: 10,
-    title: "Error Handling",
-    description: "Catching bugs before they bite.",
-    lessonType: "Article",
-    activityType: "Exception Escape",
     icon: AlertTriangle,
     color: "bg-red-500",
+    activityLabel: "Exception Escape",
   },
 ];
 
-// --- COMPONENT: ROADMAP NODE (Restored your ChallengeNode style) ---
+// --- COMPONENT: ROADMAP NODE (Strictly your UI) ---
 function RoadmapNode({ chapter, status, alignment, onClick }: any) {
   const Icon = chapter.icon;
   const isLocked = status === "locked";
 
-  // Animation variants (Slide in from left/right)
   const cardVariants = {
     hidden: { opacity: 0, x: alignment === "left" ? -20 : 20 },
     visible: { opacity: 1, x: 0, transition: { delay: 0.1 } },
@@ -151,7 +118,7 @@ function RoadmapNode({ chapter, status, alignment, onClick }: any) {
         whileInView="visible"
         viewport={{ once: true, margin: "-50px" }}
       >
-        {/* 1. Info Card (Offset from center) */}
+        {/* 1. Info Card */}
         <motion.div
           variants={cardVariants}
           className={cn(
@@ -173,7 +140,7 @@ function RoadmapNode({ chapter, status, alignment, onClick }: any) {
             <CardHeader className="pb-2 p-4">
               <div className="flex justify-between items-start">
                 <Badge variant="outline" className="mb-2 text-[10px]">
-                  Chapter {chapter.id}
+                  Chapter {chapter.order_index}
                 </Badge>
                 {!isLocked && <BookOpen className="w-3 h-3 text-indigo-500" />}
               </div>
@@ -189,7 +156,7 @@ function RoadmapNode({ chapter, status, alignment, onClick }: any) {
           </Card>
         </motion.div>
 
-        {/* 2. Node Circle (Perfectly Centered) */}
+        {/* 2. Node Circle */}
         <Tooltip>
           <TooltipTrigger asChild>
             <motion.button
@@ -200,7 +167,7 @@ function RoadmapNode({ chapter, status, alignment, onClick }: any) {
               onClick={onClick}
               className={cn(
                 "absolute z-10 w-20 h-20 rounded-full flex items-center justify-center border-4 border-background transition-all",
-                "left-1/2", // EXACT CENTER
+                "left-1/2",
                 isLocked
                   ? "bg-muted text-muted-foreground"
                   : cn(
@@ -217,7 +184,6 @@ function RoadmapNode({ chapter, status, alignment, onClick }: any) {
                 <Icon className="w-8 h-8" />
               )}
 
-              {/* Pulsing Ring for Current Level */}
               {status === "current" && (
                 <span className="absolute inset-0 rounded-full animate-ping opacity-30 bg-white" />
               )}
@@ -232,9 +198,32 @@ function RoadmapNode({ chapter, status, alignment, onClick }: any) {
   );
 }
 
-// --- COMPONENT: LESSON OVERLAY (The Modal) ---
+// --- COMPONENT: LESSON OVERLAY (Logic Injected into your UI) ---
 function LessonOverlay({ chapter, onClose, onComplete }: any) {
   const [step, setStep] = useState<"lesson" | "game">("lesson");
+
+  // Game Logic
+  const [currentActivityIndex, setCurrentActivityIndex] = useState(0);
+  const [isFinished, setIsFinished] = useState(false);
+
+  // Use DB activities or fallback to empty array
+  const activities = chapter.activities || [];
+  const currentActivity = activities[currentActivityIndex];
+
+  const handleActivitySuccess = (success: boolean) => {
+    if (!success) return;
+
+    if (currentActivityIndex < activities.length - 1) {
+      setTimeout(() => setCurrentActivityIndex((prev) => prev + 1), 500);
+    } else {
+      setIsFinished(true);
+      confetti({ particleCount: 150, spread: 70, origin: { y: 0.6 } });
+    }
+  };
+
+  const handleFinish = () => {
+    onComplete();
+  };
 
   return (
     <Dialog open={true} onOpenChange={onClose}>
@@ -266,7 +255,7 @@ function LessonOverlay({ chapter, onClose, onComplete }: any) {
               <p className="text-sm text-muted-foreground">
                 {step === "lesson"
                   ? "Read the Lesson"
-                  : `Mini-Game: ${chapter.activityType}`}
+                  : `Activity: ${chapter.activityType}`}
               </p>
             </div>
           </div>
@@ -287,16 +276,12 @@ function LessonOverlay({ chapter, onClose, onComplete }: any) {
                 className="max-w-2xl mx-auto space-y-6"
               >
                 <div className="prose dark:prose-invert prose-lg">
+                  {/* Render content from DB or Fallback */}
                   <h3 className="text-3xl font-bold text-indigo-600 dark:text-indigo-400">
                     {chapter.title}
                   </h3>
-                  <p className="lead">
-                    This is where the AI-generated friendly article will go.
-                    Imagine a clear, simple explanation using everyday
-                    analogies.
-                  </p>
-                  <div className="bg-muted p-6 rounded-xl my-6 border-l-4 border-indigo-500 font-mono text-sm">
-                    Console.WriteLine("Hello CodeON!");
+                  <div className="whitespace-pre-wrap font-sans text-foreground/80 leading-relaxed">
+                    {chapter.content_markdown || "Content coming soon..."}
                   </div>
                 </div>
               </motion.div>
@@ -308,24 +293,84 @@ function LessonOverlay({ chapter, onClose, onComplete }: any) {
                 exit={{ opacity: 0, x: 20 }}
                 className="h-full flex flex-col items-center justify-center text-center"
               >
-                <div className="w-32 h-32 bg-orange-100 dark:bg-orange-900/30 rounded-full flex items-center justify-center mb-6 animate-bounce">
-                  <chapter.icon className="w-16 h-16 text-orange-500" />
-                </div>
-                <h2 className="text-3xl font-black mb-2">Ready to Play?</h2>
-                <p className="text-muted-foreground mb-8">
-                  Prove your skills in{" "}
-                  <strong className="text-orange-500">
-                    {chapter.activityType}
-                  </strong>
-                </p>
+                {!isFinished ? (
+                  <div className="w-full max-w-xl">
+                    {currentActivity ? (
+                      <>
+                        <div className="mb-8">
+                          <h3 className="text-2xl font-black mb-2">
+                            {currentActivity.prompt}
+                          </h3>
+                          <p className="text-muted-foreground text-sm">
+                            Question {currentActivityIndex + 1} of{" "}
+                            {activities.length}
+                          </p>
+                        </div>
 
-                <Button
-                  size="lg"
-                  className="bg-green-600 hover:bg-green-700 text-white gap-2 w-full max-w-xs shadow-lg shadow-green-900/20"
-                  onClick={onComplete}
-                >
-                  <CheckCircle className="w-5 h-5" /> Complete Chapter
-                </Button>
+                        {/* DYNAMIC ACTIVITY RENDERER */}
+                        {currentActivity.type === "QUIZ" && (
+                          <QuizActivity
+                            data={currentActivity.data}
+                            onComplete={handleActivitySuccess}
+                          />
+                        )}
+                        {currentActivity.type === "BUILDING_BLOCKS" && (
+                          <BuildingBlocksActivity
+                            data={currentActivity.data}
+                            onComplete={handleActivitySuccess}
+                          />
+                        )}
+                        {currentActivity.type === "MATCHING" && (
+                          <MatchingActivity
+                            data={currentActivity.data}
+                            onComplete={handleActivitySuccess}
+                          />
+                        )}
+                      </>
+                    ) : (
+                      // Fallback if DB has no activities for this lesson
+                      <div className="text-center">
+                        <div className="w-32 h-32 bg-orange-100 dark:bg-orange-900/30 rounded-full flex items-center justify-center mb-6 mx-auto">
+                          <chapter.icon className="w-16 h-16 text-orange-500" />
+                        </div>
+                        <h3 className="text-xl font-bold">Practice Mode</h3>
+                        <p className="text-muted-foreground mb-4">
+                          No specific activities configured yet.
+                        </p>
+                        <Button
+                          onClick={() => setIsFinished(true)}
+                          variant="secondary"
+                        >
+                          Auto-Complete
+                        </Button>
+                      </div>
+                    )}
+                  </div>
+                ) : (
+                  // SUCCESS SCREEN (Your "Complete Chapter" UI)
+                  <>
+                    <div className="w-32 h-32 bg-green-100 dark:bg-green-900/30 rounded-full flex items-center justify-center mb-6 animate-bounce">
+                      <CheckCircle className="w-16 h-16 text-green-600" />
+                    </div>
+                    <h2 className="text-3xl font-black mb-2">
+                      Chapter Complete!
+                    </h2>
+                    <p className="text-muted-foreground mb-8">
+                      You earned{" "}
+                      <strong className="text-yellow-500">
+                        +{chapter.xp_reward || 50} XP
+                      </strong>
+                    </p>
+
+                    <Button
+                      size="lg"
+                      className="bg-green-600 hover:bg-green-700 text-white gap-2 w-full max-w-xs shadow-lg shadow-green-900/20"
+                      onClick={handleFinish}
+                    >
+                      <CheckCircle className="w-5 h-5" /> Finish
+                    </Button>
+                  </>
+                )}
               </motion.div>
             )}
           </AnimatePresence>
@@ -351,17 +396,88 @@ function LessonOverlay({ chapter, onClose, onComplete }: any) {
 // --- MAIN PAGE: C# ADVENTURE ---
 export default function AdventurePage() {
   const navigate = useNavigate();
+  const { user } = useAuth();
+  const { grantXP } = useGameProgress();
 
-  // TODO: Connect this to user.level in the future
-  const [userLevel, setUserLevel] = useState(3);
+  const [lessons, setLessons] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
   const [selectedChapter, setSelectedChapter] = useState<any>(null);
 
-  // Calculate the Green Line Height (Exact logic from your PlayTab.tsx)
-  // (level - 1) * (160 + 32) + 80 (half node height)
+  // 1. FETCH & MAP DATA
+  useEffect(() => {
+    const fetchData = async () => {
+      // Fetch DB Lessons
+      const { data: dbLessons } = await supabase
+        .from("lessons")
+        .select("*, activities(*)")
+        .order("order_index");
+
+      // Merge DB data with your UI Template (CHAPTER_VISUALS)
+      // This preserves your exact colors/icons while using DB content
+      const mergedLessons = CHAPTER_VISUALS.map((visual) => {
+        const dbMatch = dbLessons?.find((l) => l.order_index === visual.id);
+        return {
+          ...visual,
+          // If DB has data, use it; otherwise fallback or keep defaults
+          id: dbMatch?.id || visual.id,
+          title: dbMatch?.title || `Chapter ${visual.id}`,
+          description: dbMatch?.description || "Loading description...",
+          content_markdown: dbMatch?.content_markdown,
+          xp_reward: dbMatch?.xp_reward || 50,
+          activities: dbMatch?.activities || [],
+          // Keep Visuals
+          order_index: visual.id,
+          icon: visual.icon,
+          color: visual.color,
+          activityType: visual.activityLabel,
+        };
+      });
+
+      setLessons(mergedLessons);
+      setLoading(false);
+    };
+
+    fetchData();
+  }, []);
+
+  // 2. Logic: User Level
+  const userLevel = user?.level || 1;
+
+  // 3. Logic: Green Line (Exact Formula)
   const progressHeight =
     userLevel > 0
       ? (userLevel - 1) * (NODE_HEIGHT + NODE_GAP) + NODE_HEIGHT / 2
       : 0;
+
+  // 4. Handle Completion
+  const handleChapterComplete = async () => {
+    if (!selectedChapter || !user) return;
+
+    // Grant XP
+    grantXP(selectedChapter.xp_reward);
+
+    // Update DB Progress
+    const { error } = await supabase.from("user_lesson_progress").upsert(
+      {
+        user_id: user.uid,
+        lesson_id: selectedChapter.id,
+        status: "completed",
+        completed_at: new Date().toISOString(),
+      },
+      { onConflict: "user_id, lesson_id" }
+    );
+
+    if (error) console.error("Save failed:", error);
+
+    setSelectedChapter(null);
+  };
+
+  if (loading)
+    return (
+      <div className="flex h-screen items-center justify-center">
+        <Loader2 className="animate-spin" />
+      </div>
+    );
 
   return (
     <div className="min-h-screen bg-background p-6">
@@ -396,7 +512,7 @@ export default function AdventurePage() {
           </div>
         </div>
 
-        {/* 2. The Map (Exact UI from your PlayTab) */}
+        {/* 2. The Map (Your Exact UI) */}
         <div className="relative w-full mt-12">
           {/* Gray Background Path */}
           <div className="absolute top-0 left-1/2 -translate-x-1/2 h-full w-2 bg-muted rounded-full" />
@@ -411,7 +527,7 @@ export default function AdventurePage() {
 
           {/* Nodes Container */}
           <div className="relative z-10 flex flex-col items-center gap-8">
-            {roadmapChapters.map((chapter, index) => {
+            {lessons.map((chapter, index) => {
               const level = index + 1;
               let status: "locked" | "current" | "completed" = "locked";
 
@@ -448,10 +564,7 @@ export default function AdventurePage() {
         <LessonOverlay
           chapter={selectedChapter}
           onClose={() => setSelectedChapter(null)}
-          onComplete={() => {
-            setUserLevel((prev) => prev + 1); // Mock completion
-            setSelectedChapter(null);
-          }}
+          onComplete={handleChapterComplete}
         />
       )}
     </div>

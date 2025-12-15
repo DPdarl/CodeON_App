@@ -1,5 +1,5 @@
 // app/routes/dashboard.tsx
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import {
   useNavigate,
   useLoaderData,
@@ -15,11 +15,12 @@ import { useAuth, type UserData } from "~/contexts/AuthContext";
 import { supabase } from "~/lib/supabase";
 import { Skeleton } from "~/components/ui/skeleton";
 
-// ... (Keep your existing clientLoader code exactly as is) ...
+// --- 1. DATA LOADER (Restored Logic) ---
 export async function clientLoader({ request }: ClientLoaderFunctionArgs) {
   const {
     data: { session },
   } = await supabase.auth.getSession();
+
   if (!session) return { user: null };
 
   const { data: dbUser, error } = await supabase
@@ -33,9 +34,11 @@ export async function clientLoader({ request }: ClientLoaderFunctionArgs) {
   const mappedUser: UserData = {
     uid: dbUser.id,
     email: dbUser.email,
+    studentId: dbUser.student_id,
     displayName: dbUser.display_name || "Coder",
     photoURL: dbUser.photo_url,
     avatarConfig: dbUser.avatar_config,
+    isOnboarded: dbUser.is_onboarded ?? false,
     settings: dbUser.settings,
     xp: dbUser.xp,
     level: dbUser.level,
@@ -52,6 +55,7 @@ export async function clientLoader({ request }: ClientLoaderFunctionArgs) {
     role: dbUser.role,
     activeDates: dbUser.active_dates || [],
     badges: dbUser.badges || [],
+    googleBound: !!dbUser.google_provider_id,
   };
 
   return { user: mappedUser };
@@ -59,43 +63,51 @@ export async function clientLoader({ request }: ClientLoaderFunctionArgs) {
 
 clientLoader.hydrate = true;
 
-// --- 1. NEW: STOP AUTO-RELOADING ON TAB SWITCH ---
+// --- 2. PREVENT AUTO-REFRESH ON TABS ---
 export const shouldRevalidate: ShouldRevalidateFunction = ({
-  actionResult,
-  defaultShouldRevalidate,
   formMethod,
+  defaultShouldRevalidate,
 }) => {
-  // Only revalidate if we explicitly submitted a form (mutation)
-  // This prevents "focusRevalidation" (switching tabs) from firing
   if (formMethod === "GET") {
     return false;
   }
   return defaultShouldRevalidate;
 };
 
-// ... (Keep HydrateFallback exactly as is) ...
+// --- 3. LOADING SCREEN (Themed Skeleton) ---
 export function HydrateFallback() {
   return (
-    <div className="flex h-screen overflow-hidden bg-gradient-to-br from-blue-50 to-indigo-100 dark:from-gray-900 dark:to-gray-800">
-      <div className="w-64 h-screen border-r border-white/20 bg-white/50 dark:bg-gray-800/50 p-4 space-y-4 hidden md:block">
-        <Skeleton className="h-10 w-32 mb-8" />
-        <Skeleton className="h-10 w-full" />
-        <Skeleton className="h-10 w-full" />
-        <Skeleton className="h-10 w-full" />
-        <Skeleton className="h-10 w-full" />
+    <div className="flex h-screen overflow-hidden bg-gradient-to-br from-blue-50 to-indigo-100 dark:from-gray-900 dark:to-gray-800 transition-colors duration-300">
+      {/* Sidebar Skeleton */}
+      <div className="w-64 h-screen border-r border-indigo-100 dark:border-gray-800 bg-white/50 dark:bg-gray-900/50 p-4 space-y-6 hidden md:block backdrop-blur-sm">
+        <Skeleton className="h-12 w-40 mb-10 bg-indigo-200/50 dark:bg-gray-700" />
+        <div className="space-y-3">
+          <Skeleton className="h-10 w-full bg-indigo-100 dark:bg-gray-800" />
+          <Skeleton className="h-10 w-full bg-indigo-100 dark:bg-gray-800" />
+          <Skeleton className="h-10 w-full bg-indigo-100 dark:bg-gray-800" />
+          <Skeleton className="h-10 w-full bg-indigo-100 dark:bg-gray-800" />
+        </div>
       </div>
-      <div className="flex-1 flex flex-col p-6 space-y-6">
+
+      {/* Main Content Skeleton */}
+      <div className="flex-1 flex flex-col p-6 space-y-8">
+        {/* Header */}
         <div className="flex justify-between items-center">
-          <Skeleton className="h-8 w-48" />
+          <div className="space-y-2">
+            <Skeleton className="h-8 w-64 bg-indigo-200 dark:bg-gray-700" />
+            <Skeleton className="h-4 w-48 bg-indigo-100 dark:bg-gray-800" />
+          </div>
           <div className="flex space-x-3">
-            <Skeleton className="h-10 w-10 rounded-full" />
-            <Skeleton className="h-10 w-10 rounded-full" />
+            <Skeleton className="h-10 w-10 rounded-full bg-indigo-200 dark:bg-gray-700" />
+            <Skeleton className="h-10 w-10 rounded-full bg-indigo-200 dark:bg-gray-700" />
           </div>
         </div>
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 pt-6">
-          <Skeleton className="h-48 w-full rounded-xl" />
-          <Skeleton className="h-48 w-full rounded-xl" />
-          <Skeleton className="h-48 w-full rounded-xl" />
+
+        {/* Cards Grid */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 pt-4">
+          <Skeleton className="h-48 w-full rounded-3xl bg-white/60 dark:bg-gray-800/60" />
+          <Skeleton className="h-48 w-full rounded-3xl bg-white/60 dark:bg-gray-800/60" />
+          <Skeleton className="h-48 w-full rounded-3xl bg-white/60 dark:bg-gray-800/60" />
         </div>
       </div>
     </div>
@@ -114,22 +126,29 @@ export default function Dashboard() {
   const { user: contextUser, logout, updateProfile, syncUser } = useAuth();
   const navigate = useNavigate();
 
-  // --- 2. UPDATE SYNC LOGIC ---
-  const loaderUserString = JSON.stringify(loaderUser);
-  const contextUserString = JSON.stringify(contextUser);
+  // Track initial sync
+  const hasSyncedRef = useRef(false);
 
   useEffect(() => {
-    // We strictly trust the loader ONLY if it's genuinely different and valid.
-    // Because we added shouldRevalidate, this will now only fire on initial load
-    // or explicit navigations, NOT on Alt-Tab.
-    if (loaderUser && loaderUserString !== contextUserString) {
-      console.log("Syncing fresh loader data...");
-      syncUser(loaderUser);
+    // Sync loader data to context ONLY ONCE on mount to avoid overwriting local updates
+    if (loaderUser && !hasSyncedRef.current) {
+      if (JSON.stringify(loaderUser) !== JSON.stringify(contextUser)) {
+        console.log("Syncing fresh loader data...");
+        syncUser(loaderUser);
+      }
+      hasSyncedRef.current = true;
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [loaderUserString, syncUser]);
+  }, [loaderUser, contextUser, syncUser]);
 
+  // Use Context user for live updates, fallback to Loader user for initial paint
   const activeUser = contextUser || loaderUser;
+
+  // --- REDIRECT CHECK ---
+  useEffect(() => {
+    if (activeUser && activeUser.isOnboarded === false) {
+      navigate("/onboarding");
+    }
+  }, [activeUser, navigate]);
 
   const [activeTab, setActiveTab] = useState("home");
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
@@ -196,13 +215,16 @@ export default function Dashboard() {
     localStorage.setItem("active_dashboard_tab", tab);
   };
 
+  // Prevent flash if redirecting
+  if (activeUser && activeUser.isOnboarded === false) return null;
+
   return (
     <PrivateRoute>
-      <div className="flex h-screen overflow-hidden bg-gradient-to-br from-blue-50 to-indigo-100 dark:from-gray-900 dark:to-gray-800">
+      <div className="flex h-screen overflow-hidden bg-gradient-to-br from-blue-50 to-indigo-100 dark:from-gray-900 dark:to-gray-800 transition-colors duration-300">
         <div
           className={`flex-shrink-0 transition-all duration-300 ${
             sidebarCollapsed ? "w-24" : "w-64"
-          } h-screen`}
+          } h-screen hidden md:block`}
         >
           <Sidebar
             activeTab={activeTab}
@@ -227,7 +249,7 @@ export default function Dashboard() {
             onLogout={handleLogout}
           />
 
-          <main className="p-6 z-0">
+          <main className="p-4 md:p-6 z-0">
             <DashboardTabs
               activeTab={activeTab}
               user={activeUser}
