@@ -1,4 +1,3 @@
-// app/contexts/AuthContext.tsx
 import {
   createContext,
   useContext,
@@ -21,12 +20,7 @@ export interface UserData {
   photoURL?: string;
   avatarConfig?: any;
   isOnboarded?: boolean;
-  settings?: {
-    theme?: "light" | "dark" | "system";
-    reduceMotion?: boolean;
-    highContrast?: boolean;
-    soundEnabled?: boolean;
-  };
+  settings?: any;
   xp?: number;
   level?: number;
   streaks?: number;
@@ -66,165 +60,195 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (cached) {
         try {
           return JSON.parse(cached);
-        } catch (e) {
-          console.error(e);
-        }
+        } catch {}
       }
     }
     return null;
   });
 
   const [loading, setLoading] = useState(!user);
-  const userIdRef = useRef<string | null>(user?.uid || null);
+  const userIdRef = useRef<string | null>(user?.uid ?? null);
+  const channelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
 
-  useEffect(() => {
-    userIdRef.current = user?.uid || null;
-    if (user) {
-      localStorage.setItem(USER_CACHE_KEY, JSON.stringify(user));
-    } else if (user === null && !loading) {
-      localStorage.removeItem(USER_CACHE_KEY);
-    }
-  }, [user, loading]);
+  // ------------------------
+  // Utils
+  // ------------------------
 
   const mapUserFromDB = useCallback(
-    (dbUser: any): UserData => ({
-      uid: dbUser.id,
-      email: dbUser.email,
-      studentId: dbUser.student_id,
-      section: dbUser.section,
-      displayName: dbUser.display_name || "Coder",
-      photoURL: dbUser.photo_url,
-      avatarConfig: dbUser.avatar_config,
-      isOnboarded: dbUser.is_onboarded || false,
-      settings: dbUser.settings,
-      xp: dbUser.xp,
-      level: dbUser.level,
-      streaks: dbUser.streaks,
-      coins: dbUser.coins,
-      hearts: dbUser.hearts,
-      streakFreezes: dbUser.streak_freezes || 0,
-      hints: dbUser.hints || 0,
-      ownedCosmetics: dbUser.owned_cosmetics || [],
-      inventory: dbUser.inventory || [],
-      trophies: dbUser.trophies,
-      league: dbUser.league,
-      joinedAt: dbUser.joined_at,
-      role: dbUser.role,
-      activeDates: dbUser.active_dates || [],
-      badges: dbUser.badges || [],
-      googleBound: !!dbUser.google_provider_id,
+    (db: any): UserData => ({
+      uid: db.id,
+      email: db.email,
+      studentId: db.student_id,
+      section: db.section,
+      displayName: db.display_name ?? "Coder",
+      photoURL: db.photo_url,
+      avatarConfig: db.avatar_config,
+      isOnboarded: db.is_onboarded,
+      settings: db.settings,
+      xp: db.xp,
+      level: db.level,
+      streaks: db.streaks,
+      coins: db.coins,
+      hearts: db.hearts,
+      trophies: db.trophies,
+      league: db.league,
+      joinedAt: db.joined_at,
+      role: db.role,
+      streakFreezes: db.streak_freezes,
+      hints: db.hints,
+      ownedCosmetics: db.owned_cosmetics ?? [],
+      inventory: db.inventory ?? [],
+      activeDates: db.active_dates ?? [],
+      badges: db.badges ?? [],
+      googleBound: !!db.google_provider_id,
     }),
     []
   );
 
-  // --- FIX: RESTORED MAPPING LOGIC ---
-  const mapUserToDB = useCallback((appUser: Partial<UserData>) => {
-    const dbData: any = { ...appUser };
-
-    // 1. Map camelCase to snake_case for DB
-    if (appUser.isOnboarded !== undefined) {
-      dbData.is_onboarded = appUser.isOnboarded;
-      delete dbData.isOnboarded;
+  const mapUserToDB = useCallback((data: Partial<UserData>) => {
+    const db: any = { ...data };
+    if ("displayName" in db) {
+      db.display_name = db.displayName;
+      delete db.displayName;
     }
-    if (appUser.displayName !== undefined) {
-      dbData.display_name = appUser.displayName;
-      delete dbData.displayName;
+    if ("photoURL" in db) {
+      db.photo_url = db.photoURL;
+      delete db.photoURL;
     }
-    if (appUser.photoURL !== undefined) {
-      dbData.photo_url = appUser.photoURL;
-      delete dbData.photoURL;
+    if ("isOnboarded" in db) {
+      db.is_onboarded = db.isOnboarded;
+      delete db.isOnboarded;
     }
-    if (appUser.avatarConfig !== undefined) {
-      dbData.avatar_config = appUser.avatarConfig;
-      delete dbData.avatarConfig;
+    if ("streakFreezes" in db) {
+      db.streak_freezes = db.streakFreezes;
+      delete db.streakFreezes;
     }
-    if (appUser.streakFreezes !== undefined) {
-      dbData.streak_freezes = appUser.streakFreezes;
-      delete dbData.streakFreezes;
+    if ("ownedCosmetics" in db) {
+      db.owned_cosmetics = db.ownedCosmetics;
+      delete db.ownedCosmetics;
     }
-    if (appUser.ownedCosmetics !== undefined) {
-      dbData.owned_cosmetics = appUser.ownedCosmetics;
-      delete dbData.ownedCosmetics;
+    if ("activeDates" in db) {
+      db.active_dates = db.activeDates;
+      delete db.activeDates;
     }
-    if (appUser.activeDates !== undefined) {
-      dbData.active_dates = appUser.activeDates;
-      delete dbData.activeDates;
-    }
-    if (appUser.section !== undefined) {
-      dbData.section = appUser.section;
-      delete dbData.section;
-    }
-
-    // 2. Remove fields that don't exist in DB or are read-only
-    if (dbData.uid) delete dbData.uid;
-    delete dbData.googleBound;
-    delete dbData.studentId;
-
-    return dbData;
+    delete db.uid;
+    delete db.studentId;
+    delete db.googleBound;
+    return db;
   }, []);
 
+  // ------------------------
+  // Fetch User
+  // ------------------------
+
   const fetchUserData = useCallback(
-    async (authUser: User, forceLoading = false) => {
-      if (forceLoading) setLoading(true);
-      try {
-        const { data, error } = await supabase
-          .from("users")
-          .select("*")
-          .eq("id", authUser.id)
-          .single();
+    async (authUser: User) => {
+      const { data, error } = await supabase
+        .from("users")
+        .select("*")
+        .eq("id", authUser.id)
+        .single();
 
-        if (data) {
-          const { data: identities } = await supabase.auth.getUser();
-          const isGoogleBound = identities.user?.identities?.some(
-            (id) => id.provider === "google"
-          );
-
-          const mappedUser = mapUserFromDB(data);
-          mappedUser.googleBound = isGoogleBound;
-          setUser(mappedUser);
-        } else {
-          console.error(
-            "User authenticated but no record found in public.users"
-          );
-          await supabase.auth.signOut();
-          setUser(null);
-        }
-      } catch (err) {
-        console.error("Error fetching user data:", err);
-      } finally {
-        if (forceLoading) setLoading(false);
+      if (error || !data) {
+        await supabase.auth.signOut();
+        setUser(null);
+        return;
       }
+
+      const mapped = mapUserFromDB(data);
+      setUser(mapped);
+      localStorage.setItem(USER_CACHE_KEY, JSON.stringify(mapped));
     },
     [mapUserFromDB]
   );
 
+  // ------------------------
+  // Realtime (Supabase v2)
+  // ------------------------
+
+  const setupRealtime = useCallback(() => {
+    if (!user?.uid) return;
+
+    if (channelRef.current) {
+      channelRef.current.unsubscribe();
+    }
+
+    channelRef.current = supabase
+      .channel(`user:${user.uid}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "UPDATE",
+          schema: "public",
+          table: "users",
+          filter: `id=eq.${user.uid}`,
+        },
+        (payload: { new: any }) => {
+          setUser((prev) => {
+            if (!prev) return prev;
+            const updated = { ...prev, ...mapUserFromDB(payload.new) };
+            localStorage.setItem(USER_CACHE_KEY, JSON.stringify(updated));
+            return updated;
+          });
+        }
+      )
+      .subscribe();
+  }, [user, mapUserFromDB]);
+
+  // ------------------------
+  // Visibility Re-sync (Duolingo behavior)
+  // ------------------------
+
   useEffect(() => {
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      if (session?.user) {
-        const hasCache = !!user;
-        fetchUserData(session.user, !hasCache);
+    if (!user) return;
+
+    setupRealtime();
+
+    const onVisible = () => {
+      if (document.visibilityState === "visible") {
+        fetchUserData({ id: user.uid } as User);
+        setupRealtime();
+      }
+    };
+
+    document.addEventListener("visibilitychange", onVisible);
+
+    return () => {
+      document.removeEventListener("visibilitychange", onVisible);
+      channelRef.current?.unsubscribe();
+    };
+  }, [user, setupRealtime, fetchUserData]);
+
+  // ------------------------
+  // Auth Lifecycle
+  // ------------------------
+
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data }) => {
+      if (data.session?.user) {
+        fetchUserData(data.session.user);
       } else {
         setLoading(false);
       }
     });
 
-    const {
-      data: { subscription },
-    } = supabase.auth.onAuthStateChange(async (event, session) => {
-      if (event === "SIGNED_OUT") {
-        setUser(null);
-        localStorage.removeItem(USER_CACHE_KEY);
-        setLoading(false);
-        return;
+    const { data: listener } = supabase.auth.onAuthStateChange(
+      (event, session) => {
+        if (event === "SIGNED_OUT") {
+          setUser(null);
+          localStorage.removeItem(USER_CACHE_KEY);
+          setLoading(false);
+        }
+        if (session?.user) fetchUserData(session.user);
       }
-      if (session?.user) {
-        await fetchUserData(session.user, false);
-      }
-    });
-    return () => subscription.unsubscribe();
-  }, []);
+    );
 
-  // --- ACTIONS ---
+    return () => listener.subscription.unsubscribe();
+  }, [fetchUserData]);
+
+  // ------------------------
+  // Actions
+  // ------------------------
 
   const syncUser = useCallback((data: UserData) => {
     setUser(data);
@@ -233,95 +257,49 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const updateProfile = useCallback(
     async (data: Partial<UserData>) => {
-      if (!userIdRef.current) throw new Error("No user is signed in");
-
-      // 1. Optimistic Update
-      setUser((prev) => {
-        if (!prev) return null;
-        const updated = { ...prev, ...data };
-        localStorage.setItem(USER_CACHE_KEY, JSON.stringify(updated));
-        return updated;
-      });
-
-      // 2. DB Update
-      const dbUpdates = mapUserToDB(data);
-
-      const { error } = await supabase
-        .from("users")
-        .update(dbUpdates)
-        .eq("id", userIdRef.current);
-
-      if (error) {
-        console.error("DB Update Failed:", error.message);
-        throw error;
-      }
+      if (!user?.uid) return;
+      syncUser({ ...user, ...data });
+      await supabase.from("users").update(mapUserToDB(data)).eq("id", user.uid);
     },
-    [mapUserToDB]
+    [user, mapUserToDB, syncUser]
   );
 
-  const loginWithStudentId = useCallback(
-    async (studentId: string, p: string) => {
-      setLoading(true);
-      try {
-        const { data: userRecord, error: findError } = await supabase
-          .from("users")
-          .select("email")
-          .eq("student_id", studentId)
-          .single();
-
-        if (findError || !userRecord) {
-          throw new Error("Student ID not found.");
-        }
-
-        const { error } = await supabase.auth.signInWithPassword({
-          email: userRecord.email,
-          password: p,
-        });
-
-        if (error) throw error;
-      } catch (err) {
-        setLoading(false);
-        throw err;
-      }
-    },
-    []
-  );
-
-  const logout = useCallback(async () => {
+  const loginWithStudentId = async (studentId: string, p: string) => {
     setLoading(true);
+    const { data } = await supabase
+      .from("users")
+      .select("email")
+      .eq("student_id", studentId)
+      .single();
+
+    if (!data?.email) throw new Error("Student ID not found");
+
+    await supabase.auth.signInWithPassword({ email: data.email, password: p });
+    setLoading(false);
+  };
+
+  const logout = async () => {
     localStorage.removeItem(USER_CACHE_KEY);
     await supabase.auth.signOut();
-  }, []);
+    setUser(null);
+  };
 
-  const signInWithGoogle = useCallback(async (): Promise<boolean> => {
-    setLoading(true);
-    const { error } = await supabase.auth.signInWithOAuth({
+  const signInWithGoogle = async () => {
+    await supabase.auth.signInWithOAuth({
       provider: "google",
-      options: {
-        redirectTo: window.location.origin + "/dashboard",
-        queryParams: {
-          access_type: "offline",
-          prompt: "consent",
-        },
-      },
+      options: { redirectTo: window.location.origin + "/dashboard" },
     });
-
-    if (error) {
-      setLoading(false);
-      throw error;
-    }
     return false;
-  }, []);
+  };
 
-  const linkGoogleAccount = useCallback(async () => {
-    const { error } = await supabase.auth.linkIdentity({
+  const linkGoogleAccount = async () => {
+    await supabase.auth.linkIdentity({
       provider: "google",
       options: {
         redirectTo: window.location.origin + "/dashboard?linked=true",
       },
     });
-    if (error) throw error;
-  }, []);
+  };
 
   const value = useMemo(
     () => ({
@@ -334,23 +312,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       updateProfile,
       syncUser,
     }),
-    [
-      user,
-      loading,
-      loginWithStudentId,
-      logout,
-      signInWithGoogle,
-      linkGoogleAccount,
-      updateProfile,
-      syncUser,
-    ]
+    [user, loading]
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }
 
 export function useAuth() {
-  const context = useContext(AuthContext);
-  if (context === undefined) throw new Error("useAuth error");
-  return context;
+  const ctx = useContext(AuthContext);
+  if (!ctx) throw new Error("useAuth must be used inside AuthProvider");
+  return ctx;
 }

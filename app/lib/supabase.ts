@@ -9,5 +9,13 @@ const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY || "";
 if (!supabaseUrl || !supabaseAnonKey) {
   console.warn("Supabase credentials missing! Check your .env file.");
 }
-
-export const supabase = createClient(supabaseUrl, supabaseAnonKey);
+export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
+  realtime: {
+    params: {
+      // Keep socket alive for auto reconnect
+      keepalive: 30,
+      // Detect disconnect
+      pingInterval: 15000,
+    },
+  },
+});
