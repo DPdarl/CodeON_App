@@ -4,10 +4,10 @@ import { useNavigate } from "@remix-run/react";
 import { useAuth } from "~/contexts/AuthContext";
 import { CustomizeAvatar } from "~/components/dashboardmodule/CustomizeAvatar";
 import { PrivateRoute } from "~/components/PrivateRoute";
-import CodeOnLogo from "~/components/ui/CodeOnLogo";
 import { motion } from "framer-motion";
 import confetti from "canvas-confetti";
 import { toast } from "sonner"; // Assuming you have this, otherwise use alert
+import { CoinIcon } from "~/components/ui/Icons";
 
 export default function Onboarding() {
   const { user, updateProfile } = useAuth();
@@ -70,7 +70,7 @@ export default function Onboarding() {
             className="text-center space-y-4"
           >
             <div className="flex justify-center">
-              <CodeOnLogo className="h-16 w-16" />
+              <CoinIcon className="h-16 w-16" />
             </div>
             <h1 className="text-4xl md:text-5xl font-extrabold text-gray-900 dark:text-white font-pixelify">
               Welcome, {user?.displayName || "Coder"}!

@@ -1,4 +1,3 @@
-// app/components/dashboardmodule/ProfileTab.tsx
 import { useState, useEffect } from "react";
 import { useAuth, type UserData } from "~/contexts/AuthContext";
 import { getUserRank } from "~/lib/leaderboard-logic";
@@ -7,7 +6,7 @@ import {
   CardHeader,
   CardTitle,
   CardContent,
-  CardFooter,
+  CardDescription,
 } from "~/components/ui/card";
 import { Button } from "~/components/ui/button";
 import { Input } from "~/components/ui/input";
@@ -16,21 +15,44 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "~/components/ui/tabs";
 import { CustomizeAvatar } from "./CustomizeAvatar";
 import { AvatarDisplay } from "./AvatarDisplay";
 import { Skeleton } from "~/components/ui/skeleton";
+import { Badge } from "~/components/ui/badge";
 import {
   User,
   Calendar,
-  Flame,
   Trophy,
   Sparkles,
   Medal,
   Crown,
   Check,
-  Mail,
   Shield,
   Loader2,
+  Zap,
+  Plus,
+  Link,
+  X,
+  RefreshCcw,
 } from "lucide-react";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "~/components/ui/dialog";
 import { motion } from "framer-motion";
-import { toast } from "sonner"; // Ensure sonner is installed or replace with alert
+import { toast } from "sonner";
+
+const AVAILABLE_BADGES = [
+  "week-warrior",
+  "consistency-king",
+  "century-club",
+  "bug-hunter",
+  "code-wizard",
+  "night-owl",
+  "early-bird",
+  "quest-master",
+];
 
 interface ProfileTabProps {
   user: UserData | null;
@@ -38,45 +60,104 @@ interface ProfileTabProps {
 }
 
 export function ProfileTab({ user, onSaveAvatar }: ProfileTabProps) {
-  const { updateProfile, linkGoogleAccount } = useAuth();
+  const {
+    updateProfile,
+    linkGoogleAccount,
+    unlinkGoogleAccount,
+    refreshSession,
+  } = useAuth();
 
-  // Initialize state
   const [displayName, setDisplayName] = useState(user?.displayName || "");
+  const [selectedBadges, setSelectedBadges] = useState<string[]>(
+    user?.badges || []
+  );
   const [realRank, setRealRank] = useState<number | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [isLinking, setIsLinking] = useState(false);
+  const [showLinkModal, setShowLinkModal] = useState(false);
+  const [showChangeAccountModal, setShowChangeAccountModal] = useState(false);
 
   const isProfileChanged =
     displayName.trim() !== "" && displayName.trim() !== user?.displayName;
 
-  useEffect(() => {
-    let isMounted = true;
+  const isBadgesChanged =
+    JSON.stringify(selectedBadges.sort()) !==
+    JSON.stringify((user?.badges || []).sort());
 
+  useEffect(() => {
     if (user?.displayName) setDisplayName(user.displayName);
+    if (user?.badges) setSelectedBadges(user.badges);
 
     const loadData = async () => {
       if (user?.trophies !== undefined) {
         try {
           const r = await getUserRank(user.trophies);
-          if (isMounted) setRealRank(r);
+          setRealRank(r);
         } catch (e) {
           console.warn("Could not fetch rank", e);
         }
       }
     };
-
     loadData();
-
-    return () => {
-      isMounted = false;
-    };
   }, [user]);
 
+  // --- HANDLE ACCOUNT BINDING RETURN ---
+  useEffect(() => {
+    const checkBinding = async () => {
+      const status = sessionStorage.getItem("codeon_linking_status");
+
+      if (status === "pending") {
+        sessionStorage.removeItem("codeon_linking_status");
+        setIsLinking(true);
+        toast.loading("Verifying Google account...", { id: "bind-load" });
+
+        try {
+          const updatedAuthUser = await refreshSession();
+
+          if (updatedAuthUser && updatedAuthUser.identities) {
+            const googleIdentity = updatedAuthUser.identities.find(
+              (id) => id.provider === "google"
+            );
+
+            if (googleIdentity) {
+              const googleEmail = googleIdentity.identity_data?.email;
+
+              await updateProfile({
+                googleBound: true,
+                ...(googleEmail ? { email: googleEmail } : {}),
+              });
+
+              toast.success("Account successfully linked!", {
+                id: "bind-load",
+              });
+            } else {
+              toast.error("Linking failed: Identity not found.", {
+                id: "bind-load",
+              });
+            }
+          }
+        } catch (error) {
+          console.error("Binding error:", error);
+          toast.error("Error finalizing link.", { id: "bind-load" });
+        } finally {
+          setIsLinking(false);
+        }
+      }
+    };
+
+    checkBinding();
+  }, [refreshSession, updateProfile]);
+
+  // --- HANDLERS ---
+
   const handleProfileUpdate = async () => {
-    if (!isProfileChanged) return;
+    if (!isProfileChanged && !isBadgesChanged) return;
     setIsSaving(true);
     try {
-      await updateProfile({ displayName: displayName.trim() });
+      await updateProfile({
+        displayName: displayName.trim(),
+        badges: selectedBadges,
+      });
       toast.success("Profile updated successfully!");
     } catch (error) {
       toast.error("Failed to update profile.");
@@ -90,16 +171,43 @@ export function ProfileTab({ user, onSaveAvatar }: ProfileTabProps) {
     toast.success("Avatar updated! Looking good.");
   };
 
-  const handleLinkGoogle = async () => {
+  const initiateLinkProcess = () => {
+    setShowLinkModal(true);
+  };
+
+  const confirmLinkAccount = async () => {
+    setShowLinkModal(false);
     setIsLinking(true);
     try {
       await linkGoogleAccount();
-      // Redirect happens automatically
-    } catch (error) {
+    } catch (error: any) {
       console.error(error);
-      toast.error("Failed to bind Google account.");
+      setIsLinking(false);
+      if (error.message?.includes("already linked")) {
+        toast.error("This Google account is already used.");
+      } else {
+        toast.error(`Error: ${error.message}`);
+      }
+    }
+  };
+
+  const handleChangeAccount = async () => {
+    setShowChangeAccountModal(false);
+    setIsLinking(true);
+    try {
+      await unlinkGoogleAccount();
+      await linkGoogleAccount();
+    } catch (error: any) {
+      console.error(error);
+      toast.error(`Change account failed: ${error.message}`);
       setIsLinking(false);
     }
+  };
+
+  const toggleBadge = (badge: string) => {
+    setSelectedBadges((prev) =>
+      prev.includes(badge) ? prev.filter((b) => b !== badge) : [...prev, badge]
+    );
   };
 
   if (!user) return <ProfileSkeleton />;
@@ -110,7 +218,7 @@ export function ProfileTab({ user, onSaveAvatar }: ProfileTabProps) {
 
   const stats = {
     trophies: user.trophies || 0,
-    streak: user.streaks || 0,
+    xp: user.xp || 0,
     league: user.league || "Novice",
     rank: realRank ? `#${realRank}` : "...",
   };
@@ -138,12 +246,26 @@ export function ProfileTab({ user, onSaveAvatar }: ProfileTabProps) {
                 <Calendar className="w-4 h-4 mr-2" /> Joined: {creationDate}
               </div>
             </div>
-
-            {/* Rank Badge */}
-            <div className="hidden sm:flex ml-auto flex-col items-end">
-              <div className="text-sm text-gray-500">Global Rank</div>
-              <div className="text-4xl font-black text-indigo-600 dark:text-indigo-400">
-                {stats.rank}
+            <div className="hidden sm:flex ml-auto flex-col items-end gap-2 max-w-[250px]">
+              <div className="text-sm text-gray-500 font-bold uppercase tracking-wider">
+                Active Badges
+              </div>
+              <div className="flex flex-wrap justify-end gap-1.5">
+                {user.badges && user.badges.length > 0 ? (
+                  user.badges.slice(0, 5).map((badge) => (
+                    <Badge
+                      key={badge}
+                      variant="secondary"
+                      className="text-[10px] px-2 py-0.5 bg-indigo-50 text-indigo-600 border-indigo-100 dark:bg-indigo-900/30 dark:text-indigo-300 dark:border-indigo-800"
+                    >
+                      {badge}
+                    </Badge>
+                  ))
+                ) : (
+                  <span className="text-xs text-gray-400 italic">
+                    No badges equipped
+                  </span>
+                )}
               </div>
             </div>
           </CardContent>
@@ -164,10 +286,10 @@ export function ProfileTab({ user, onSaveAvatar }: ProfileTabProps) {
           color="text-yellow-500"
         />
         <StatItem
-          icon={Flame}
-          value={stats.streak.toString()}
-          label="Day Streak"
-          color="text-orange-500"
+          icon={Zap}
+          value={stats.xp.toLocaleString()}
+          label="Total XP"
+          color="text-blue-500"
         />
         <StatItem
           icon={Crown}
@@ -179,7 +301,7 @@ export function ProfileTab({ user, onSaveAvatar }: ProfileTabProps) {
           icon={Medal}
           value={stats.rank}
           label="Global Rank"
-          color="text-blue-500"
+          color="text-indigo-500"
         />
       </motion.div>
 
@@ -201,7 +323,7 @@ export function ProfileTab({ user, onSaveAvatar }: ProfileTabProps) {
 
           <TabsContent value="profile">
             <div className="grid gap-6 mt-4">
-              {/* Personal Info Card */}
+              {/* Personal Info */}
               <Card className="bg-white dark:bg-gray-900 shadow-lg rounded-3xl">
                 <CardHeader>
                   <CardTitle>Your Details</CardTitle>
@@ -228,39 +350,72 @@ export function ProfileTab({ user, onSaveAvatar }: ProfileTabProps) {
                       placeholder="Enter your coder name"
                     />
                   </div>
+
+                  {/* --- UPDATED EMAIL FIELD --- */}
                   <div className="space-y-2">
-                    <Label htmlFor="email">Email</Label>
+                    <div className="flex items-center justify-between">
+                      <Label htmlFor="email">Email</Label>
+                      {user.googleBound ? (
+                        <span className="text-[10px] uppercase font-bold text-green-600 dark:text-green-400 flex items-center gap-1 bg-green-50 dark:bg-green-900/20 px-2 py-0.5 rounded-full">
+                          <Check className="w-3 h-3" /> Google Linked
+                        </span>
+                      ) : (
+                        <span className="text-[10px] uppercase font-bold text-gray-400 flex items-center gap-1 bg-gray-100 dark:bg-gray-800 px-2 py-0.5 rounded-full">
+                          Not Linked
+                        </span>
+                      )}
+                    </div>
                     <Input
                       id="email"
                       value={user.email || ""}
                       disabled
                       className="bg-gray-50 dark:bg-gray-800"
+                      placeholder="No email associated"
                     />
                   </div>
                 </CardContent>
-                <CardFooter>
-                  <Button
-                    onClick={handleProfileUpdate}
-                    disabled={!isProfileChanged || isSaving}
-                    className={`w-full font-bold rounded-xl transition-all ${
-                      !isProfileChanged
-                        ? "bg-gray-200 text-gray-400 dark:bg-gray-800 dark:text-gray-500 cursor-not-allowed"
-                        : "bg-indigo-600 hover:bg-indigo-700 text-white shadow-md hover:shadow-lg"
-                    }`}
-                  >
-                    {isSaving ? (
-                      <>
-                        <Loader2 className="w-4 h-4 mr-2 animate-spin" />{" "}
-                        Saving...
-                      </>
-                    ) : (
-                      "Save Changes"
-                    )}
-                  </Button>
-                </CardFooter>
               </Card>
 
-              {/* Account Security Card (Google Bind) */}
+              {/* Badge Showcase */}
+              <Card className="bg-white dark:bg-gray-900 shadow-lg rounded-3xl">
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <Medal className="w-5 h-5 text-orange-500" /> Badge Showcase
+                  </CardTitle>
+                  <CardDescription>
+                    Select the badges you want to display.
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <div className="flex flex-wrap gap-2">
+                    {AVAILABLE_BADGES.map((badge) => {
+                      const isSelected = selectedBadges.includes(badge);
+                      return (
+                        <div
+                          key={badge}
+                          onClick={() => toggleBadge(badge)}
+                          className={`cursor-pointer px-3 py-2 rounded-xl border-2 transition-all flex items-center gap-2 ${
+                            isSelected
+                              ? "bg-orange-50 border-orange-500 text-orange-700 dark:bg-orange-900/20 dark:border-orange-500 dark:text-orange-300"
+                              : "bg-gray-50 border-transparent text-gray-500 hover:bg-gray-100 dark:bg-gray-800 dark:hover:bg-gray-700 dark:text-gray-400"
+                          }`}
+                        >
+                          {isSelected ? (
+                            <Check className="w-3.5 h-3.5" />
+                          ) : (
+                            <Plus className="w-3.5 h-3.5 opacity-50" />
+                          )}
+                          <span className="text-xs font-bold uppercase">
+                            {badge.replace(/-/g, " ")}
+                          </span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </CardContent>
+              </Card>
+
+              {/* Account Security */}
               <Card className="bg-white dark:bg-gray-900 shadow-lg rounded-3xl border-t-4 border-t-blue-500">
                 <CardHeader>
                   <CardTitle className="flex items-center gap-2">
@@ -285,8 +440,8 @@ export function ProfileTab({ user, onSaveAvatar }: ProfileTabProps) {
                         </h4>
                         <p className="text-sm text-gray-500">
                           {user?.googleBound
-                            ? "Your account is linked successfully."
-                            : "Link your Google account for easier login."}
+                            ? "Linked to " + user.email
+                            : "Link for easier login."}
                         </p>
                       </div>
                     </div>
@@ -294,14 +449,22 @@ export function ProfileTab({ user, onSaveAvatar }: ProfileTabProps) {
                     {user?.googleBound ? (
                       <Button
                         variant="outline"
-                        disabled
-                        className="text-green-600 border-green-200 bg-green-50 dark:bg-green-900/20 dark:border-green-800"
+                        onClick={() => setShowChangeAccountModal(true)}
+                        disabled={isLinking}
                       >
-                        <Check className="w-4 h-4 mr-2" /> Linked
+                        {isLinking ? (
+                          <Loader2 className="w-4 h-4 animate-spin" />
+                        ) : (
+                          <>
+                            {" "}
+                            <RefreshCcw className="w-4 h-4 mr-2" /> Change
+                            Account
+                          </>
+                        )}
                       </Button>
                     ) : (
                       <Button
-                        onClick={handleLinkGoogle}
+                        onClick={() => setShowLinkModal(true)}
                         disabled={isLinking}
                         variant="outline"
                         className="hover:bg-blue-50 dark:hover:bg-blue-900/20 border-blue-200 text-blue-600"
@@ -309,13 +472,38 @@ export function ProfileTab({ user, onSaveAvatar }: ProfileTabProps) {
                         {isLinking ? (
                           <Loader2 className="w-4 h-4 animate-spin" />
                         ) : (
-                          "Bind Account"
+                          <>
+                            {" "}
+                            <Link className="w-4 h-4 mr-2" /> Bind Account
+                          </>
                         )}
                       </Button>
                     )}
                   </div>
                 </CardContent>
               </Card>
+
+              {/* Save Button */}
+              <div className="sticky bottom-4 z-10">
+                <Button
+                  onClick={handleProfileUpdate}
+                  disabled={(!isProfileChanged && !isBadgesChanged) || isSaving}
+                  className={`w-full h-12 font-bold rounded-xl transition-all shadow-xl ${
+                    !isProfileChanged && !isBadgesChanged
+                      ? "bg-gray-200 text-gray-400 dark:bg-gray-800 dark:text-gray-500 cursor-not-allowed"
+                      : "bg-indigo-600 hover:bg-indigo-700 text-white hover:scale-[1.01]"
+                  }`}
+                >
+                  {isSaving ? (
+                    <>
+                      <Loader2 className="w-4 h-4 mr-2 animate-spin" />{" "}
+                      Saving...
+                    </>
+                  ) : (
+                    "Save Changes"
+                  )}
+                </Button>
+              </div>
             </div>
           </TabsContent>
 
@@ -330,10 +518,63 @@ export function ProfileTab({ user, onSaveAvatar }: ProfileTabProps) {
           </TabsContent>
         </Tabs>
       </motion.div>
+
+      {/* --- CONFIRMATION MODALS --- */}
+      <Dialog open={showLinkModal} onOpenChange={setShowLinkModal}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Bind Google Account?</DialogTitle>
+            <DialogDescription>
+              Redirecting to Google to verify your account.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="ghost" onClick={() => setShowLinkModal(false)}>
+              Cancel
+            </Button>
+            <Button
+              onClick={confirmLinkAccount}
+              className="bg-blue-600 hover:bg-blue-700"
+            >
+              Continue
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog
+        open={showChangeAccountModal}
+        onOpenChange={setShowChangeAccountModal}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Change Linked Account?</DialogTitle>
+            <DialogDescription>
+              This will disconnect <b>{user?.email}</b> and allow you to sign in
+              with a different Google account.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button
+              variant="ghost"
+              onClick={() => setShowChangeAccountModal(false)}
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={handleChangeAccount}
+              className="bg-blue-600 hover:bg-blue-700"
+            >
+              Yes, Change Account
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
 
+// ... StatItem and ProfileSkeleton
 function StatItem({ icon: Icon, value, label, color }: any) {
   return (
     <div className="flex flex-col md:flex-row items-center md:items-start gap-3 p-4 bg-gray-50 dark:bg-gray-800/50 rounded-2xl border border-gray-100 dark:border-gray-800 shadow-sm transition-transform hover:scale-[1.02]">

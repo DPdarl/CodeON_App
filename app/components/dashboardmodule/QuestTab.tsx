@@ -20,6 +20,7 @@ import { Progress } from "~/components/ui/progress";
 import { Button } from "~/components/ui/button";
 import { cn } from "~/lib/utils";
 import { useAuth } from "~/contexts/AuthContext";
+import { ScrollQuestIcon } from "../ui/Icons";
 
 // --- MOCK DATA (To be replaced by Firestore logic later) ---
 const DAILY_QUESTS = [
@@ -122,7 +123,7 @@ export function QuestTab() {
         className="flex items-center justify-between"
       >
         <div className="flex items-center gap-3">
-          <Scroll className="w-8 h-8 text-indigo-500" />
+          <ScrollQuestIcon className="w-8 h-8 text-indigo-500" />
           <div>
             <h1 className="text-3xl font-extrabold text-gray-900 dark:text-white">
               Quest Board

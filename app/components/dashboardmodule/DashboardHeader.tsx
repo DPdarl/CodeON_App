@@ -19,10 +19,8 @@ import {
 } from "~/components/ui/dialog";
 import { PanelLeftOpen, PanelLeftClose, Moon, LogOut } from "lucide-react";
 import { AvatarDisplay } from "./AvatarDisplay";
-import CodeOnLogo from "../ui/CodeOnLogo";
-import HeartIcon from "../ui/HeartIcon";
-import FlameIcon from "../ui/FlameIcon";
 import { calculateProgress } from "~/lib/leveling-system";
+import { CoinIcon, FlameIcon, HeartIcon } from "../ui/Icons";
 
 interface StatItemProps {
   icon: React.ReactNode;
@@ -121,7 +119,7 @@ export function DashboardHeader({
                 value={stats.streaks}
               />
               <StatItem
-                icon={<CodeOnLogo className="h-6 w-6" />}
+                icon={<CoinIcon className="h-6 w-6" />}
                 value={stats.coins}
               />
               <StatItem

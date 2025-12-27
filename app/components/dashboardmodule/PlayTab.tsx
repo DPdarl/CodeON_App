@@ -16,6 +16,7 @@ import { Button } from "~/components/ui/button";
 import { Badge } from "~/components/ui/badge";
 import { useAuth } from "~/contexts/AuthContext";
 import { cn } from "~/lib/utils";
+import { ControllerIcon, MapIcon } from "../ui/Icons";
 
 export function PlayTab() {
   const navigate = useNavigate();
@@ -28,7 +29,7 @@ export function PlayTab() {
       title: "C# Adventures",
       description:
         "Your main journey. Master C# concepts step-by-step through interactive lessons and mini-games.",
-      icon: Map,
+      icon: MapIcon,
       color: "text-emerald-500",
       bgColor: "bg-emerald-500/10",
       borderColor: "hover:border-emerald-500/50",
@@ -71,7 +72,7 @@ export function PlayTab() {
       >
         <div className="flex items-center gap-4">
           <div className="p-3 bg-indigo-600 rounded-xl shadow-lg shadow-indigo-600/20">
-            <Gamepad2 className="w-8 h-8 text-white" />
+            <ControllerIcon className="w-10 h-10 text-white" />
           </div>
           <div>
             <h1 className="text-3xl font-black tracking-tight text-foreground">
@@ -81,12 +82,6 @@ export function PlayTab() {
               Choose your path and level up your skills.
             </p>
           </div>
-        </div>
-
-        {/* User Level Badge */}
-        <div className="flex items-center gap-2 px-4 py-2 bg-background border rounded-full shadow-sm">
-          <Trophy className="w-4 h-4 text-yellow-500 fill-yellow-500" />
-          <span className="font-bold text-sm">Level {currentLevel}</span>
         </div>
       </motion.div>
 
@@ -140,7 +135,7 @@ export function PlayTab() {
                       mode.bgColor
                     )}
                   >
-                    <mode.icon className={cn("w-7 h-7", mode.color)} />
+                    <mode.icon className={cn("w-10 h-10", mode.color)} />
                   </div>
                   <CardTitle className="text-xl flex items-center justify-between">
                     {mode.title}

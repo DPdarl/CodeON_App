@@ -14,8 +14,9 @@ import {
   Loader2,
   Play,
   Crown,
-  Zap, // Added for Test Button
-  Sparkles, // Added for UI
+  Zap,
+  Sparkles,
+  Compass, // Added for Adventure Icon
 } from "lucide-react";
 import { Button } from "~/components/ui/button";
 import { Progress } from "~/components/ui/progress";
@@ -25,31 +26,11 @@ import { supabase } from "~/lib/supabase";
 import { Challenge } from "~/types/challenge.types";
 import { SelectionCarousel } from "./SelectionCarousel";
 import { calculateProgress } from "~/lib/leveling-system";
-import TrophyIcon from "../ui/TrophyIcon";
-import FlameIcon from "../ui/FlameIcon";
+import { TrophyIcon, FlameIcon, CrownIcon, StarIcon } from "../ui/Icons";
 
 // --- NEW IMPORTS FOR GAME LOGIC ---
 import { useGameProgress } from "~/hooks/useGameProgress";
 import { LevelUpModal } from "./LevelUpModal";
-
-// Helper to get colors based on language (Visuals)
-const getColorForLanguage = (lang: string) => {
-  switch (lang.toLowerCase()) {
-    case "python":
-      return "from-yellow-400 to-orange-500";
-    case "javascript":
-      return "from-yellow-300 to-yellow-500";
-    case "html/css":
-      return "from-orange-400 to-red-500";
-    case "react":
-      return "from-cyan-400 to-blue-500";
-    case "csharp":
-    case "c#":
-      return "from-green-400 to-blue-500";
-    default:
-      return "from-indigo-400 to-purple-500";
-  }
-};
 
 interface HomeTabProps {
   onTabChange: (tab: string) => void;
@@ -141,21 +122,12 @@ export function HomeTab({ onTabChange }: HomeTabProps) {
             <div>
               <div className="flex items-center space-x-2 mb-2">
                 <span className="bg-white/20 backdrop-blur-md px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider flex items-center gap-1">
-                  <Crown className="w-3 h-3" />
                   {stats.league} League
                 </span>
               </div>
               <h1 className="text-3xl md:text-4xl font-extrabold mb-2 tracking-tight font-pixelify">
                 Welcome back, {user?.displayName || "Traveler"}!
               </h1>
-              <p className="text-indigo-100 max-w-lg text-lg flex items-center gap-2">
-                <Flame className="w-5 h-5 text-orange-300 fill-orange-400" />
-                You're on a{" "}
-                <span className="font-bold text-yellow-300">
-                  {stats.streak} day streak
-                </span>
-                .
-              </p>
 
               {/* --- TEST BUTTON FOR DEMO --- */}
               <div className="mt-6 flex flex-wrap gap-4 items-center">
@@ -227,7 +199,7 @@ export function HomeTab({ onTabChange }: HomeTabProps) {
         />
         {/* 3. League */}
         <StatCard
-          icon={Crown}
+          icon={CrownIcon}
           label="Current League"
           value={stats.league}
           color="text-purple-500"
@@ -235,7 +207,7 @@ export function HomeTab({ onTabChange }: HomeTabProps) {
         />
         {/* 4. Challenges */}
         <StatCard
-          icon={Star}
+          icon={StarIcon}
           label="Challenges"
           value={challenges.length.toString()}
           color="text-blue-500"
@@ -243,79 +215,101 @@ export function HomeTab({ onTabChange }: HomeTabProps) {
         />
       </div>
 
-      {/* --- Carousel Section --- */}
+      {/* --- Adventure Banner (Where you left off) --- */}
+      <motion.div
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: 0.3 }}
+        className="group relative overflow-hidden rounded-3xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 shadow-md hover:shadow-xl transition-all duration-300"
+      >
+        {/* Decorative background gradient */}
+        <div className="absolute inset-0 bg-gradient-to-r from-orange-500/5 to-red-500/5 dark:from-orange-900/20 dark:to-red-900/20 opacity-0 group-hover:opacity-100 transition-opacity" />
+
+        <div className="relative p-6 md:p-8 flex flex-col md:flex-row items-center justify-between gap-6">
+          <div className="flex items-start gap-5">
+            <div className="h-16 w-16 shrink-0 rounded-2xl bg-orange-100 dark:bg-orange-900/30 flex items-center justify-center text-orange-600 dark:text-orange-400 shadow-sm">
+              <Compass className="w-8 h-8" />
+            </div>
+            <div>
+              <div className="flex items-center gap-2 mb-1">
+                <span className="px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider bg-orange-100 text-orange-700 dark:bg-orange-950 dark:text-orange-300">
+                  Adventure Mode
+                </span>
+              </div>
+              <h3 className="text-2xl font-bold text-gray-900 dark:text-white">
+                Where you left off
+              </h3>
+              <p className="text-gray-500 dark:text-gray-400 mt-1 max-w-md">
+                You are currently facing challenges in{" "}
+                <span className="font-bold text-orange-600 dark:text-orange-400">
+                  Level {stats.level}
+                </span>
+                . Ready to continue your journey?
+              </p>
+            </div>
+          </div>
+
+          <Button
+            onClick={() => onTabChange("play")}
+            className="w-full md:w-auto h-12 px-8 text-base font-bold bg-orange-600 hover:bg-orange-700 text-white rounded-xl shadow-lg shadow-orange-500/20 transition-transform active:scale-95"
+          >
+            Resume Journey <ArrowRight className="w-5 h-5 ml-2" />
+          </Button>
+        </div>
+      </motion.div>
+
+      {/* --- Enhanced Available Challenges Section --- */}
       <motion.div
         variants={containerVariants}
         initial="hidden"
         animate="visible"
-        className="space-y-6"
+        className="space-y-4 pt-2"
       >
-        <div className="flex justify-between items-center">
-          <h2 className="text-2xl font-bold text-gray-900 dark:text-white flex items-center gap-2">
-            <Map className="w-6 h-6 text-indigo-500" />
-            Available Challenges
-          </h2>
+        <div className="flex justify-between items-end px-2">
+          <div>
+            <h2 className="text-2xl font-bold text-gray-900 dark:text-white flex items-center gap-2">
+              <Code2 className="w-6 h-6 text-indigo-500" />
+              Practice Arena
+            </h2>
+            <p className="text-gray-500 dark:text-gray-400 text-sm mt-1">
+              Sharpen your skills with standalone coding challenges.
+            </p>
+          </div>
           <Button
             variant="ghost"
-            className="text-indigo-600 dark:text-indigo-400 font-semibold"
-            onClick={() => onTabChange("play")}
+            onClick={() => navigate("/play.challenges")} // Navigate to full challenges page if distinct
+            className="text-indigo-600 dark:text-indigo-400 font-semibold hover:bg-indigo-50 dark:hover:bg-indigo-900/20"
           >
-            View Map <ArrowRight className="w-4 h-4 ml-1" />
+            View All <ArrowRight className="w-4 h-4 ml-1" />
           </Button>
         </div>
 
-        {loading ? (
-          <div className="flex justify-center py-20">
-            <Loader2 className="h-10 w-10 animate-spin text-indigo-500" />
-          </div>
-        ) : challenges.length > 0 ? (
-          <SelectionCarousel
-            challenges={challenges}
-            onSelectChallenge={handleSelectChallenge}
-          />
-        ) : (
-          <div className="text-center py-20 bg-gray-50 dark:bg-gray-800/50 rounded-3xl border border-dashed border-gray-300 dark:border-gray-700">
-            <p className="text-gray-500 text-lg">
-              No challenges found in the database.
-            </p>
-            <p className="text-sm text-gray-400 mt-2">
-              (Try adding some to your 'challenges' table!)
-            </p>
-          </div>
-        )}
-      </motion.div>
+        {/* Enhanced Card Container for Carousel */}
+        <div className="bg-gradient-to-br from-gray-50 to-white dark:from-gray-900 dark:to-gray-900/50 rounded-[2rem] p-6 border border-gray-100 dark:border-gray-800 shadow-sm relative overflow-hidden">
+          {/* Subtle background decoration */}
+          <div className="absolute top-0 right-0 w-64 h-64 bg-indigo-500/5 rounded-full blur-3xl -mr-16 -mt-16 pointer-events-none" />
 
-      {/* --- Daily Challenge Banner --- */}
-      <motion.div
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ delay: 0.4 }}
-        className="bg-gradient-to-br from-gray-900 to-gray-800 dark:from-black dark:to-gray-900 rounded-3xl p-1 shadow-xl"
-      >
-        <div className="bg-white/5 backdrop-blur-sm rounded-[20px] p-6 md:p-8 border border-white/10 flex flex-col md:flex-row items-center justify-between gap-6">
-          <div className="flex items-start gap-4">
-            <div className="p-3 bg-green-500/20 rounded-2xl">
-              <Terminal className="w-8 h-8 text-green-400" />
-            </div>
-            <div>
-              <div className="flex items-center gap-2 mb-1">
-                <span className="bg-green-500/20 text-green-400 text-[10px] font-bold px-2 py-0.5 rounded uppercase tracking-wide">
-                  Daily Quest
-                </span>
-                <span className="text-gray-400 text-xs">+50 XP</span>
+          <div className="relative z-10">
+            {loading ? (
+              <div className="flex justify-center py-24">
+                <Loader2 className="h-10 w-10 animate-spin text-indigo-500" />
               </div>
-              <h3 className="text-xl font-bold text-white mb-1">
-                The Algorithm of Fire
-              </h3>
-              <p className="text-gray-400 text-sm max-w-md">
-                Solve the "Binary Search" challenge efficiently to keep your
-                streak alive!
-              </p>
-            </div>
+            ) : challenges.length > 0 ? (
+              <SelectionCarousel
+                challenges={challenges}
+                onSelectChallenge={handleSelectChallenge}
+              />
+            ) : (
+              <div className="text-center py-20 rounded-xl border border-dashed border-gray-300 dark:border-gray-700">
+                <p className="text-gray-500 text-lg">
+                  No challenges found in the database.
+                </p>
+                <p className="text-sm text-gray-400 mt-2">
+                  (Try adding some to your 'challenges' table!)
+                </p>
+              </div>
+            )}
           </div>
-          <Button className="w-full md:w-auto bg-green-500 hover:bg-green-600 text-white font-bold rounded-xl px-8 py-6 shadow-lg shadow-green-500/20 transition-all hover:scale-105 active:scale-95">
-            Start Quest <Play className="w-4 h-4 ml-2 fill-current" />
-          </Button>
         </div>
       </motion.div>
     </div>
@@ -326,7 +320,7 @@ function StatCard({ icon: Icon, label, value, color, bgColor }: any) {
   return (
     <div className="bg-white dark:bg-gray-900 rounded-2xl p-4 border border-gray-100 dark:border-gray-800 shadow-sm dark:hover:shadow-white hover:shadow-md flex items-center gap-4 transition-transform hover:scale-105">
       <div className={`p-3 rounded-xl ${bgColor}`}>
-        <Icon className={`w-5 h-5 ${color}`} />
+        <Icon className={`w-8 h-8 ${color}`} />
       </div>
       <div>
         <div className="text-2xl font-black text-gray-900 dark:text-white">

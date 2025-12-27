@@ -1,5 +1,5 @@
 // app/components/dashboardmodule/LeaderboardTab.tsx
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import { useAuth } from "~/contexts/AuthContext";
 import { supabase } from "~/lib/supabase";
 import { Card } from "~/components/ui/card";
@@ -12,24 +12,44 @@ import {
 } from "~/components/ui/dialog";
 import {
   Medal,
-  Trophy,
   Award,
   Crown,
   Calendar,
   Zap,
   Shield,
-  Info, // Added Info icon
+  Info,
+  Filter,
+  ChevronDown,
+  Gamepad2,
+  Clock, // Added for Adventure mode
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { AvatarDisplay } from "./AvatarDisplay";
-import TrophyIcon from "../ui/TrophyIcon";
 import { Badge } from "~/components/ui/badge";
+import { Button } from "~/components/ui/button";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "~/components/ui/dropdown-menu";
 import {
   Tooltip,
   TooltipContent,
   TooltipProvider,
   TooltipTrigger,
 } from "~/components/ui/tooltip";
+import {
+  CrownIcon,
+  FlameIcon,
+  MedalBronze,
+  MedalGold,
+  MedalSilver,
+  TrophyIcon,
+  XpOrb,
+  StarIcon, // Ensure StarIcon is imported
+} from "../ui/Icons";
+import { getLeagueFromXP } from "~/lib/leaderboard-logic";
 
 // --- LEAGUE DATA CONSTANT ---
 export const LEAGUES = [
@@ -39,6 +59,13 @@ export const LEAGUES = [
   { name: "Gold", minXp: 5000, color: "text-yellow-500" },
   { name: "Platinum", minXp: 10000, color: "text-cyan-400" },
   { name: "Diamond", minXp: 25000, color: "text-indigo-400" },
+];
+
+const SECTIONS = ["ALL", "BSCS", "BSIS", "BSAIS", "ACT"];
+const GAMEMODES = [
+  { id: "MULTIPLAYER", label: "Multiplayer", icon: TrophyIcon },
+  { id: "CHALLENGES", label: "Challenges", icon: StarIcon },
+  { id: "ADVENTURE", label: "Adventure", icon: Clock },
 ];
 
 interface LeaderboardUser {
@@ -53,16 +80,29 @@ interface LeaderboardUser {
   joinedAt?: string;
   badges?: string[];
   streaks?: number;
+  section?: string;
+  stars?: number; // Added for Challenges mode
+  adventureTime?: number; // Added for Adventure mode (seconds)
 }
 
 const LEADERBOARD_CACHE_KEY = "codeon_leaderboard_cache";
 const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
+// Helper to format seconds into MM:SS
+const formatTime = (seconds: number) => {
+  if (!seconds && seconds !== 0) return "--:--";
+  const mins = Math.floor(seconds / 60);
+  const secs = Math.round(seconds % 60);
+  return `${mins}:${secs.toString().padStart(2, "0")}`;
+};
+
 export function LeaderboardTab() {
-  const { user } = useAuth();
+  const { user, updateProfile } = useAuth();
   const [selectedUser, setSelectedUser] = useState<LeaderboardUser | null>(
     null
   );
+  const [sectionFilter, setSectionFilter] = useState("ALL");
+  const [gamemode, setGamemode] = useState("MULTIPLAYER"); // NEW: Gamemode Filter
 
   const [users, setUsers] = useState<LeaderboardUser[]>(() => {
     if (typeof window !== "undefined") {
@@ -80,7 +120,7 @@ export function LeaderboardTab() {
 
   const fetchUsers = useCallback(
     async (isBackground = false) => {
-      if (!isBackground && users.length === 0) setLoading(true);
+      if (!isBackground) setLoading(true);
 
       let attempt = 0;
       const maxRetries = 3;
@@ -88,11 +128,23 @@ export function LeaderboardTab() {
 
       while (attempt < maxRetries && !success) {
         try {
-          const { data, error } = await supabase
-            .from("users")
-            .select("*")
-            .order("trophies", { ascending: false })
-            .limit(100);
+          let query = supabase.from("users").select("*");
+
+          // --- DYNAMIC SORTING BASED ON GAMEMODE ---
+          if (gamemode === "MULTIPLAYER") {
+            query = query.order("trophies", { ascending: false });
+          } else if (gamemode === "CHALLENGES") {
+            // Assumes 'stars' column exists in DB
+            query = query.order("stars", { ascending: false });
+          } else if (gamemode === "ADVENTURE") {
+            // Assumes 'adventure_time' column exists in DB (seconds)
+            // Filter out users who haven't completed it (null time)
+            query = query
+              .not("adventure_time", "is", null)
+              .order("adventure_time", { ascending: true });
+          }
+
+          const { data, error } = await query.limit(100);
 
           if (error) throw error;
 
@@ -109,6 +161,9 @@ export function LeaderboardTab() {
               joinedAt: u.joined_at,
               badges: u.badges || [],
               streaks: u.streaks || 0,
+              section: u.section,
+              stars: u.stars || 0, // Map stars
+              adventureTime: u.adventure_time, // Map adventure_time
             })
           );
 
@@ -119,6 +174,7 @@ export function LeaderboardTab() {
           );
           success = true;
         } catch (error) {
+          console.error("Fetch error:", error);
           attempt++;
           if (attempt < maxRetries) await wait(1000);
         }
@@ -126,12 +182,13 @@ export function LeaderboardTab() {
 
       if (!isBackground) setLoading(false);
     },
-    [users.length]
+    [gamemode] // Dependencies: Re-fetch when gamemode changes
   );
 
-  // Initial Fetch
+  // Initial Fetch & when gamemode changes
   useEffect(() => {
-    fetchUsers(users.length > 0);
+    fetchUsers(false);
+
     const onFocus = () => {
       setTimeout(() => {
         if (document.visibilityState === "visible") fetchUsers(true);
@@ -141,14 +198,13 @@ export function LeaderboardTab() {
     return () => window.removeEventListener("focus", onFocus);
   }, [fetchUsers]);
 
-  // --- REAL-TIME LOCAL UPDATE ---
-  // If the current user levels up (via HomeTab), update their entry in the leaderboard list immediately.
+  // --- REAL-TIME LOCAL UPDATE (Only for basic stats) ---
   useEffect(() => {
     if (user && users.length > 0) {
       setUsers((prevUsers) => {
         const index = prevUsers.findIndex((u) => u.id === user.uid);
         if (index !== -1) {
-          // Check if stats are different
+          // Check simple stats; assuming adventureTime/stars update requires refresh for now
           if (
             prevUsers[index].xp !== user.xp ||
             prevUsers[index].level !== user.level
@@ -158,7 +214,6 @@ export function LeaderboardTab() {
               ...newUsers[index],
               xp: user.xp || 0,
               level: user.level || 1,
-              // Update league locally based on XP if needed
               league:
                 LEAGUES.slice()
                   .reverse()
@@ -170,14 +225,32 @@ export function LeaderboardTab() {
         return prevUsers;
       });
     }
-  }, [user]); // Re-run whenever AuthContext user changes
+  }, [user]);
 
-  const topThree = users.slice(0, 3);
-  const restOfUsers = users.slice(3);
+  // Auto-correct league
+  useEffect(() => {
+    if (user?.xp) {
+      const correctLeague = getLeagueFromXP(user.xp);
+      if (user.league !== correctLeague) {
+        updateProfile({ league: correctLeague });
+      }
+    }
+  }, [user?.xp, user?.league, updateProfile]);
 
-  const currentUserRank = users.findIndex((u) => u.id === user?.uid);
+  // --- FILTER USERS BASED ON SECTION ---
+  const filteredUsers = useMemo(() => {
+    if (sectionFilter === "ALL") return users;
+    return users.filter((u) =>
+      u.section?.toUpperCase().includes(sectionFilter)
+    );
+  }, [users, sectionFilter]);
+
+  const topThree = filteredUsers.slice(0, 3);
+  const restOfUsers = filteredUsers.slice(3);
+
+  const currentUserRank = filteredUsers.findIndex((u) => u.id === user?.uid);
   const currentUserData =
-    currentUserRank !== -1 ? users[currentUserRank] : null;
+    currentUserRank !== -1 ? filteredUsers[currentUserRank] : null;
 
   const containerVariants = {
     hidden: { opacity: 0 },
@@ -189,25 +262,25 @@ export function LeaderboardTab() {
     visible: { opacity: 1, y: 0 },
   };
 
+  // Helper to get active mode icon
+  const ActiveModeIcon =
+    GAMEMODES.find((g) => g.id === gamemode)?.icon || TrophyIcon;
+
   return (
     <div className="max-w-4xl mx-auto space-y-8 pb-12">
       {/* Header */}
       <motion.div
         initial={{ opacity: 0, y: -20 }}
         animate={{ opacity: 1, y: 0 }}
-        className="text-center"
+        className="text-center relative"
       >
         <TrophyIcon className="w-20 h-20 text-yellow-500 mx-auto drop-shadow-lg" />
         <h1 className="text-4xl font-extrabold text-gray-900 dark:text-white mt-4 font-pixelify tracking-wide">
           Hall of Champions
         </h1>
 
-        {/* Subtitle with Info Icon */}
-        <div className="flex items-center justify-center gap-2 mt-2">
-          <p className="text-lg text-gray-600 dark:text-gray-400">
-            Ranked by Trophies earned in the Arena
-          </p>
-
+        {/* Filter & Info Row */}
+        <div className="flex flex-wrap items-center justify-center gap-3 mt-4 relative z-20">
           <TooltipProvider delayDuration={0}>
             <Tooltip>
               <TooltipTrigger asChild>
@@ -243,14 +316,77 @@ export function LeaderboardTab() {
               </TooltipContent>
             </Tooltip>
           </TooltipProvider>
+
+          {/* Gamemode Filter Dropdown */}
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button
+                variant="outline"
+                className="h-9 rounded-full px-4 border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 text-sm font-semibold shadow-sm hover:bg-gray-50 dark:hover:bg-gray-800"
+              >
+                <Gamepad2 className="w-3.5 h-3.5 mr-2 text-orange-500" />
+                {GAMEMODES.find((g) => g.id === gamemode)?.label}
+                <ChevronDown className="w-3.5 h-3.5 ml-2 opacity-50" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="center" className="w-40">
+              {GAMEMODES.map((mode) => (
+                <DropdownMenuItem
+                  key={mode.id}
+                  onClick={() => setGamemode(mode.id)}
+                  className={`cursor-pointer font-medium ${
+                    gamemode === mode.id
+                      ? "text-orange-600 bg-orange-50 dark:bg-orange-950/30"
+                      : ""
+                  }`}
+                >
+                  <mode.icon className="w-4 h-4 mr-2" />
+                  {mode.label}
+                </DropdownMenuItem>
+              ))}
+            </DropdownMenuContent>
+          </DropdownMenu>
+
+          {/* Section Filter Dropdown */}
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button
+                variant="outline"
+                className="h-9 rounded-full px-4 border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 text-sm font-semibold shadow-sm hover:bg-gray-50 dark:hover:bg-gray-800"
+              >
+                <Filter className="w-3.5 h-3.5 mr-2 text-indigo-500" />
+                {sectionFilter === "ALL" ? "All Sections" : sectionFilter}
+                <ChevronDown className="w-3.5 h-3.5 ml-2 opacity-50" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="center" className="w-40">
+              {SECTIONS.map((sec) => (
+                <DropdownMenuItem
+                  key={sec}
+                  onClick={() => setSectionFilter(sec)}
+                  className={`cursor-pointer font-medium ${
+                    sectionFilter === sec
+                      ? "text-indigo-600 bg-indigo-50 dark:bg-indigo-950/30"
+                      : ""
+                  }`}
+                >
+                  {sec === "ALL" ? "All Sections" : sec}
+                </DropdownMenuItem>
+              ))}
+            </DropdownMenuContent>
+          </DropdownMenu>
         </div>
+
+        <p className="text-sm text-gray-500 dark:text-gray-400 mt-2">
+          Ranked by {GAMEMODES.find((g) => g.id === gamemode)?.label}
+        </p>
       </motion.div>
 
       {/* Loading Skeleton */}
       {loading && <LeaderboardSkeleton />}
 
       {/* Leaderboard Content */}
-      {!loading && users.length > 0 && (
+      {!loading && filteredUsers.length > 0 && (
         <>
           {/* Top 3 Podium */}
           <motion.div
@@ -268,6 +404,7 @@ export function LeaderboardTab() {
                   user={topThree[1]}
                   rank={2}
                   onClick={() => setSelectedUser(topThree[1])}
+                  gamemode={gamemode}
                 />
               )}
             </motion.div>
@@ -278,6 +415,7 @@ export function LeaderboardTab() {
                   user={topThree[0]}
                   rank={1}
                   onClick={() => setSelectedUser(topThree[0])}
+                  gamemode={gamemode}
                 />
               )}
             </motion.div>
@@ -288,6 +426,7 @@ export function LeaderboardTab() {
                   user={topThree[2]}
                   rank={3}
                   onClick={() => setSelectedUser(topThree[2])}
+                  gamemode={gamemode}
                 />
               )}
             </motion.div>
@@ -307,6 +446,7 @@ export function LeaderboardTab() {
                   rank={index + 4}
                   isCurrentUser={leaderboardUser.id === user?.uid}
                   onClick={() => setSelectedUser(leaderboardUser)}
+                  gamemode={gamemode}
                 />
               </motion.div>
             ))}
@@ -314,12 +454,17 @@ export function LeaderboardTab() {
         </>
       )}
 
-      {!loading && users.length === 0 && (
-        <Card className="p-8 text-center bg-white dark:bg-gray-900 border-gray-200 dark:border-gray-800">
-          <Award className="w-12 h-12 text-gray-400 mx-auto" />
-          <h3 className="text-xl font-semibold text-gray-700 dark:text-gray-300 mt-4">
-            The Leaderboard is Empty
+      {!loading && filteredUsers.length === 0 && (
+        <Card className="p-12 text-center bg-white dark:bg-gray-900 border-gray-200 dark:border-gray-800 shadow-sm rounded-3xl">
+          <div className="w-16 h-16 bg-gray-100 dark:bg-gray-800 rounded-full flex items-center justify-center mx-auto mb-4">
+            <ActiveModeIcon className="w-8 h-8 text-gray-400" />
+          </div>
+          <h3 className="text-xl font-bold text-gray-900 dark:text-white">
+            No Champions Found
           </h3>
+          <p className="text-gray-500 dark:text-gray-400 mt-2">
+            No one matches the current filters yet.
+          </p>
         </Card>
       )}
 
@@ -338,6 +483,7 @@ export function LeaderboardTab() {
               isCurrentUser={true}
               isSticky={true}
               onClick={() => setSelectedUser(currentUserData)}
+              gamemode={gamemode}
             />
           </div>
         </motion.div>
@@ -352,7 +498,8 @@ export function LeaderboardTab() {
   );
 }
 
-// ... (Sub-components PodiumCard, UserRankRow, etc. remain the same as previous version)
+// ... UserProfileModal remains largely same (or you can add stats there too if desired)
+
 function UserProfileModal({
   user,
   onClose,
@@ -386,35 +533,49 @@ function UserProfileModal({
               </span>
               <span>•</span>
               <span className="text-indigo-500">Lvl {user.level}</span>
+              {user.section && (
+                <>
+                  <span>•</span>
+                  <span className="font-bold text-gray-600 dark:text-gray-400">
+                    {user.section}
+                  </span>
+                </>
+              )}
             </div>
           </div>
 
+          {/* Stats Grid */}
           <div className="grid grid-cols-3 gap-3 w-full">
             <div className="p-3 bg-gray-50 dark:bg-gray-800 rounded-2xl flex flex-col items-center justify-center gap-1 border border-gray-100 dark:border-gray-700">
-              <TrophyIcon className="w-5 h-5 text-yellow-500" />
+              <TrophyIcon className="w-8 h-8 text-yellow-500" />
               <span className="text-lg font-bold">{user.trophies}</span>
               <span className="text-[10px] uppercase text-gray-400 font-bold">
                 Trophies
               </span>
             </div>
+            {/* Added Stars Stat */}
             <div className="p-3 bg-gray-50 dark:bg-gray-800 rounded-2xl flex flex-col items-center justify-center gap-1 border border-gray-100 dark:border-gray-700">
-              <Zap className="w-5 h-5 text-orange-500" />
-              <span className="text-lg font-bold">{user.streaks || 0}</span>
+              <StarIcon className="w-8 h-8 text-yellow-400" />
+              <span className="text-lg font-bold">{user.stars || 0}</span>
               <span className="text-[10px] uppercase text-gray-400 font-bold">
-                Streak
+                Stars
               </span>
             </div>
+            {/* Added Adventure Time Stat */}
             <div className="p-3 bg-gray-50 dark:bg-gray-800 rounded-2xl flex flex-col items-center justify-center gap-1 border border-gray-100 dark:border-gray-700">
-              <Shield className="w-5 h-5 text-blue-500" />
-              <span className="text-lg font-bold">{user.xp}</span>
+              <Clock className="w-8 h-8 text-blue-500" />
+              <span className="text-lg font-bold">
+                {user.adventureTime ? formatTime(user.adventureTime) : "--"}
+              </span>
               <span className="text-[10px] uppercase text-gray-400 font-bold">
-                Total XP
+                Fastest Run
               </span>
             </div>
           </div>
 
           <div className="w-full space-y-3">
-            <div className="text-xs font-bold uppercase text-gray-400 tracking-wider ml-1">
+            {/* Badges ... (rest same) */}
+            <div className="text-sm font-bold uppercase text-gray-400 tracking-wider ml-1">
               Badges Earned
             </div>
             {user.badges && user.badges.length > 0 ? (
@@ -448,19 +609,52 @@ function UserProfileModal({
   );
 }
 
-// ... Keep PodiumCard, UserRankRow, LeaderboardSkeleton as they were
 function PodiumCard({
   user,
   rank,
   onClick,
+  gamemode, // Passed Prop
 }: {
   user: LeaderboardUser;
   rank: number;
   onClick: () => void;
+  gamemode: string;
 }) {
   const isFirst = rank === 1;
   const isSecond = rank === 2;
   const isThird = rank === 3;
+
+  // Determine Metric to Display based on Gamemode
+  const renderMetric = () => {
+    if (gamemode === "MULTIPLAYER") {
+      return (
+        <>
+          <TrophyIcon
+            className={`w-5 h-5 ${
+              isFirst ? "text-yellow-400" : "text-gray-300"
+            }`}
+          />
+          {user.trophies}
+        </>
+      );
+    } else if (gamemode === "CHALLENGES") {
+      return (
+        <>
+          <StarIcon className={`w-5 h-5 text-yellow-400`} />
+          {user.stars || 0}
+        </>
+      );
+    } else if (gamemode === "ADVENTURE") {
+      return (
+        <>
+          <Clock className={`w-5 h-5 text-blue-400`} />
+          <span className="text-lg">
+            {user.adventureTime ? formatTime(user.adventureTime) : "--"}
+          </span>
+        </>
+      );
+    }
+  };
 
   return (
     <div
@@ -491,10 +685,12 @@ function PodiumCard({
       `}
       >
         {isFirst ? (
-          <Crown className="w-6 h-6 text-white fill-current" />
-        ) : (
-          <Medal className="w-6 h-6 text-white fill-current" />
-        )}
+          <MedalGold className="w-8 h-8 text-white fill-current" />
+        ) : isSecond ? (
+          <MedalSilver className="w-8 h-8 text-white fill-current" />
+        ) : isThird ? (
+          <MedalBronze className="w-8 h-8 text-white fill-current" />
+        ) : null}
       </div>
 
       <div
@@ -520,13 +716,15 @@ function PodiumCard({
         <span className="text-xs text-indigo-500 font-semibold">
           Level {user.level}
         </span>
+        {user.section && (
+          <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">
+            {user.section}
+          </span>
+        )}
       </div>
 
       <div className="mt-4 bg-gray-900 dark:bg-white/10 rounded-xl px-4 py-2 text-xl font-black text-white flex items-center gap-2 shadow-inner">
-        <TrophyIcon
-          className={`w-5 h-5 ${isFirst ? "text-yellow-400" : "text-gray-300"}`}
-        />
-        {user.trophies}
+        {renderMetric()}
       </div>
     </div>
   );
@@ -538,12 +736,14 @@ function UserRankRow({
   isCurrentUser,
   isSticky = false,
   onClick,
+  gamemode, // Passed Prop
 }: {
   user: LeaderboardUser;
   rank: number;
   isCurrentUser: boolean;
   isSticky?: boolean;
   onClick: () => void;
+  gamemode: string;
 }) {
   let bgColor = "bg-white dark:bg-gray-900";
   let borderColor = "border-gray-100 dark:border-gray-800";
@@ -551,7 +751,7 @@ function UserRankRow({
 
   if (isCurrentUser) {
     if (rank === 1) {
-      bgColor = "bg-yellow-50 dark:bg-yellow-900/40";
+      bgColor = "bg-yellow-50 dark:bg-yellow-900";
       borderColor = "border-yellow-400";
       highlightClass =
         "ring-2 ring-yellow-400 ring-offset-2 dark:ring-offset-gray-900";
@@ -561,15 +761,41 @@ function UserRankRow({
       highlightClass =
         "ring-2 ring-gray-400 ring-offset-2 dark:ring-offset-gray-900";
     } else if (rank === 3) {
-      bgColor = "bg-orange-50 dark:bg-orange-900/40";
+      bgColor = "bg-orange-50 dark:bg-orange-900";
       borderColor = "border-orange-400";
       highlightClass =
         "ring-2 ring-orange-400 ring-offset-2 dark:ring-offset-gray-900";
     } else {
-      bgColor = "bg-indigo-50 dark:bg-indigo-950/50";
+      bgColor = "bg-indigo-50 dark:bg-indigo-950";
       borderColor = "border-indigo-200 dark:border-indigo-800";
     }
   }
+
+  // Determine Metric to Display based on Gamemode
+  const renderMetric = () => {
+    if (gamemode === "MULTIPLAYER") {
+      return (
+        <>
+          <TrophyIcon className="w-4 h-4 text-yellow-500 fill-current" />
+          {user.trophies}
+        </>
+      );
+    } else if (gamemode === "CHALLENGES") {
+      return (
+        <>
+          <StarIcon className="w-4 h-4 text-yellow-500 fill-current" />
+          {user.stars || 0}
+        </>
+      );
+    } else if (gamemode === "ADVENTURE") {
+      return (
+        <>
+          <Clock className="w-4 h-4 text-blue-500" />
+          {user.adventureTime ? formatTime(user.adventureTime) : "--"}
+        </>
+      );
+    }
+  };
 
   return (
     <div
@@ -607,6 +833,14 @@ function UserRankRow({
             <span className="font-semibold text-indigo-500">{user.league}</span>
             <span>•</span>
             <span>Lvl {user.level}</span>
+            {user.section && (
+              <>
+                <span>•</span>
+                <span className="uppercase font-bold tracking-wide">
+                  {user.section}
+                </span>
+              </>
+            )}
           </div>
         </div>
       </div>
@@ -619,8 +853,7 @@ function UserRankRow({
               : "text-gray-900 dark:text-white"
           }`}
         >
-          <TrophyIcon className="w-4 h-4 text-yellow-500 fill-current" />
-          {user.trophies}
+          {renderMetric()}
         </div>
       </div>
     </div>

@@ -20,26 +20,22 @@ import {
   Check,
   Lock,
   Crown,
-  Zap, // Added for test button
+  Zap,
+  Frown,
 } from "lucide-react";
 import { motion } from "framer-motion";
 import { cn } from "~/lib/utils";
-import { STREAK_MILESTONES, calculateStreakUpdate } from "~/lib/streak-logic"; // Connected Logic
+import {
+  STREAK_MILESTONES,
+  calculateStreakUpdate,
+  getStreakState,
+  StreakStatus,
+  getPhDateString,
+  UIVisualState,
+} from "~/lib/streak-logic";
+import { FlameIcon, SnowflakeIcon } from "../ui/Icons";
 
-// --- HELPERS (Visuals only) ---
-
-const getPhDate = () => {
-  const now = new Date();
-  const phTimeStr = now.toLocaleString("en-US", { timeZone: "Asia/Manila" });
-  return new Date(phTimeStr);
-};
-
-const getPhISODate = (date: Date): string => {
-  const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, "0");
-  const day = String(date.getDate()).padStart(2, "0");
-  return `${year}-${month}-${day}`;
-};
+/* --------------------------- ANIMATIONS --------------------------- */
 
 const containerVariants = {
   hidden: { opacity: 0 },
@@ -51,107 +47,138 @@ const itemVariants = {
   visible: { y: 0, opacity: 1 },
 };
 
+/* --------------------------- COMPONENT --------------------------- */
+
 export function StreakTab() {
   const { user, updateProfile } = useAuth();
+
   const [calendarDays, setCalendarDays] = useState<any[]>([]);
   const [currentMonth, setCurrentMonth] = useState("");
   const [isProcessing, setIsProcessing] = useState(false);
 
-  // Modal State
+  // Modals
   const [selectedMilestone, setSelectedMilestone] = useState<any | null>(null);
+  const [streakStatusModal, setStreakStatusModal] = useState<{
+    show: boolean;
+    status: StreakStatus;
+    message: string;
+  }>({ show: false, status: "NONE", message: "" });
 
   const currentStreak = user?.streaks || 0;
-  const freezeCount = (user as any)?.streakFreezes || 0;
-  const activeDatesRaw = (user as any)?.activeDates;
+  const freezeCount = user?.streakFreezes || 0;
+  const activeDatesRaw = user?.activeDates || [];
+  const frozenDatesRaw = (user as any)?.frozenDates || [];
 
-  // Generate Dynamic Milestones List
+  // Determine Visual State (Orange, Blue, Gray)
+  const visualState = getStreakState(user);
+  const todayDate = getPhDateString();
+  const hasPlayedToday = activeDatesRaw.includes(todayDate);
+
+  /* --------------------------- MILESTONES --------------------------- */
+
   const milestonesList = Object.entries(STREAK_MILESTONES)
     .map(([days, reward]) => ({
-      days: parseInt(days),
+      days: Number(days),
       ...reward,
-      earned: currentStreak >= parseInt(days),
+      earned: currentStreak >= Number(days),
     }))
     .sort((a, b) => a.days - b.days);
 
-  // --- LOGIC INTEGRATION: Calendar Generation ---
-  useEffect(() => {
-    const activeDays = activeDatesRaw || [];
-    const today = getPhDate();
-    const todayStr = getPhISODate(today);
+  /* --------------------------- CALENDAR --------------------------- */
 
+  useEffect(() => {
+    // Generate Calendar based on PH time
+    const today = new Date(
+      new Date().toLocaleString("en-US", { timeZone: "Asia/Manila" })
+    );
+
+    // Set display month
     setCurrentMonth(today.toLocaleString("default", { month: "long" }));
 
     const year = today.getFullYear();
     const month = today.getMonth();
-    const firstDayOfMonth = new Date(year, month, 1).getDay();
+
+    // First day of current month
+    const firstDay = new Date(year, month, 1).getDay();
+    // Total days in current month
     const daysInMonth = new Date(year, month + 1, 0).getDate();
 
-    const days = [];
+    const days: any[] = [];
 
-    for (let i = 0; i < firstDayOfMonth; i++) {
-      days.push({ day: 0, isPadding: true });
+    // Add padding for previous month
+    for (let i = 0; i < firstDay; i++) {
+      days.push({ isPadding: true });
     }
 
-    for (let day = 1; day <= daysInMonth; day++) {
-      const date = new Date(year, month, day);
-      const dateStr = getPhISODate(date);
-      const isToday = dateStr === todayStr;
+    // Build day objects
+    for (let d = 1; d <= daysInMonth; d++) {
+      // Create a date object for this specific day (noon to avoid dst/boundary issues)
+      const dateObj = new Date(year, month, d, 12, 0, 0);
 
-      let isActive = activeDays.includes(dateStr);
-      // Visual fix: If local streak > 0 and it's today, assume active visually
-      if (isToday && currentStreak > 0 && activeDays.includes(todayStr))
-        isActive = true;
+      // Format to YYYY-MM-DD using our consistent logic
+      const dateStr = new Intl.DateTimeFormat("en-CA", {
+        timeZone: "Asia/Manila",
+        year: "numeric",
+        month: "2-digit",
+        day: "2-digit",
+      }).format(dateObj);
 
-      const isFuture = date.setHours(0, 0, 0, 0) > today.setHours(0, 0, 0, 0);
+      const isToday = dateStr === todayDate;
 
       days.push({
-        day,
+        day: d,
         isPadding: false,
         isToday,
-        isActive,
-        isFuture,
+        isActive: activeDatesRaw.includes(dateStr),
+        isFrozen: frozenDatesRaw.includes(dateStr),
+        // If the date string is "greater" than today's string, it's future
+        isFuture: dateStr > todayDate,
       });
     }
 
     setCalendarDays(days);
-  }, [currentStreak, activeDatesRaw]);
+  }, [currentStreak, activeDatesRaw, frozenDatesRaw, todayDate]);
 
-  // --- HANDLER: Manual Test Button ---
+  /* --------------------------- TEST BUTTON --------------------------- */
+
   const handleTestStreak = async () => {
     if (!user || isProcessing) return;
     setIsProcessing(true);
 
     try {
-      console.log("--- Running Streak Logic ---");
       const result = calculateStreakUpdate(user);
-      console.log("Result:", result);
 
-      if (result.shouldUpdate) {
-        // Update DB via Context
-        await updateProfile({
-          streaks: result.newStreak,
-          activeDates: result.newActiveDates,
-          coins: result.newCoins,
-          streakFreezes: result.newFreezes,
-          badges: result.newBadges,
-        });
-
-        const msg =
-          result.messages.length > 0
-            ? result.messages.join("\n")
-            : "Streak maintained!";
-        alert(`✅ Success!\n${msg}`);
-      } else {
-        console.log("No update needed (Already active today)");
-        alert("📅 You have already extended your streak today!");
+      if (!result.shouldUpdate) {
+        alert("📅 You already saved your streak today!");
+        setIsProcessing(false);
+        return;
       }
-    } catch (error) {
-      console.error("Streak Test Failed:", error);
-      alert("❌ Error updating streak. Check console.");
+
+      await updateProfile({
+        streaks: result.newStreak,
+        activeDates: result.newActiveDates,
+        coins: result.newCoins,
+        streakFreezes: result.newFreezes,
+        badges: result.newBadges,
+        // @ts-ignore
+        frozenDates: result.newFrozenDates,
+      });
+
+      // Show Status Modal
+      setStreakStatusModal({
+        show: true,
+        status: result.status,
+        message: result.messages.join(" "),
+      });
+    } catch (e) {
+      console.error(e);
+      alert("❌ Failed to update streak.");
     } finally {
       setIsProcessing(false);
     }
   };
+
+  /* --------------------------- UI --------------------------- */
 
   return (
     <div className="max-w-6xl mx-auto space-y-8 pb-12">
@@ -162,24 +189,24 @@ export function StreakTab() {
         className="flex items-center justify-between gap-3"
       >
         <div className="flex items-center gap-3">
-          <Flame className="w-8 h-8 text-orange-500" />
+          <FlameIcon className="w-8 h-8 text-orange-500" />
           <h1 className="text-4xl font-extrabold text-gray-900 dark:text-white">
             Your Streak
           </h1>
         </div>
 
-        {/* TEST BUTTON */}
         <Button
           variant="outline"
           onClick={handleTestStreak}
-          disabled={isProcessing}
-          className="gap-2 border-orange-200 bg-orange-50 text-orange-600 hover:bg-orange-100 hover:text-orange-700 dark:border-orange-900 dark:bg-orange-950/30 dark:text-orange-400"
+          disabled={isProcessing || hasPlayedToday}
+          className="gap-2"
         >
           {isProcessing ? (
-            <span className="animate-pulse">Processing...</span>
+            "Processing..."
           ) : (
             <>
-              <Zap className="w-4 h-4 fill-current" /> Test Streak
+              <Zap className="w-4 h-4" />
+              {hasPlayedToday ? "Streak Saved" : "Test Streak"}
             </>
           )}
         </Button>
@@ -193,7 +220,7 @@ export function StreakTab() {
         animate="visible"
       >
         <motion.div variants={itemVariants} className="lg:col-span-2 space-y-6">
-          <CurrentStreakCard streak={currentStreak} />
+          <CurrentStreakCard streak={currentStreak} visualState={visualState} />
           <StreakCalendarCard month={currentMonth} days={calendarDays} />
         </motion.div>
 
@@ -205,6 +232,81 @@ export function StreakTab() {
           />
         </motion.div>
       </motion.div>
+
+      {/* --- STATUS MODAL (BROKEN / FROZEN / CONTINUED) --- */}
+      <Dialog
+        open={streakStatusModal.show}
+        onOpenChange={(open) =>
+          !open && setStreakStatusModal((prev) => ({ ...prev, show: false }))
+        }
+      >
+        <DialogContent className="sm:max-w-sm text-center">
+          <div className="flex flex-col items-center gap-4 py-4">
+            {/* FROZEN STATE */}
+            {streakStatusModal.status === "FROZEN" && (
+              <>
+                <div className="w-24 h-24 rounded-full bg-blue-100 dark:bg-blue-900/30 flex items-center justify-center mb-2 animate-bounce">
+                  <Snowflake className="w-12 h-12 text-blue-500" />
+                </div>
+                <h2 className="text-2xl font-black text-blue-600 dark:text-blue-400">
+                  Streak Frozen!
+                </h2>
+                <p className="text-gray-600 dark:text-gray-300">
+                  You missed a day, but your{" "}
+                  <span className="font-bold">Streak Freeze</span> saved you.
+                </p>
+              </>
+            )}
+
+            {/* BROKEN STATE */}
+            {streakStatusModal.status === "BROKEN" && (
+              <>
+                <div className="w-24 h-24 rounded-full bg-gray-200 dark:bg-gray-800 flex items-center justify-center mb-2 grayscale">
+                  <Frown className="w-12 h-12 text-gray-500" />
+                </div>
+                <h2 className="text-2xl font-black text-gray-700 dark:text-gray-300">
+                  Streak Broken
+                </h2>
+                <p className="text-gray-600 dark:text-gray-400">
+                  You missed a day without a freeze. Your streak has reset to 1.
+                </p>
+              </>
+            )}
+
+            {/* CONTINUED / FIRST STATE */}
+            {(streakStatusModal.status === "CONTINUED" ||
+              streakStatusModal.status === "FIRST") && (
+              <>
+                <div className="w-24 h-24 rounded-full bg-orange-100 dark:bg-orange-900/30 flex items-center justify-center mb-2 animate-pulse">
+                  <Flame className="w-12 h-12 text-orange-500 fill-orange-500" />
+                </div>
+                <h2 className="text-2xl font-black text-orange-500">
+                  Streak Extended!
+                </h2>
+                <p className="text-gray-600 dark:text-gray-300">
+                  Keep up the great work!
+                </p>
+              </>
+            )}
+
+            <Button
+              className="w-full mt-4"
+              variant={
+                streakStatusModal.status === "FROZEN"
+                  ? "default"
+                  : streakStatusModal.status === "BROKEN"
+                  ? "secondary"
+                  : "default"
+              }
+              onClick={() =>
+                setStreakStatusModal((prev) => ({ ...prev, show: false }))
+              }
+            >
+              Continue
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
 
       {/* --- MILESTONE MODAL --- */}
       <Dialog
@@ -225,7 +327,6 @@ export function StreakTab() {
           </DialogHeader>
 
           <div className="py-6 space-y-4">
-            {/* Reward Box */}
             <div className="flex items-center justify-center gap-4 p-4 bg-gray-50 dark:bg-gray-800 rounded-2xl border-2 border-dashed border-gray-200 dark:border-gray-700">
               <div className="flex flex-col items-center">
                 <span className="text-xs uppercase font-bold text-gray-400">
@@ -274,15 +375,67 @@ export function StreakTab() {
 
 // --- Sub-components ---
 
-function CurrentStreakCard({ streak }: { streak: number }) {
+function CurrentStreakCard({
+  streak,
+  visualState,
+}: {
+  streak: number;
+  visualState: UIVisualState;
+}) {
+  let bgColor = "bg-gray-200 dark:bg-gray-800";
+  let textColor = "text-gray-500 dark:text-gray-400";
+  let flameColor = "text-gray-400 fill-gray-400";
+  let statusText = "Streak Inactive";
+  let statusIcon = <Flame className="w-16 h-16 drop-shadow-md" />;
+
+  if (visualState === "ACTIVE") {
+    bgColor = "bg-gradient-to-br from-orange-400 to-red-500";
+    textColor = "text-white";
+    flameColor = "text-white fill-white animate-pulse";
+    statusText = "🔥 You're on fire!";
+  } else if (visualState === "FROZEN") {
+    bgColor = "bg-gradient-to-br from-blue-400 to-cyan-500";
+    textColor = "text-white";
+    flameColor = "text-white fill-white";
+    statusText = "❄️ Streak Frozen";
+    statusIcon = <Snowflake className="w-16 h-16 drop-shadow-md text-white" />;
+  } else {
+    // Broken or At Risk
+    bgColor = "bg-gray-200 dark:bg-gray-800";
+    textColor = "text-gray-500 dark:text-gray-400";
+    flameColor = "text-gray-400 fill-gray-400 grayscale";
+    statusText = "⚠️ Start a streak!";
+  }
+
   return (
-    <Card className="bg-gradient-to-br from-orange-400 to-red-500 text-white rounded-3xl shadow-lg overflow-hidden relative">
-      {/* Background Pattern */}
+    <Card
+      className={cn(
+        "rounded-3xl shadow-lg overflow-hidden relative transition-all duration-500",
+        bgColor,
+        textColor
+      )}
+    >
       <div className="absolute top-0 right-0 -mt-10 -mr-10 w-40 h-40 bg-white/10 rounded-full blur-3xl" />
 
       <CardContent className="p-8 flex items-center gap-6 relative z-10">
-        <div className="p-4 bg-white/20 rounded-full backdrop-blur-sm shadow-inner">
-          <Flame className="w-16 h-16 drop-shadow-md animate-pulse text-white fill-white" />
+        <div
+          className={cn(
+            "p-4 rounded-full backdrop-blur-sm shadow-inner transition-all",
+            visualState === "ACTIVE" || visualState === "FROZEN"
+              ? "bg-white/20"
+              : "bg-gray-300 dark:bg-gray-700"
+          )}
+        >
+          {visualState === "FROZEN" ? (
+            statusIcon
+          ) : (
+            <Flame
+              className={cn(
+                "w-16 h-16 drop-shadow-md transition-all",
+                flameColor
+              )}
+            />
+          )}
         </div>
         <div>
           <p className="text-sm font-bold uppercase tracking-wider opacity-80 mb-1">
@@ -291,8 +444,15 @@ function CurrentStreakCard({ streak }: { streak: number }) {
           <p className="text-6xl font-black drop-shadow-sm leading-none mb-2">
             {streak}
           </p>
-          <div className="inline-flex items-center px-3 py-1 rounded-full bg-white/20 text-xs font-bold backdrop-blur-sm">
-            {streak > 0 ? "🔥 You're on fire!" : "🌱 Start your streak today!"}
+          <div
+            className={cn(
+              "inline-flex items-center px-3 py-1 rounded-full text-xs font-bold backdrop-blur-sm",
+              visualState === "ACTIVE" || visualState === "FROZEN"
+                ? "bg-white/20"
+                : "bg-black/10"
+            )}
+          >
+            {statusText}
           </div>
         </div>
       </CardContent>
@@ -308,8 +468,6 @@ function StreakCalendarCard({ month, days }: { month: string; days: any[] }) {
       <CardHeader>
         <CardTitle className="text-2xl font-bold flex items-center justify-between">
           <span>{month}</span>
-          {/* Note: This simplistic check assumes if ANY day is active, streak is saved. 
-              Ideally, check if *today* is active. */}
           <div
             className={`text-xs px-3 py-1 rounded-full font-bold flex items-center gap-1 ${
               days.find((d) => d.isToday)?.isActive
@@ -340,24 +498,40 @@ function StreakCalendarCard({ month, days }: { month: string; days: any[] }) {
 
         <div className="grid grid-cols-7 gap-2">
           {days.map((day, index) => {
-            const isWarning = day.isToday && !day.isActive;
+            const isMissedToday = day.isToday && !day.isActive;
+
             return (
               <div
                 key={index}
                 className={cn(
                   "relative aspect-square rounded-xl flex items-center justify-center font-bold text-sm transition-all",
                   day.isPadding && "bg-transparent",
+
+                  // Future Days
                   day.isFuture &&
                     "bg-gray-50 dark:bg-gray-800/20 text-gray-300 dark:text-gray-700",
+
+                  // Past/Present Inactive (Default)
                   !day.isPadding &&
                     !day.isFuture &&
                     !day.isActive &&
+                    !day.isFrozen &&
                     !day.isToday &&
                     "bg-gray-100 dark:bg-gray-800/50 text-gray-400",
+
+                  // Active (Orange)
                   day.isActive &&
                     "bg-orange-500 text-white shadow-md shadow-orange-500/20 scale-105 border-2 border-white dark:border-gray-900",
-                  isWarning &&
-                    "bg-transparent text-gray-900 dark:text-white border-2 border-dashed border-red-300 dark:border-red-700",
+
+                  // Frozen (Blue)
+                  day.isFrozen &&
+                    "bg-blue-500 text-white shadow-md shadow-blue-500/20 border-2 border-white dark:border-gray-900",
+
+                  // Today Missing (Red Flashing)
+                  isMissedToday &&
+                    "bg-transparent text-gray-900 dark:text-white border-2 border-dashed border-red-400 dark:border-red-500 animate-pulse bg-red-50 dark:bg-red-900/10",
+
+                  // Today Active Ring
                   day.isToday &&
                     day.isActive &&
                     "ring-2 ring-offset-2 ring-orange-500 dark:ring-offset-gray-900"
@@ -383,7 +557,7 @@ function StreakInventoryCard({ freezeCount }: { freezeCount: number }) {
         <div className="flex items-center justify-between p-3 bg-blue-50 dark:bg-blue-900/20 rounded-2xl border border-blue-100 dark:border-blue-900/50">
           <div className="flex items-center gap-3">
             <div className="p-2 bg-white dark:bg-blue-900 rounded-xl shadow-sm">
-              <Snowflake className="w-6 h-6 text-blue-500" />
+              <SnowflakeIcon className="w-8 h-8 text-blue-500" />
             </div>
             <div>
               <div className="font-bold text-blue-900 dark:text-blue-100">
@@ -470,7 +644,11 @@ function StreakMilestonesCard({
 
               {/* Reward Pill */}
               <div className="flex items-center gap-1 bg-white dark:bg-black/20 px-2 py-1 rounded-lg text-xs font-bold text-gray-500">
-                <img src="/assets/icons/coinv2.png" className="w-3 h-3" />
+                <img
+                  src="/assets/icons/coinv2.png"
+                  className="w-3 h-3"
+                  alt="Coin"
+                />
                 {milestone.coins}
               </div>
             </div>

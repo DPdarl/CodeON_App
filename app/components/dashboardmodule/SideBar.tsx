@@ -15,9 +15,9 @@ import {
   GraduationCap, // Student Management
   UserCog, // Instructor Management
   ShieldAlert, // Admin Management
-  FileText, // User Reports
+  FileText,
+  HistoryIcon, // User Reports
 } from "lucide-react";
-import CodeOnLogo from "~/components/ui/CodeOnLogo";
 import { useState, useRef, useEffect } from "react";
 import {
   Dialog,
@@ -29,6 +29,20 @@ import {
 } from "~/components/ui/dialog";
 import { Button } from "~/components/ui/button";
 import { UserData } from "~/contexts/AuthContext";
+import {
+  AdminIcon,
+  CoinIcon,
+  ControllerIcon,
+  CrownIcon,
+  FlameIcon,
+  HomeIcon,
+  IconStore,
+  InstructorIcon,
+  ProfileIcon,
+  ReportIcon,
+  ScrollQuestIcon,
+  TogaIcon,
+} from "../ui/Icons";
 
 interface SidebarProps {
   activeTab: string;
@@ -58,18 +72,34 @@ export function Sidebar({
 
   const allNavItems = [
     // Standard Tabs
-    { id: "home", label: "Home", icon: Home, roles: ALL_ROLES },
-    { id: "play", label: "Play", icon: Gamepad2, roles: ALL_ROLES },
-    { id: "leaderboard", label: "Leaderboard", icon: Crown, roles: ALL_ROLES },
-    { id: "progress", label: "Quests", icon: Scroll, roles: ALL_ROLES },
-    { id: "streak", label: "Streak", icon: Flame, roles: ALL_ROLES },
-    { id: "store", label: "Store", icon: Store, roles: ALL_ROLES },
+    { id: "home", label: "Home", icon: HomeIcon, roles: ALL_ROLES },
+    { id: "play", label: "Play", icon: ControllerIcon, roles: ALL_ROLES },
+    {
+      id: "leaderboard",
+      label: "Leaderboard",
+      icon: CrownIcon,
+      roles: ALL_ROLES,
+    },
+    {
+      id: "quest",
+      label: "Quests",
+      icon: ScrollQuestIcon,
+      roles: ALL_ROLES,
+    },
+    {
+      id: "match-history",
+      label: "Match History",
+      icon: HistoryIcon,
+      roles: ALL_ROLES,
+    },
+    { id: "streak", label: "Streak", icon: FlameIcon, roles: ALL_ROLES },
+    { id: "store", label: "Store", icon: IconStore, roles: ALL_ROLES },
 
     // Management Tabs (RBAC)
     {
       id: "student-management",
       label: "Students",
-      icon: GraduationCap,
+      icon: TogaIcon,
       roles: STAFF_ROLES,
     },
     {
@@ -81,18 +111,18 @@ export function Sidebar({
     {
       id: "admin-management",
       label: "Admins",
-      icon: ShieldAlert,
+      icon: AdminIcon,
       roles: SUPER_ONLY,
     },
     {
       id: "user-reports",
       label: "Reports",
-      icon: FileText,
+      icon: ReportIcon,
       roles: STAFF_ROLES,
     },
 
     // Standard User Tabs
-    { id: "profile", label: "Profile", icon: UserCircle, roles: ALL_ROLES },
+    { id: "profile", label: "Profile", icon: ProfileIcon, roles: ALL_ROLES },
     {
       id: "more",
       label: "More",
@@ -158,7 +188,7 @@ export function Sidebar({
         {/* Logo Section */}
         <div className="px-3 py-6 border-b">
           <div className="flex items-center  ">
-            <CodeOnLogo className="h-8 w-8 mx-3" />
+            <CoinIcon className="h-8 w-8 mx-3" />
             {!collapsed && (
               <div className="flex flex-col">
                 <h1 className="text-xl font-bold leading-tight font-pixelify dark:text-white">
@@ -200,7 +230,7 @@ export function Sidebar({
                     }
                     title={collapsed ? item.label : ""}
                   >
-                    <Icon className="h-5 w-5 flex-shrink-0" />
+                    <Icon className="h-6 w-6 flex-shrink-0" />
                     {!collapsed && (
                       <span className="truncate">{item.label}</span>
                     )}

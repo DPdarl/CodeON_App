@@ -1,75 +1,92 @@
-// app/hooks/useGameProgress.ts
+// app/hooks/useGameProgress.tsx
 import { useState } from "react";
 import { useAuth } from "~/contexts/AuthContext";
-import { awardXPToUser } from "~/lib/leveling-system";
+import { calculateProgress } from "~/lib/leveling-system";
+import { getLeagueFromXP } from "~/lib/leaderboard-logic";
+import { toast } from "sonner";
+
+// Define the interface to match LevelUpModalProps
+interface Reward {
+  type: "coin" | "badge" | "unlock";
+  label: string;
+}
 
 export function useGameProgress() {
-  const { user, syncUser } = useAuth();
-
-  // Modal State
-  const [showLevelUp, setShowLevelUp] = useState(false);
-  const [earnedRewards, setEarnedRewards] = useState<
-    { type: "coin" | "badge" | "unlock"; label: string }[]
-  >([]);
-  const [newLevel, setNewLevel] = useState(1);
+  const { user, updateProfile } = useAuth();
   const [isProcessing, setIsProcessing] = useState(false);
+
+  const [levelUpModal, setLevelUpModal] = useState({
+    isOpen: false,
+    newLevel: 1,
+    rewards: [] as Reward[], // ✅ FIX: Correctly typed as Reward objects
+  });
 
   const grantXP = async (amount: number) => {
     if (!user || isProcessing) return;
+
     setIsProcessing(true);
+    const currentXP = user.xp || 0;
+    const currentLevel = user.level || 1;
+    const currentLeague = user.league || "Novice";
 
-    try {
-      // 1. Run the Logic & Update DB
-      // (Ensure awardXPToUser is exported from your ~/lib/leveling-system.ts)
-      const result = await awardXPToUser(user.uid, amount);
+    const newXP = currentXP + amount;
 
-      // 2. Prepare Rewards Data for UI
-      const currentRewards: typeof earnedRewards = [];
+    // 1. Calculate Level Up
+    const { currentLevel: calculatedLevel } = calculateProgress(newXP);
 
-      if (result.coinsEarned > 0) {
-        currentRewards.push({
-          type: "coin",
-          label: `+${result.coinsEarned} Coins`,
-        });
-      }
+    // 2. Calculate League Update
+    const newLeague = getLeagueFromXP(newXP);
 
-      // Check specific level milestones
-      if (result.newLevel > user.level!) {
-        // Level Up Happened!
-        if (result.newLevel === 5)
-          currentRewards.push({
-            type: "unlock",
-            label: "Multiplayer Unlocked",
-          });
-        if (result.newLevel % 5 === 0)
-          currentRewards.push({ type: "badge", label: "Milestone Badge" });
+    const updates: any = {
+      xp: newXP,
+      level: calculatedLevel,
+      // Update active dates to keep track of daily activity
+      activeDates: Array.from(
+        new Set([
+          ...(user.activeDates || []),
+          new Date().toISOString().split("T")[0],
+        ])
+      ),
+    };
 
-        setNewLevel(result.newLevel);
-        setEarnedRewards(currentRewards);
-        setShowLevelUp(true);
-      }
-
-      // 3. Sync Context immediately (Updates Home/Leaderboard instantly)
-      syncUser({
-        ...user,
-        xp: result.newTotalXP,
-        level: result.newLevel,
-        coins: (user.coins || 0) + result.coinsEarned,
-      });
-    } catch (error) {
-      console.error("XP Grant Failed", error);
-    } finally {
-      setIsProcessing(false);
+    // Only update league if it changed (e.g., Novice -> Bronze)
+    if (newLeague !== currentLeague) {
+      updates.league = newLeague;
+      toast.success(`Promoted to ${newLeague} League! 🏆`);
     }
+
+    // Handle Level Up Logic
+    if (calculatedLevel > currentLevel) {
+      // ✅ FIX: Define rewards as objects, not strings
+      const rewards: Reward[] = [
+        { type: "coin", label: "100 Coins" },
+        { type: "unlock", label: "Streak Freeze" },
+      ];
+
+      updates.coins = (user.coins || 0) + 100;
+      updates.streakFreezes = (user.streakFreezes || 0) + 1;
+
+      setLevelUpModal({
+        isOpen: true,
+        newLevel: calculatedLevel,
+        rewards,
+      });
+    } else {
+      // Just a simple toast for normal XP gain
+      toast.success(`+${amount} XP`);
+    }
+
+    // Save to DB (This saves XP, Level, League, and Rewards)
+    await updateProfile(updates);
+
+    setIsProcessing(false);
   };
 
   return {
     grantXP,
     levelUpModal: {
-      isOpen: showLevelUp,
-      newLevel,
-      rewards: earnedRewards,
-      close: () => setShowLevelUp(false),
+      ...levelUpModal,
+      close: () => setLevelUpModal((prev) => ({ ...prev, isOpen: false })),
     },
     isProcessing,
   };

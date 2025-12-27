@@ -20,8 +20,8 @@ import {
   ArrowRight,
   CheckCircle,
   Map as MapIcon,
-  Gamepad2,
   Loader2,
+  Lightbulb,
 } from "lucide-react";
 import { cn } from "~/lib/utils";
 import { Button } from "~/components/ui/button";
@@ -50,8 +50,7 @@ import confetti from "canvas-confetti";
 const NODE_HEIGHT = 160;
 const NODE_GAP = 32;
 
-// --- VISUAL TEMPLATE (Keeps your UI style strict) ---
-// We map DB data to these visual slots based on order_index
+// --- 1. VISUAL TEMPLATE (Strict Styling) ---
 const CHAPTER_VISUALS = [
   {
     id: 1,
@@ -100,7 +99,142 @@ const CHAPTER_VISUALS = [
   },
 ];
 
-// --- COMPONENT: ROADMAP NODE (Strictly your UI) ---
+// --- 2. C# CONTENT DATA (From PDF) ---
+const CSHARP_LESSONS = [
+  {
+    id: 1,
+    title: "Understanding C# and .NET",
+    description: "C# is the language; .NET is the engine.",
+    content_markdown:
+      "C# (pronounced C-sharp) is a modern programming language created by Microsoft. It runs on .NET, a platform that translates your code so the computer can execute it.\n\nThink of C# as the language you speak, and .NET as the translator that makes your program run.",
+    codeSnippet: `Console.WriteLine("Hello, CodeON!");`,
+    keyTakeaway:
+      "C# is the language you write, and .NET is the platform that runs it.",
+    xp_reward: 50,
+  },
+  {
+    id: 2,
+    title: "Basic Syntax and Structure",
+    description: "The grammar rules of your code.",
+    content_markdown:
+      "Syntax is the set of rules that defines how C# code must be written. Just like grammar in English, correct syntax ensures the computer understands you.\n\nEvery C# program follows a basic structure, typically starting with a 'Main' method.",
+    codeSnippet: `using System;
+class Program {
+  static void Main() {
+    Console.WriteLine("Welcome to CodeON");
+  }
+}`,
+    keyTakeaway: "C# programs must follow a clear structure to work correctly.",
+    xp_reward: 100,
+  },
+  {
+    id: 3,
+    title: "Variables and Data Types",
+    description: "Containers for storing information.",
+    content_markdown:
+      "A variable is a container for data. Each variable has a 'type' telling C# what kind of value it holds:\n\n• int: Whole numbers\n• double: Decimals\n• bool: True or False\n• string: Text",
+    codeSnippet: `int age = 18;
+string name = "Alex";
+bool isStudent = true;`,
+    keyTakeaway:
+      "Choose the correct data type based on the kind of data you want to store.",
+    xp_reward: 150,
+  },
+  {
+    id: 4,
+    title: "Operators",
+    description: "Math and logic symbols.",
+    content_markdown:
+      "Operators are symbols used to perform actions:\n\n• Arithmetic: + (Add), * (Multiply)\n• Comparison: == (Equal), > (Greater than)\n• Logical: && (And), ! (Not)",
+    codeSnippet: `int total = 5 + 3;
+bool isPassed = total >= 8;`,
+    keyTakeaway: "Operators help your code think and calculate.",
+    xp_reward: 150,
+  },
+  {
+    id: 5,
+    title: "Control Structures",
+    description: "Making decisions with If and Loops.",
+    content_markdown:
+      "Control structures decide the flow of your program.\n\n• If Statements: Run code only if a condition is true.\n• Loops (for, while): Repeat tasks automatically.",
+    codeSnippet: `if (score >= 75) {
+  Console.WriteLine("You passed!");
+}
+
+for (int i = 0; i < 3; i++) {
+  Console.WriteLine("Hello");
+}`,
+    keyTakeaway: "They control decisions and repetition in your program.",
+    xp_reward: 200,
+  },
+  {
+    id: 6,
+    title: "Methods",
+    description: "Reusable blocks of code.",
+    content_markdown:
+      "A method is a block of code designed to perform a specific task. Instead of writing the same code twice, you wrap it in a method and call it whenever needed.",
+    codeSnippet: `static int Add(int a, int b) {
+  return a + b;
+}`,
+    keyTakeaway:
+      "Methods group actions into reusable blocks to keep code clean.",
+    xp_reward: 200,
+  },
+  {
+    id: 7,
+    title: "Classes and Objects",
+    description: "Blueprints and instances.",
+    content_markdown:
+      "A Class is a blueprint (like a drawing of a car). An Object is the actual instance (the red car in your driveway).\n\nClasses define properties (color, speed) and behaviors (drive, stop).",
+    codeSnippet: `class Car {
+  public string color;
+}
+
+Car myCar = new Car();
+myCar.color = "Red";`,
+    keyTakeaway: "Classes define objects, and objects use those definitions.",
+    xp_reward: 250,
+  },
+  {
+    id: 8,
+    title: "OOP Pillars",
+    description: "The 4 foundations of software design.",
+    content_markdown:
+      "Object-Oriented Programming (OOP) relies on four pillars:\n\n1. Encapsulation: Protecting data\n2. Inheritance: Reusing code\n3. Polymorphism: Flexibility\n4. Abstraction: Hiding complexity",
+    codeSnippet: `// 1. Encapsulation
+// 2. Inheritance
+// 3. Polymorphism
+// 4. Abstraction`,
+    keyTakeaway: "OOP pillars help build scalable and maintainable software.",
+    xp_reward: 300,
+  },
+  {
+    id: 9,
+    title: "Arrays and Collections",
+    description: "Storing lists of data.",
+    content_markdown:
+      "An Array stores multiple values of the same type in a fixed list. Collections (like Lists) are more flexible and can grow or shrink.",
+    codeSnippet: `int[] numbers = { 1, 2, 3 };`,
+    keyTakeaway: "Arrays and collections store groups of data efficiently.",
+    xp_reward: 250,
+  },
+  {
+    id: 10,
+    title: "Error Handling",
+    description: "Preventing crashes with try-catch.",
+    content_markdown:
+      "Error handling prevents your program from crashing when something goes wrong (like dividing by zero).\n\nUse 'try' to run code and 'catch' to handle errors if they happen.",
+    codeSnippet: `try {
+  int num = int.Parse("abc");
+} catch {
+  Console.WriteLine("Error!");
+}`,
+    keyTakeaway: "Use try-catch to handle unexpected problems safely.",
+    xp_reward: 300,
+  },
+];
+
+// --- COMPONENT: ROADMAP NODE ---
 function RoadmapNode({ chapter, status, alignment, onClick }: any) {
   const Icon = chapter.icon;
   const isLocked = status === "locked";
@@ -198,7 +332,7 @@ function RoadmapNode({ chapter, status, alignment, onClick }: any) {
   );
 }
 
-// --- COMPONENT: LESSON OVERLAY (Logic Injected into your UI) ---
+// --- COMPONENT: LESSON OVERLAY ---
 function LessonOverlay({ chapter, onClose, onComplete }: any) {
   const [step, setStep] = useState<"lesson" | "game">("lesson");
 
@@ -206,7 +340,7 @@ function LessonOverlay({ chapter, onClose, onComplete }: any) {
   const [currentActivityIndex, setCurrentActivityIndex] = useState(0);
   const [isFinished, setIsFinished] = useState(false);
 
-  // Use DB activities or fallback to empty array
+  // Fallback to empty if no DB activities found yet
   const activities = chapter.activities || [];
   const currentActivity = activities[currentActivityIndex];
 
@@ -276,13 +410,42 @@ function LessonOverlay({ chapter, onClose, onComplete }: any) {
                 className="max-w-2xl mx-auto space-y-6"
               >
                 <div className="prose dark:prose-invert prose-lg">
-                  {/* Render content from DB or Fallback */}
+                  {/* TITLE */}
                   <h3 className="text-3xl font-bold text-indigo-600 dark:text-indigo-400">
                     {chapter.title}
                   </h3>
-                  <div className="whitespace-pre-wrap font-sans text-foreground/80 leading-relaxed">
-                    {chapter.content_markdown || "Content coming soon..."}
+
+                  {/* MAIN CONTENT */}
+                  <div className="whitespace-pre-wrap font-sans text-foreground/80 leading-relaxed text-lg">
+                    {chapter.content_markdown}
                   </div>
+
+                  {/* CODE SNIPPET */}
+                  {chapter.codeSnippet && (
+                    <div className="my-6 relative group">
+                      <div className="absolute -top-3 right-4 bg-gray-800 text-xs text-gray-400 px-2 py-1 rounded">
+                        C#
+                      </div>
+                      <pre className="bg-gray-950 text-gray-100 p-6 rounded-xl font-mono text-sm overflow-x-auto border border-gray-800 shadow-xl">
+                        <code>{chapter.codeSnippet}</code>
+                      </pre>
+                    </div>
+                  )}
+
+                  {/* KEY TAKEAWAY */}
+                  {chapter.keyTakeaway && (
+                    <div className="bg-yellow-50 dark:bg-yellow-900/10 border-l-4 border-yellow-500 p-4 rounded-r-lg mt-8 flex gap-3 items-start">
+                      <Lightbulb className="w-6 h-6 text-yellow-600 flex-shrink-0 mt-0.5" />
+                      <div>
+                        <h4 className="font-bold text-yellow-800 dark:text-yellow-500 text-sm uppercase tracking-wide">
+                          Key Takeaway
+                        </h4>
+                        <p className="text-yellow-900 dark:text-yellow-200">
+                          {chapter.keyTakeaway}
+                        </p>
+                      </div>
+                    </div>
+                  )}
                 </div>
               </motion.div>
             ) : (
@@ -347,7 +510,7 @@ function LessonOverlay({ chapter, onClose, onComplete }: any) {
                     )}
                   </div>
                 ) : (
-                  // SUCCESS SCREEN (Your "Complete Chapter" UI)
+                  // SUCCESS SCREEN
                   <>
                     <div className="w-32 h-32 bg-green-100 dark:bg-green-900/30 rounded-full flex items-center justify-center mb-6 animate-bounce">
                       <CheckCircle className="w-16 h-16 text-green-600" />
@@ -406,29 +569,30 @@ export default function AdventurePage() {
   // 1. FETCH & MAP DATA
   useEffect(() => {
     const fetchData = async () => {
-      // Fetch DB Lessons
+      // Fetch DB Activities (Optional - we can merge if they exist)
+      // For now, we rely primarily on CSHARP_LESSONS constant
+      // so it works instantly without DB population.
+
       const { data: dbLessons } = await supabase
         .from("lessons")
-        .select("*, activities(*)")
-        .order("order_index");
+        .select("id, order_index, activities(*)");
 
-      // Merge DB data with your UI Template (CHAPTER_VISUALS)
-      // This preserves your exact colors/icons while using DB content
+      // Merge: Visuals + C# Content + DB Activities (if any)
       const mergedLessons = CHAPTER_VISUALS.map((visual) => {
+        // Find C# content by ID
+        const content = CSHARP_LESSONS.find((c) => c.id === visual.id);
+        // Find DB activities by ID (if you added minigames in DB)
         const dbMatch = dbLessons?.find((l) => l.order_index === visual.id);
+
         return {
-          ...visual,
-          // If DB has data, use it; otherwise fallback or keep defaults
+          ...visual, // Visuals (Icon, Color)
+          ...content, // Content (Title, Markdown, Code)
+          // Use DB ID if exists, otherwise fallback to index for local key
           id: dbMatch?.id || visual.id,
-          title: dbMatch?.title || `Chapter ${visual.id}`,
-          description: dbMatch?.description || "Loading description...",
-          content_markdown: dbMatch?.content_markdown,
-          xp_reward: dbMatch?.xp_reward || 50,
+          // Merge activities if DB has them
           activities: dbMatch?.activities || [],
-          // Keep Visuals
+          // Keep strict order
           order_index: visual.id,
-          icon: visual.icon,
-          color: visual.color,
           activityType: visual.activityLabel,
         };
       });
@@ -443,7 +607,7 @@ export default function AdventurePage() {
   // 2. Logic: User Level
   const userLevel = user?.level || 1;
 
-  // 3. Logic: Green Line (Exact Formula)
+  // 3. Logic: Green Line
   const progressHeight =
     userLevel > 0
       ? (userLevel - 1) * (NODE_HEIGHT + NODE_GAP) + NODE_HEIGHT / 2
@@ -460,14 +624,21 @@ export default function AdventurePage() {
     const { error } = await supabase.from("user_lesson_progress").upsert(
       {
         user_id: user.uid,
-        lesson_id: selectedChapter.id,
+        lesson_id: selectedChapter.id, // Ensure this matches DB ID if strict FK
         status: "completed",
         completed_at: new Date().toISOString(),
       },
       { onConflict: "user_id, lesson_id" }
     );
 
-    if (error) console.error("Save failed:", error);
+    if (error) {
+      // If it fails (e.g. strict FK on lesson_id that doesn't exist in DB yet),
+      // just log it but allow UI to continue for demo purposes
+      console.warn(
+        "Progress save warning (Lesson might not exist in DB yet):",
+        error
+      );
+    }
 
     setSelectedChapter(null);
   };
@@ -512,7 +683,7 @@ export default function AdventurePage() {
           </div>
         </div>
 
-        {/* 2. The Map (Your Exact UI) */}
+        {/* 2. The Map */}
         <div className="relative w-full mt-12">
           {/* Gray Background Path */}
           <div className="absolute top-0 left-1/2 -translate-x-1/2 h-full w-2 bg-muted rounded-full" />

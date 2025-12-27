@@ -9,6 +9,11 @@ import { SettingsTab } from "./SettingsTab";
 import { AboutTab } from "./AboutTab";
 import { StoreTab } from "./StoreTab";
 import { ProfileTab } from "./ProfileTab";
+import { StudentManagementTab } from "../managementmodule/StudentManagementTab";
+import { InstructorManagementTab } from "../managementmodule/InstructorManagementTab";
+import { AdminManagementTab } from "../managementmodule/AdminManagementTab";
+import { UserReportTab } from "./UserReportTab";
+import { MatchHistoryTab } from "./MatchHistoryTab";
 
 // --- PLACEHOLDER IMPORTS (Replace these with actual files when you create them) ---
 // import { UserManagementTab } from "./UserManagementTab";
@@ -111,7 +116,7 @@ export function DashboardTabs({
       )}
       {activeTab === "play" && <PlayTab />}
       {activeTab === "leaderboard" && <LeaderboardTab />}
-      {activeTab === "progress" && <QuestTab />}
+      {activeTab === "quest" && <QuestTab />}
       {activeTab === "streak" && <StreakTab />}
       {activeTab === "store" && <StoreTab />}
       {activeTab === "profile" && (
@@ -122,35 +127,18 @@ export function DashboardTabs({
 
       {/* --- MANAGEMENT TABS --- */}
 
-      {/* 1. User Management (SuperAdmin, Admin, Instructor) */}
-      {activeTab === "user-management" && (
-        // <UserManagementTab user={user} />
-        <PlaceholderTab title="User Management" />
-      )}
-
       {/* 2. Student Management (SuperAdmin, Admin, Instructor) */}
-      {activeTab === "student-management" && (
-        // <StudentManagementTab user={user} />
-        <PlaceholderTab title="Student Management" />
-      )}
+      {activeTab === "student-management" && <StudentManagementTab />}
 
       {/* 3. Instructor Management (SuperAdmin, Admin) */}
-      {activeTab === "instructor-management" && (
-        // <InstructorManagementTab user={user} />
-        <PlaceholderTab title="Instructor Management" />
-      )}
+      {activeTab === "instructor-management" && <InstructorManagementTab />}
 
       {/* 4. Admin Management (SuperAdmin Only) */}
-      {activeTab === "admin-management" && (
-        // <AdminManagementTab user={user} />
-        <PlaceholderTab title="Admin Management" />
-      )}
+      {activeTab === "admin-management" && <AdminManagementTab />}
 
       {/* 5. User Reports (SuperAdmin, Admin, Instructor) */}
-      {activeTab === "user-reports" && (
-        // <UserReportsTab user={user} />
-        <PlaceholderTab title="User Reports" />
-      )}
+      {activeTab === "user-reports" && <UserReportTab />}
+      {activeTab === "match-history" && <MatchHistoryTab />}
     </div>
   );
 }

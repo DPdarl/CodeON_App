@@ -1,42 +1,739 @@
-import { Users, GraduationCap, Search } from "lucide-react";
+import { useState, useEffect } from "react";
+import { supabase } from "~/lib/supabase";
+import {
+  Card,
+  CardHeader,
+  CardTitle,
+  CardContent,
+  CardDescription,
+} from "~/components/ui/card";
 import { Button } from "~/components/ui/button";
 import { Input } from "~/components/ui/input";
-import { Card, CardContent, CardHeader, CardTitle } from "~/components/ui/card";
+import { Label } from "~/components/ui/label";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+  DialogDescription,
+} from "~/components/ui/dialog";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "~/components/ui/select";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "~/components/ui/tabs";
+import {
+  Search,
+  Plus,
+  MoreVertical,
+  Pencil,
+  Trash2,
+  KeyRound,
+  Loader2,
+  RefreshCw,
+  CheckCircle2,
+  XCircle,
+  UserPlus,
+  CalendarDays,
+  Copy,
+  Eye,
+  EyeOff,
+  Check,
+} from "lucide-react";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "~/components/ui/dropdown-menu";
+import { Badge } from "~/components/ui/badge";
+import { toast } from "sonner";
+
+// --- TYPES ---
+interface Student {
+  id: string;
+  student_id: string;
+  display_name: string;
+  email: string;
+  section: string;
+  role: string;
+  created_at: string;
+  google_bound: boolean;
+  birthdate?: string;
+}
+
+interface AccountRequest {
+  id: string;
+  student_id: string;
+  full_name: string;
+  section: string;
+  professor: string;
+  birthdate?: string;
+  created_at: string;
+  is_approved: boolean; // ✅ Added New Column
+}
+
+const SECTIONS = ["BSIT-1A", "BSIT-1B", "BSCS-1A", "BSIS", "BSAIS", "ACT"];
 
 export function StudentManagementTab() {
+  const [students, setStudents] = useState<Student[]>([]);
+  const [requests, setRequests] = useState<AccountRequest[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [searchQuery, setSearchQuery] = useState("");
+
+  // Modals
+  const [isAddOpen, setIsAddOpen] = useState(false);
+  const [isEditOpen, setIsEditOpen] = useState(false);
+  const [isDeleteOpen, setIsDeleteOpen] = useState(false);
+  const [selectedStudent, setSelectedStudent] = useState<Student | null>(null);
+
+  // State to track if we are currently approving a specific request ID
+  const [approvingRequestId, setApprovingRequestId] = useState<string | null>(
+    null
+  );
+
+  // Form & UI State
+  const [formData, setFormData] = useState({
+    studentId: "",
+    fullName: "",
+    email: "",
+    section: "",
+    birthdate: "",
+    password: "",
+  });
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
+
+  // --- FETCH DATA ---
+  const fetchData = async () => {
+    setIsLoading(true);
+
+    // 1. Fetch Students
+    const { data: studentData, error: studentError } = await supabase
+      .from("users")
+      .select("*")
+      .in("role", ["user", "student"])
+      .order("student_id", { ascending: true });
+
+    if (studentError) {
+      console.error("Error fetching students:", studentError);
+      toast.error("Failed to load students.");
+    } else {
+      setStudents(studentData || []);
+    }
+
+    // 2. Fetch Requests (Fetch ALL to show history, ordered by newest)
+    const { data: reqData } = await supabase
+      .from("account_requests")
+      .select("*")
+      .order("created_at", { ascending: false });
+
+    if (reqData) setRequests(reqData);
+
+    setIsLoading(false);
+  };
+
+  useEffect(() => {
+    fetchData();
+  }, []);
+
+  // --- HANDLERS ---
+
+  const handleBirthdateChange = (date: string) => {
+    const generatedPass = date ? `Ici${date}` : "";
+    setFormData((prev) => ({
+      ...prev,
+      birthdate: date,
+      password: generatedPass,
+    }));
+  };
+
+  const handleCreateStudent = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setIsSubmitting(true);
+
+    try {
+      // 1. Create Profile Record
+      const { error } = await supabase.from("users").insert([
+        {
+          student_id: formData.studentId,
+          display_name: formData.fullName,
+          email: formData.email,
+          section: formData.section,
+          birthdate: formData.birthdate,
+          role: "user",
+        },
+      ]);
+
+      if (error) throw error;
+
+      // 2. ✅ If this came from a request, mark it as approved
+      if (approvingRequestId) {
+        await supabase
+          .from("account_requests")
+          .update({ is_approved: true, status: "approved" })
+          .eq("id", approvingRequestId);
+      }
+
+      toast.success(
+        <div className="flex flex-col gap-1">
+          <span className="font-bold">Student Record Created!</span>
+          <span className="text-xs">
+            Password: <span className="font-mono">{formData.password}</span>
+          </span>
+        </div>
+      );
+
+      handleCloseAddModal();
+      fetchData();
+    } catch (error: any) {
+      console.error(error);
+      toast.error("Failed to create: " + error.message);
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleUpdateStudent = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedStudent) return;
+    setIsSubmitting(true);
+
+    try {
+      const { error } = await supabase
+        .from("users")
+        .update({
+          student_id: formData.studentId,
+          display_name: formData.fullName,
+          email: formData.email,
+          section: formData.section,
+          birthdate: formData.birthdate,
+        })
+        .eq("id", selectedStudent.id);
+
+      if (error) throw error;
+
+      toast.success("Student updated");
+      setIsEditOpen(false);
+      fetchData();
+    } catch (error: any) {
+      toast.error("Update failed: " + error.message);
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleDeleteStudent = async () => {
+    if (!selectedStudent) return;
+    setIsSubmitting(true);
+    try {
+      const { error } = await supabase
+        .from("users")
+        .delete()
+        .eq("id", selectedStudent.id);
+      if (error) throw error;
+      toast.success("Student record deleted");
+      setIsDeleteOpen(false);
+      fetchData();
+    } catch (error: any) {
+      toast.error("Delete failed: " + error.message);
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleApproveRequest = (req: AccountRequest) => {
+    setApprovingRequestId(req.id); // ✅ Track ID
+    setFormData({
+      studentId: req.student_id,
+      fullName: req.full_name,
+      email: "",
+      section: req.section,
+      birthdate: req.birthdate || "",
+      password: req.birthdate ? `Ici${req.birthdate}` : "",
+    });
+    setIsAddOpen(true);
+  };
+
+  const handleRejectRequest = async (id: string) => {
+    if (!confirm("Reject and delete this request?")) return;
+    const { error } = await supabase
+      .from("account_requests")
+      .delete()
+      .eq("id", id);
+    if (!error) {
+      toast.success("Request rejected");
+      fetchData();
+    }
+  };
+
+  const copyToClipboard = (text: string) => {
+    navigator.clipboard.writeText(text);
+    toast.success("Password copied to clipboard");
+  };
+
+  // Helper to reset state on close
+  const handleCloseAddModal = () => {
+    setIsAddOpen(false);
+    setApprovingRequestId(null); // Reset tracking
+    setFormData({
+      studentId: "",
+      fullName: "",
+      email: "",
+      section: "",
+      birthdate: "",
+      password: "",
+    });
+  };
+
+  const openAddModal = () => {
+    setApprovingRequestId(null);
+    setFormData({
+      studentId: "",
+      fullName: "",
+      email: "",
+      section: "",
+      birthdate: "",
+      password: "",
+    });
+    setIsAddOpen(true);
+  };
+
+  const openEditModal = (s: Student) => {
+    setSelectedStudent(s);
+    setFormData({
+      studentId: s.student_id,
+      fullName: s.display_name,
+      email: s.email,
+      section: s.section,
+      birthdate: s.birthdate || "",
+      password: "",
+    });
+    setIsEditOpen(true);
+  };
+
+  const filteredStudents = students.filter(
+    (s) =>
+      s.display_name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      s.student_id?.toLowerCase().includes(searchQuery.toLowerCase())
+  );
+
+  // Filter out pending requests for the count badge
+  const pendingCount = requests.filter((r) => !r.is_approved).length;
+
   return (
-    <div className="space-y-6 animate-in fade-in duration-500">
-      <div className="flex items-center justify-between">
+    <div className="space-y-6">
+      <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight">
+          <h1 className="text-3xl font-bold text-gray-900 dark:text-white">
             Student Management
           </h1>
-          <p className="text-muted-foreground">
-            Manage student accounts and academic progress.
+          <p className="text-gray-500 dark:text-gray-400">
+            Manage student accounts and records.
           </p>
         </div>
-        <Button className="gap-2">
-          <GraduationCap className="h-4 w-4" /> Add Student
-        </Button>
+        <div className="flex gap-2">
+          <Button variant="outline" onClick={fetchData} disabled={isLoading}>
+            <RefreshCw
+              className={`w-4 h-4 mr-2 ${isLoading ? "animate-spin" : ""}`}
+            />{" "}
+            Refresh
+          </Button>
+          <Button
+            onClick={openAddModal}
+            className="bg-indigo-600 hover:bg-indigo-700"
+          >
+            <Plus className="w-4 h-4 mr-2" /> Add Student
+          </Button>
+        </div>
       </div>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Directory</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="flex gap-4 mb-4">
-            <div className="relative flex-1">
-              <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-              <Input placeholder="Search students..." className="pl-8" />
+      <Tabs defaultValue="active" className="w-full">
+        <TabsList className="grid w-full max-w-md grid-cols-2">
+          <TabsTrigger value="active">Active Students</TabsTrigger>
+          <TabsTrigger value="requests" className="relative">
+            Account Requests
+            {pendingCount > 0 && (
+              <span className="absolute -top-1 -right-1 flex h-4 w-4 items-center justify-center rounded-full bg-red-500 text-[10px] text-white">
+                {pendingCount}
+              </span>
+            )}
+          </TabsTrigger>
+        </TabsList>
+
+        {/* --- TAB: ACTIVE STUDENTS --- */}
+        <TabsContent value="active" className="mt-4">
+          <Card className="border-gray-200 dark:border-gray-800">
+            <CardHeader>
+              <div className="flex items-center justify-between">
+                <CardTitle>Student Directory</CardTitle>
+                <div className="relative w-64">
+                  <Search className="absolute left-2 top-2.5 h-4 w-4 text-gray-400" />
+                  <Input
+                    placeholder="Search..."
+                    className="pl-8 bg-gray-50 dark:bg-gray-900"
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                  />
+                </div>
+              </div>
+            </CardHeader>
+            <CardContent>
+              <div className="rounded-md border border-gray-200 dark:border-gray-800 overflow-hidden">
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm text-left">
+                    <thead className="bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 border-b border-gray-200 dark:border-gray-700">
+                      <tr>
+                        <th className="px-4 py-3">ID</th>
+                        <th className="px-4 py-3">Name</th>
+                        <th className="px-4 py-3">Section</th>
+                        <th className="px-4 py-3">Birthdate</th>
+                        <th className="px-4 py-3 text-right">Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-200 dark:divide-gray-800 bg-white dark:bg-gray-900">
+                      {isLoading ? (
+                        <tr>
+                          <td
+                            colSpan={5}
+                            className="p-4 text-center text-gray-500"
+                          >
+                            Loading...
+                          </td>
+                        </tr>
+                      ) : filteredStudents.length === 0 ? (
+                        <tr>
+                          <td
+                            colSpan={5}
+                            className="p-4 text-center text-gray-500"
+                          >
+                            No students found.
+                          </td>
+                        </tr>
+                      ) : (
+                        filteredStudents.map((s) => (
+                          <tr
+                            key={s.id}
+                            className="hover:bg-gray-50 dark:hover:bg-gray-800/50"
+                          >
+                            <td className="px-4 py-3 font-mono text-gray-600 dark:text-gray-400">
+                              {s.student_id}
+                            </td>
+                            <td className="px-4 py-3 font-bold">
+                              {s.display_name}
+                            </td>
+                            <td className="px-4 py-3">
+                              <Badge variant="outline">{s.section}</Badge>
+                            </td>
+                            <td className="px-4 py-3 text-gray-500">
+                              {s.birthdate || "-"}
+                            </td>
+                            <td className="px-4 py-3 text-right">
+                              <DropdownMenu>
+                                <DropdownMenuTrigger asChild>
+                                  <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    className="h-8 w-8"
+                                  >
+                                    <MoreVertical className="h-4 w-4" />
+                                  </Button>
+                                </DropdownMenuTrigger>
+                                <DropdownMenuContent align="end">
+                                  <DropdownMenuItem
+                                    onClick={() => openEditModal(s)}
+                                  >
+                                    <Pencil className="mr-2 h-4 w-4" /> Edit
+                                  </DropdownMenuItem>
+                                  <DropdownMenuItem
+                                    className="text-red-600"
+                                    onClick={() => {
+                                      setSelectedStudent(s);
+                                      setIsDeleteOpen(true);
+                                    }}
+                                  >
+                                    <Trash2 className="mr-2 h-4 w-4" /> Delete
+                                  </DropdownMenuItem>
+                                </DropdownMenuContent>
+                              </DropdownMenu>
+                            </td>
+                          </tr>
+                        ))
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        {/* --- TAB: ACCOUNT REQUESTS --- */}
+        <TabsContent value="requests" className="mt-4">
+          <Card className="border-gray-200 dark:border-gray-800">
+            <CardHeader>
+              <CardTitle>Access Requests</CardTitle>
+            </CardHeader>
+            <CardContent>
+              {requests.length === 0 ? (
+                <div className="text-center py-12 text-gray-500 bg-gray-50 dark:bg-gray-900 rounded-xl border border-dashed border-gray-200 dark:border-gray-800">
+                  <UserPlus className="w-12 h-12 mx-auto mb-3 opacity-20" />
+                  <p>No requests found.</p>
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  {requests.map((req) => (
+                    <div
+                      key={req.id}
+                      className={`flex items-center justify-between p-4 border rounded-xl shadow-sm transition-all
+                        ${
+                          req.is_approved
+                            ? "bg-gray-100 dark:bg-gray-800/50 border-gray-200 dark:border-gray-800 opacity-70"
+                            : "bg-white dark:bg-gray-900 border-gray-200 dark:border-gray-800"
+                        }
+                      `}
+                    >
+                      <div className="flex gap-4 items-center">
+                        <div
+                          className={`h-10 w-10 rounded-full flex items-center justify-center font-bold text-lg 
+                            ${
+                              req.is_approved
+                                ? "bg-gray-300 dark:bg-gray-700 text-gray-500"
+                                : "bg-indigo-100 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400"
+                            }`}
+                        >
+                          {req.full_name[0]}
+                        </div>
+                        <div>
+                          {/* ✅ VISUAL FEEDBACK: Line-through if approved */}
+                          <h4
+                            className={`font-bold ${
+                              req.is_approved
+                                ? "line-through text-gray-500"
+                                : "text-gray-900 dark:text-white"
+                            }`}
+                          >
+                            {req.full_name}
+                          </h4>
+                          <div className="flex gap-2 text-sm text-gray-500">
+                            <span className="font-mono">{req.student_id}</span>
+                            <span>•</span>
+                            <span>{req.section}</span>
+                            <span>•</span>
+                            <span className="flex items-center gap-1">
+                              <CalendarDays className="w-3 h-3" />{" "}
+                              {req.birthdate}
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="flex gap-2">
+                        {req.is_approved ? (
+                          <Badge
+                            variant="outline"
+                            className="bg-green-50 text-green-700 border-green-200 dark:bg-green-900/20 dark:text-green-400 gap-1 px-3 py-1"
+                          >
+                            <Check className="w-3 h-3" /> Approved
+                          </Badge>
+                        ) : (
+                          <>
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              className="text-red-500 hover:text-red-600 hover:bg-red-50"
+                              onClick={() => handleRejectRequest(req.id)}
+                            >
+                              <XCircle className="w-5 h-5" />
+                            </Button>
+                            <Button
+                              size="sm"
+                              className="bg-green-600 hover:bg-green-700 text-white gap-2"
+                              onClick={() => handleApproveRequest(req)}
+                            >
+                              <CheckCircle2 className="w-4 h-4" /> Approve
+                            </Button>
+                          </>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+      </Tabs>
+
+      {/* --- ADD/EDIT MODAL --- */}
+      <Dialog
+        open={isAddOpen || isEditOpen}
+        onOpenChange={(open) => {
+          if (!open) {
+            handleCloseAddModal();
+            setIsEditOpen(false);
+          }
+        }}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>
+              {isAddOpen ? "Add New Student" : "Edit Student"}
+            </DialogTitle>
+            <DialogDescription>
+              {isAddOpen ? "Create student record." : "Update details."}
+            </DialogDescription>
+          </DialogHeader>
+          <form
+            onSubmit={isAddOpen ? handleCreateStudent : handleUpdateStudent}
+            className="space-y-4"
+          >
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label>Student ID</Label>
+                <Input
+                  required
+                  value={formData.studentId}
+                  onChange={(e) =>
+                    setFormData({ ...formData, studentId: e.target.value })
+                  }
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>Section</Label>
+                <Select
+                  value={formData.section}
+                  onValueChange={(val) =>
+                    setFormData({ ...formData, section: val })
+                  }
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {SECTIONS.map((s) => (
+                      <SelectItem key={s} value={s}>
+                        {s}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
             </div>
-          </div>
-          <div className="rounded-md border p-8 text-center text-muted-foreground bg-muted/20">
-            <Users className="mx-auto h-10 w-10 opacity-20 mb-2" />
-            <p>Student list will appear here.</p>
-          </div>
-        </CardContent>
-      </Card>
+            <div className="space-y-2">
+              <Label>Full Name</Label>
+              <Input
+                required
+                value={formData.fullName}
+                onChange={(e) =>
+                  setFormData({ ...formData, fullName: e.target.value })
+                }
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>Email</Label>
+              <Input
+                required
+                type="email"
+                value={formData.email}
+                onChange={(e) =>
+                  setFormData({ ...formData, email: e.target.value })
+                }
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>Birthdate</Label>
+              <div className="relative">
+                <CalendarDays className="absolute left-3 top-2.5 h-4 w-4 text-gray-400" />
+                <Input
+                  required
+                  type="date"
+                  className="pl-10"
+                  value={formData.birthdate}
+                  onChange={(e) => handleBirthdateChange(e.target.value)}
+                />
+              </div>
+            </div>
+
+            {/* Password Display */}
+            {isAddOpen && (
+              <div className="space-y-2">
+                <Label>Initial Password (Auto-Generated)</Label>
+                <div className="flex gap-2">
+                  <div className="relative flex-1">
+                    <Input
+                      disabled
+                      value={formData.password}
+                      type={showPassword ? "text" : "password"}
+                      className="bg-gray-100 dark:bg-gray-800 font-mono pr-10"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowPassword(!showPassword)}
+                      className="absolute right-3 top-2.5 text-gray-400 hover:text-gray-600"
+                    >
+                      {showPassword ? (
+                        <EyeOff className="w-4 h-4" />
+                      ) : (
+                        <Eye className="w-4 h-4" />
+                      )}
+                    </button>
+                  </div>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="icon"
+                    onClick={() => copyToClipboard(formData.password)}
+                  >
+                    <Copy className="w-4 h-4" />
+                  </Button>
+                </div>
+                <p className="text-[10px] text-muted-foreground">
+                  Format: <span className="font-mono">IciYYYY-MM-DD</span>
+                </p>
+              </div>
+            )}
+
+            <DialogFooter className="mt-4">
+              <Button type="submit" disabled={isSubmitting}>
+                {isSubmitting ? (
+                  <Loader2 className="animate-spin" />
+                ) : isAddOpen ? (
+                  "Create Record"
+                ) : (
+                  "Save Changes"
+                )}
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
+
+      {/* --- DELETE MODAL --- */}
+      <Dialog open={isDeleteOpen} onOpenChange={setIsDeleteOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Delete Student?</DialogTitle>
+            <DialogDescription>This action cannot be undone.</DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="ghost" onClick={() => setIsDeleteOpen(false)}>
+              Cancel
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={handleDeleteStudent}
+              disabled={isSubmitting}
+            >
+              Delete
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

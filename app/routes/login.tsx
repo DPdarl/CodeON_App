@@ -1,4 +1,3 @@
-// app/routes/login.tsx
 import { useState, useEffect } from "react";
 import { useNavigate } from "@remix-run/react";
 import { useAuth } from "~/contexts/AuthContext";
@@ -6,6 +5,9 @@ import { Button } from "~/components/ui/button";
 import { Input } from "~/components/ui/input";
 import { Label } from "~/components/ui/label";
 import { Separator } from "~/components/ui/separator";
+import {
+  CalendarDays, // <--- ADD THIS
+} from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -21,11 +23,11 @@ import {
   SelectTrigger,
   SelectValue,
 } from "~/components/ui/select";
-import CodeOnLogo from "~/components/ui/CodeOnLogo";
 import { ThemeToggle } from "~/components/ThemeToggle";
 import { Loader2, User, Lock, Eye, EyeOff, AlertCircle } from "lucide-react";
 import { motion } from "framer-motion";
 import { supabase } from "~/lib/supabase";
+import { CoinIcon } from "~/components/ui/Icons";
 
 export default function Login() {
   const [studentId, setStudentId] = useState("");
@@ -34,7 +36,7 @@ export default function Login() {
   const [error, setError] = useState("");
   const [isLoading, setIsLoading] = useState(false);
 
-  // Modals State
+  // Modals
   const [showForgotPass, setShowForgotPass] = useState(false);
   const [showRequestAccount, setShowRequestAccount] = useState(false);
 
@@ -47,8 +49,17 @@ export default function Login() {
     setIsLoading(true);
 
     try {
-      await loginWithStudentId(studentId, password);
-      navigate("/dashboard");
+      // ✅ Wait for login and get the user object back
+      const user = await loginWithStudentId(studentId, password);
+
+      if (user) {
+        if (user.isOnboarded) {
+          navigate("/dashboard");
+        } else {
+          // ✅ Redirect to onboarding if this is their first time
+          navigate("/onboarding");
+        }
+      }
     } catch (err: any) {
       console.error(err);
       setError("Invalid Student ID or Password");
@@ -57,6 +68,8 @@ export default function Login() {
     }
   };
 
+  // ... rest of your JSX (Layout, Inputs, Modals) is fine ...
+  // Paste the rest of the existing Login UI code here (omitted for brevity)
   return (
     <div className="min-h-screen w-full flex bg-white dark:bg-gray-900 relative transition-colors duration-300">
       <div className="absolute top-4 right-4 z-50">
@@ -73,11 +86,11 @@ export default function Login() {
         <div className="relative z-10 text-center space-y-6 max-w-lg">
           <div className="flex justify-center mb-6">
             <div className="p-6 bg-white/10 backdrop-blur-xl rounded-3xl shadow-2xl border border-white/10">
-              <CodeOnLogo className="h-24 w-24" />
+              <CoinIcon className="h-24 w-24" />
             </div>
           </div>
           <h1 className="text-5xl font-extrabold text-white tracking-tight font-pixelify">
-            CodeON Arena
+            CodeON
           </h1>
           <p className="text-lg text-gray-300">
             Enter the battlefield. Master the code. Claim your victory.
@@ -205,7 +218,7 @@ export default function Login() {
         </motion.div>
       </div>
 
-      {/* --- MODALS --- */}
+      {/* Existing Modals */}
       <ForgotPasswordModal
         isOpen={showForgotPass}
         onClose={() => setShowForgotPass(false)}
@@ -218,7 +231,8 @@ export default function Login() {
   );
 }
 
-// --- FORGOT PASSWORD MODAL ---
+// ... ForgotPasswordModal & RequestAccountModal ...
+// (Keep these exactly as they were in your previous code)
 function ForgotPasswordModal({
   isOpen,
   onClose,
@@ -241,8 +255,9 @@ function ForgotPasswordModal({
           <DialogDescription>
             Default passwords follow the format:{" "}
             <span className="font-mono bg-gray-100 dark:bg-gray-800 px-1 rounded text-foreground font-bold">
-              StudentSurname123!
-            </span>
+              IciYYYY-MM-DD
+            </span>{" "}
+            (based on your birthdate)
           </DialogDescription>
         </DialogHeader>
 
@@ -316,7 +331,8 @@ function RequestAccountModal({
       student_id: formData.get("studentNo"),
       full_name: formData.get("fullName"),
       section: formData.get("section"),
-      professor: formData.get("professor"), // This will be the name from Select
+      professor: formData.get("professor"),
+      birthdate: formData.get("birthdate"), // Save Birthdate
       status: "pending",
       created_at: new Date().toISOString(),
     };
@@ -379,6 +395,25 @@ function RequestAccountModal({
                 required
                 placeholder="Last Name, First Name"
               />
+            </div>
+
+            {/* --- BIRTHDATE FIELD --- */}
+            <div className="space-y-2">
+              <Label>Birthdate</Label>
+              <div className="relative">
+                <CalendarDays className="absolute left-3 top-2.5 h-4 w-4 text-gray-400" />
+                <Input
+                  name="birthdate"
+                  type="date"
+                  required
+                  className="pl-10"
+                />
+              </div>
+              <p className="text-[11px] text-muted-foreground">
+                <span className="font-bold text-indigo-500">Note:</span> This
+                date will be used to generate your default password (Format:{" "}
+                <span className="font-mono">IciYYYY-MM-DD</span>).
+              </p>
             </div>
 
             {/* --- INSTRUCTOR DROPDOWN --- */}

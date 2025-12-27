@@ -1,4 +1,3 @@
-// app/components/dashboardmodule/SettingsTab.tsx
 import { useAuth } from "~/contexts/AuthContext";
 import {
   Card,
@@ -6,17 +5,19 @@ import {
   CardDescription,
   CardHeader,
   CardTitle,
+  CardFooter,
 } from "~/components/ui/card";
 import { Label } from "~/components/ui/label";
 import { Switch } from "~/components/ui/switch";
 import { Button } from "~/components/ui/button";
-import { Moon, Sun, Monitor, Volume2, Eye, Zap } from "lucide-react";
+import { Input } from "~/components/ui/input";
+import { Moon, Sun, Monitor, Eye, Zap, Lock, Loader2 } from "lucide-react";
 import { useState, useEffect } from "react";
+import { toast } from "sonner";
 
 export function SettingsTab() {
-  const { user, updateProfile } = useAuth();
+  const { user, updateProfile, updatePassword } = useAuth();
 
-  // Local state for immediate UI feedback
   const [settings, setSettings] = useState({
     theme: user?.settings?.theme || "system",
     reduceMotion: user?.settings?.reduceMotion || false,
@@ -24,7 +25,11 @@ export function SettingsTab() {
     soundEnabled: user?.settings?.soundEnabled ?? true,
   });
 
-  // Sync with user data when it loads
+  // Password State
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [isUpdatingPass, setIsUpdatingPass] = useState(false);
+
   useEffect(() => {
     if (user?.settings) {
       setSettings({
@@ -36,18 +41,15 @@ export function SettingsTab() {
     }
   }, [user]);
 
-  // Handle saving to database
   const handleSettingChange = async (key: string, value: any) => {
     const newSettings = { ...settings, [key]: value };
-    setSettings(newSettings); // Update UI immediately
+    setSettings(newSettings);
 
-    // Apply theme immediately
     if (key === "theme") {
       if (value === "dark") document.documentElement.classList.add("dark");
       else if (value === "light")
         document.documentElement.classList.remove("dark");
       else {
-        // System
         if (window.matchMedia("(prefers-color-scheme: dark)").matches) {
           document.documentElement.classList.add("dark");
         } else {
@@ -57,12 +59,34 @@ export function SettingsTab() {
     }
 
     try {
-      // Save to Firestore
-      await updateProfile({
-        settings: newSettings,
-      });
+      await updateProfile({ settings: newSettings });
     } catch (error) {
       console.error("Failed to save settings:", error);
+    }
+  };
+
+  const handlePasswordSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (newPassword !== confirmPassword) {
+      toast.error("Passwords do not match.");
+      return;
+    }
+    if (newPassword.length < 6) {
+      toast.error("Password must be at least 6 characters.");
+      return;
+    }
+
+    setIsUpdatingPass(true);
+    try {
+      await updatePassword(newPassword);
+      toast.success("Password updated successfully.");
+      setNewPassword("");
+      setConfirmPassword("");
+    } catch (error: any) {
+      console.error(error);
+      toast.error("Failed to update password. " + error.message);
+    } finally {
+      setIsUpdatingPass(false);
     }
   };
 
@@ -162,6 +186,58 @@ export function SettingsTab() {
             </div>
           </div>
         </CardContent>
+      </Card>
+
+      {/* NEW: Change Password Card */}
+      <Card className="bg-white dark:bg-gray-900 border-gray-200 dark:border-gray-800 border-t-4 border-t-red-500">
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Lock className="w-5 h-5 text-red-500" />
+            Security
+          </CardTitle>
+          <CardDescription>Update your password.</CardDescription>
+        </CardHeader>
+        <form onSubmit={handlePasswordSubmit}>
+          <CardContent className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="newPass">New Password</Label>
+              <Input
+                id="newPass"
+                type="password"
+                value={newPassword}
+                onChange={(e) => setNewPassword(e.target.value)}
+                required
+                placeholder="••••••"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="confirmPass">Confirm Password</Label>
+              <Input
+                id="confirmPass"
+                type="password"
+                value={confirmPassword}
+                onChange={(e) => setConfirmPassword(e.target.value)}
+                required
+                placeholder="••••••"
+              />
+            </div>
+          </CardContent>
+          <CardFooter>
+            <Button
+              type="submit"
+              disabled={isUpdatingPass}
+              className="w-full sm:w-auto"
+            >
+              {isUpdatingPass ? (
+                <>
+                  <Loader2 className="w-4 h-4 mr-2 animate-spin" /> Updating...
+                </>
+              ) : (
+                "Change Password"
+              )}
+            </Button>
+          </CardFooter>
+        </form>
       </Card>
     </div>
   );

@@ -1,3 +1,4 @@
+// app/components/dashboardmodule/SelectionCarousel.tsx
 import * as React from "react";
 import {
   Card,
@@ -26,42 +27,45 @@ const getLanguageStyle = (lang: string) => {
       return {
         icon: Terminal,
         gradient: "from-yellow-400 via-orange-500 to-orange-600",
-        badge:
-          "bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200",
+        shadow: "shadow-orange-500/20",
       };
     case "javascript":
       return {
         icon: Code2,
         gradient: "from-yellow-300 via-yellow-400 to-yellow-500",
-        badge:
-          "bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200",
+        shadow: "shadow-yellow-500/20",
+      };
+    case "html/css":
+      return {
+        icon: Code2,
+        gradient: "from-orange-400 via-red-500 to-red-600",
+        shadow: "shadow-red-500/20",
       };
     case "react":
       return {
         icon: Cpu,
         gradient: "from-cyan-400 via-blue-500 to-blue-600",
-        badge: "bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200",
+        shadow: "shadow-blue-500/20",
       };
     default:
       return {
         icon: Brain,
         gradient: "from-indigo-400 via-purple-500 to-purple-600",
-        badge:
-          "bg-indigo-100 text-indigo-800 dark:bg-indigo-900 dark:text-indigo-200",
+        shadow: "shadow-purple-500/20",
       };
   }
 };
 
-const getDifficultyStyle = (difficulty: "Easy" | "Medium" | "Hard") => {
+const getDifficultyColor = (difficulty: string) => {
   switch (difficulty) {
     case "Easy":
-      return "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200";
+      return "bg-green-500/10 text-green-600 dark:text-green-400 border-green-200 dark:border-green-900";
     case "Medium":
-      return "bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200";
+      return "bg-yellow-500/10 text-yellow-600 dark:text-yellow-400 border-yellow-200 dark:border-yellow-900";
     case "Hard":
-      return "bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200";
+      return "bg-red-500/10 text-red-600 dark:text-red-400 border-red-200 dark:border-red-900";
     default:
-      return "bg-gray-100 text-gray-800 dark:bg-gray-900 dark:text-gray-200";
+      return "bg-gray-500/10 text-gray-600 dark:text-gray-400 border-gray-200 dark:border-gray-800";
   }
 };
 
@@ -80,27 +84,28 @@ export function SelectionCarousel({
         align: "start",
         loop: true,
       }}
-      className="w-full"
+      className="w-full py-4"
     >
-      <CarouselContent>
+      <CarouselContent className="-ml-4">
         {challenges.map((challenge, index) => (
-          <CarouselItem key={index} className="md:basis-1/2 lg:basis-1/3">
-            <div className="p-1">
-              <ChallengeCard
-                challenge={challenge}
-                onSelect={() => onSelectChallenge(challenge)}
-              />
-            </div>
+          <CarouselItem
+            key={index}
+            className="pl-4 md:basis-1/2 lg:basis-1/3 xl:basis-1/3"
+          >
+            <ChallengeCard
+              challenge={challenge}
+              onSelect={() => onSelectChallenge(challenge)}
+            />
           </CarouselItem>
         ))}
       </CarouselContent>
-      <CarouselPrevious className="ml-10" />
-      <CarouselNext className="mr-10" />
+      <CarouselPrevious className="-left-4 h-12 w-12 border-none bg-white/80 dark:bg-gray-800/80 backdrop-blur-md shadow-lg hover:bg-white dark:hover:bg-gray-700" />
+      <CarouselNext className="-right-4 h-12 w-12 border-none bg-white/80 dark:bg-gray-800/80 backdrop-blur-md shadow-lg hover:bg-white dark:hover:bg-gray-700" />
     </Carousel>
   );
 }
 
-// --- The New Redesigned Challenge Card ---
+// --- Enhanced Challenge Card ---
 function ChallengeCard({
   challenge,
   onSelect,
@@ -111,56 +116,75 @@ function ChallengeCard({
   const {
     icon: Icon,
     gradient,
-    badge: langBadge,
-    // @ts-ignore
+    shadow,
   } = getLanguageStyle(challenge.language || "General");
-  const diffBadge = getDifficultyStyle(challenge.difficulty);
+
+  const difficultyClass = getDifficultyColor(challenge.difficulty);
 
   return (
-    <Card className="h-[350px] relative flex flex-col overflow-hidden rounded-3xl shadow-lg transition-all duration-300 hover:shadow-2xl hover:-translate-y-1 border-gray-100 dark:border-gray-800">
-      {/* Background Gradient & Icon */}
+    <div className="group relative h-[400px] flex flex-col rounded-[2rem] bg-white dark:bg-gray-900 border border-gray-100 dark:border-gray-800 shadow-lg transition-all duration-300 hover:-translate-y-2 hover:shadow-2xl overflow-hidden">
+      {/* --- Top Gradient Banner --- */}
       <div
-        className={`absolute inset-0 h-40 bg-gradient-to-br ${gradient} opacity-20 dark:opacity-30`}
+        className={`absolute top-0 left-0 right-0 h-32 bg-gradient-to-br ${gradient} opacity-90 transition-all duration-500`}
       />
-      <div className="absolute top-6 right-6 p-3 rounded-2xl bg-white/30 dark:bg-black/30 backdrop-blur-sm">
-        <Icon className="w-8 h-8 text-gray-900 dark:text-white opacity-80" />
+
+      {/* --- Watermark Icon --- */}
+      <div className="absolute -right-6 -top-6 transition-transform duration-500 group-hover:scale-110 group-hover:rotate-12">
+        <Icon className="w-44 h-44 text-white opacity-20 mix-blend-overlay" />
       </div>
 
-      {/* Content */}
-      <CardHeader className="relative z-10">
-        <div className="flex gap-2 mb-2">
-          <Badge className={diffBadge}>{challenge.difficulty}</Badge>
-          <Badge className={langBadge}>
-            {/* @ts-ignore */}
+      {/* --- Content Container --- */}
+      <div className="relative z-10 flex flex-col h-full p-6">
+        {/* Badges Row */}
+        <div className="flex items-center gap-2 mb-auto">
+          {/* Glassmorphic Language Badge */}
+          <span className="px-3 py-1 rounded-full text-[11px] font-bold uppercase tracking-wider bg-white/20 backdrop-blur-md text-white border border-white/30 shadow-sm">
             {challenge.language || "General"}
-          </Badge>
+          </span>
+
+          {/* Difficulty Badge (Floats on white part in design, but here fits nicely on banner too) */}
+          <span className="px-3 py-1 rounded-full text-[11px] font-bold uppercase tracking-wider bg-black/20 backdrop-blur-md text-white border border-white/10 shadow-sm">
+            {challenge.difficulty}
+          </span>
         </div>
-        <CardTitle className="text-2xl font-bold text-gray-900 dark:text-white">
-          {challenge.title}
-        </CardTitle>
-      </CardHeader>
 
-      <CardContent className="relative z-10 flex-1">
-        <CardDescription className="text-base text-gray-600 dark:text-gray-400 line-clamp-3">
-          {challenge.description}
-        </CardDescription>
-      </CardContent>
+        {/* Main Text Content */}
+        <div className="mt-16 space-y-3">
+          <h3 className="text-2xl font-black text-gray-900 dark:text-white leading-tight line-clamp-2 group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors">
+            {challenge.title}
+          </h3>
+          <p className="text-sm font-medium text-gray-500 dark:text-gray-400 line-clamp-3 leading-relaxed">
+            {challenge.description}
+          </p>
+        </div>
 
-      <CardFooter className="relative z-10 mt-auto p-6 bg-white/30 dark:bg-black/20 backdrop-blur-sm">
-        <div className="flex justify-between items-center w-full">
-          <div className="flex items-center gap-1.5 text-lg font-bold text-green-600 dark:text-green-400">
-            <Zap className="w-5 h-5 fill-current" />
-            <span>{challenge.xp} XP</span>
+        {/* Footer Area */}
+        <div className="mt-6 pt-5 border-t border-gray-100 dark:border-gray-800 flex items-center justify-between">
+          {/* XP Reward */}
+          <div className="flex flex-col">
+            <span className="text-[10px] uppercase font-bold text-gray-400 tracking-wider">
+              Reward
+            </span>
+            <div className="flex items-center gap-1.5 text-yellow-500 font-black text-xl drop-shadow-sm">
+              <Zap className="w-5 h-5 fill-current" />
+              <span>{challenge.xp}</span>
+            </div>
           </div>
+
+          {/* Action Button */}
           <Button
             onClick={onSelect}
-            className="bg-gray-900 dark:bg-white text-white dark:text-gray-900 hover:bg-indigo-600 dark:hover:bg-indigo-200 font-bold rounded-xl shadow-lg transition-all group"
+            className={`
+              h-12 px-8 rounded-xl font-bold text-white shadow-lg transition-all duration-300
+              bg-gradient-to-r ${gradient} ${shadow}
+              hover:shadow-xl hover:scale-105 active:scale-95 border-0
+            `}
           >
-            Start{" "}
-            <ArrowRight className="w-4 h-4 ml-1.5 transition-transform group-hover:translate-x-1" />
+            Start
+            <ArrowRight className="w-5 h-5 ml-2 transition-transform group-hover:translate-x-1" />
           </Button>
         </div>
-      </CardFooter>
-    </Card>
+      </div>
+    </div>
   );
 }

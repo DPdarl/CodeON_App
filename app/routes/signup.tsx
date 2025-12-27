@@ -7,7 +7,6 @@ import { Button } from "~/components/ui/button";
 import { Input } from "~/components/ui/input";
 import { Label } from "~/components/ui/label";
 import { Separator } from "~/components/ui/separator";
-import CodeOnLogo from "~/components/ui/CodeOnLogo";
 // 2. Kept ThemeToggle from your request
 import { ThemeToggle } from "~/components/ThemeToggle";
 import {
@@ -20,6 +19,7 @@ import {
   Trophy,
 } from "lucide-react";
 import { motion } from "framer-motion";
+import { CoinIcon } from "~/components/ui/Icons";
 
 export default function SignUp() {
   const [email, setEmail] = useState("");
@@ -121,7 +121,7 @@ export default function SignUp() {
         <div className="relative z-10 text-center space-y-8 max-w-lg">
           <div className="flex justify-center">
             <div className="p-6 bg-white/10 backdrop-blur-xl rounded-3xl shadow-2xl border border-white/10">
-              <CodeOnLogo className="h-24 w-24" />
+              <CoinIcon className="h-24 w-24" />
             </div>
           </div>
           <h1 className="text-5xl font-extrabold text-white tracking-tight leading-tight font-pixelify">

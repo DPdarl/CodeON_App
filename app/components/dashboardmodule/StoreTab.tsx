@@ -18,21 +18,12 @@ import {
   DialogHeader,
   DialogTitle,
 } from "~/components/ui/dialog";
-import {
-  Store as StoreIcon,
-  Snowflake,
-  Heart,
-  Lightbulb,
-  Loader2,
-  Backpack,
-  Minus,
-  Plus,
-  ShoppingBag,
-} from "lucide-react";
+import { Loader2, Backpack, Minus, Plus, ShoppingBag } from "lucide-react";
 import { motion } from "framer-motion";
 import { useAuth } from "~/contexts/AuthContext";
 import { toast } from "sonner";
 import { POWER_UPS, processPurchase, type ShopItem } from "~/lib/store-logic";
+import { SnowflakeIcon, BulbIcon, HeartIcon, IconStore } from "../ui/Icons";
 
 export function StoreTab() {
   const { user, updateProfile } = useAuth();
@@ -100,7 +91,7 @@ export function StoreTab() {
       >
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
           <div className="flex items-center gap-3">
-            <StoreIcon className="w-8 h-8 text-indigo-500" />
+            <IconStore className="w-8 h-8 text-indigo-500" />
             <h1 className="text-4xl font-extrabold text-gray-900 dark:text-white">
               The Store
             </h1>
@@ -128,7 +119,7 @@ export function StoreTab() {
       <Tabs defaultValue="powerups" className="w-full">
         <TabsList className="grid w-full grid-cols-2 max-w-md mx-auto h-12 rounded-xl">
           <TabsTrigger value="powerups" className="h-10 rounded-lg">
-            <Lightbulb className="w-4 h-4 mr-2" />
+            <BulbIcon className="w-4 h-4 mr-2" />
             Power-Ups
           </TabsTrigger>
           <TabsTrigger value="inventory" className="h-10 rounded-lg">
@@ -165,14 +156,15 @@ export function StoreTab() {
             <InventoryCard
               name="Streak Freeze"
               count={user?.streakFreezes || 0}
-              icon={Snowflake}
+              icon={SnowflakeIcon}
               color="text-blue-500"
               description="Protect your streak for a day."
             />
             <InventoryCard
               name="Hints"
               count={user?.hints || 0}
-              icon={Lightbulb}
+              icon={BulbIcon}
+              image="/assets/icons/bulb.png"
               color="text-yellow-500"
               description="Get help on tough challenges."
             />
@@ -180,7 +172,7 @@ export function StoreTab() {
               name="Hearts"
               count={user?.hearts || 0}
               max={5}
-              icon={Heart}
+              icon={HeartIcon}
               color="text-red-500"
               description="Lives remaining."
             />
@@ -393,13 +385,18 @@ function InventoryCard({
   icon: Icon,
   color,
   description,
+  image,
 }: any) {
   return (
     <Card className="bg-white dark:bg-gray-900 shadow-sm border border-gray-100 dark:border-gray-800 rounded-3xl flex items-center p-4 gap-4">
       <div
-        className={`w-14 h-14 rounded-2xl bg-gray-50 dark:bg-gray-800 flex items-center justify-center`}
+        className={`w-14 h-14 rounded-2xl bg-gray-50 dark:bg-gray-800 flex items-center justify-center shrink-0`}
       >
-        <Icon className={`w-7 h-7 ${color}`} />
+        {image ? (
+          <img src={image} alt={name} className="w-9 h-9 object-contain" />
+        ) : (
+          <Icon className={`w-7 h-7 ${color}`} />
+        )}
       </div>
       <div>
         <div className="text-sm font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">

@@ -16,12 +16,23 @@ export const STREAK_MILESTONES: Record<
 
 /* ----------------------------- DATE HELPERS ------------------------------ */
 
-// PH calendar day (Duolingo-style)
-export const getPhDateString = () => {
+// Robust PH Date Getter (YYYY-MM-DD)
+// Uses Intl.DateTimeFormat to avoid local timezone shifts during ISO conversion
+export const getPhDateString = (offsetDays = 0) => {
   const now = new Date();
-  return new Date(now.toLocaleString("en-US", { timeZone: "Asia/Manila" }))
-    .toISOString()
-    .split("T")[0];
+  if (offsetDays !== 0) {
+    now.setDate(now.getDate() + offsetDays);
+  }
+
+  const formatter = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Asia/Manila",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  });
+
+  // en-CA outputs YYYY-MM-DD directly
+  return formatter.format(now);
 };
 
 const diffInDays = (a: string, b: string) => {
@@ -32,14 +43,63 @@ const diffInDays = (a: string, b: string) => {
 
 /* ----------------------------- RESULT TYPE ------------------------------ */
 
+export type StreakStatus =
+  | "CONTINUED"
+  | "FROZEN"
+  | "BROKEN"
+  | "FIRST"
+  | "NONE"
+  | "RECOVERED";
+
 export interface StreakUpdateResult {
   shouldUpdate: boolean;
+  status: StreakStatus;
   newStreak: number;
   newActiveDates: string[];
+  newFrozenDates: string[];
   newCoins: number;
   newFreezes: number;
   newBadges: string[];
   messages: string[];
+}
+
+/* --------------------------- HELPER: GET CURRENT STATE ------------------- */
+
+export type UIVisualState = "ACTIVE" | "FROZEN" | "BROKEN";
+
+/**
+ * Determines the visual state of the streak (Orange, Blue, or Gray)
+ * based on the user's history relative to TODAY (PH Time).
+ */
+export function getStreakState(user: UserData | null): UIVisualState {
+  if (!user) return "BROKEN";
+
+  const today = getPhDateString();
+  const activeDates = user.activeDates ?? [];
+  const frozenDates = (user as any).frozenDates ?? [];
+
+  // 1. Played Today? -> Active
+  if (activeDates.includes(today)) return "ACTIVE";
+
+  const lastActive = activeDates.at(-1);
+  if (!lastActive) return "BROKEN"; // No history
+
+  const yesterday = getPhDateString(-1);
+
+  // 2. Played Yesterday? -> Active (waiting for today)
+  if (lastActive === yesterday) return "ACTIVE";
+
+  // 3. Frozen Yesterday? -> Frozen (Blue state)
+  // This means they missed yesterday but it was caught by a freeze
+  if (frozenDates.includes(yesterday)) return "FROZEN";
+
+  // 4. Check if we ARE currently in a frozen gap (for gaps > 1 day)
+  // If the last active date is far back, but ALL days since then are in frozenDates
+  // Check the most recent missing day (yesterday). If it is frozen, we are SAFE.
+  if (frozenDates.includes(yesterday)) return "FROZEN";
+
+  // 5. Otherwise -> Broken (Gray state)
+  return "BROKEN";
 }
 
 /* --------------------------- MAIN STREAK LOGIC --------------------------- */
@@ -47,63 +107,98 @@ export interface StreakUpdateResult {
 export function calculateStreakUpdate(user: UserData): StreakUpdateResult {
   const today = getPhDateString();
   const activeDates = user.activeDates ?? [];
+  const frozenDates = (user as any).frozenDates ?? [];
+
   const lastActive = activeDates.at(-1) ?? null;
 
   const result: StreakUpdateResult = {
     shouldUpdate: false,
+    status: "NONE",
     newStreak: user.streaks ?? 0,
     newActiveDates: [...activeDates],
+    newFrozenDates: [...frozenDates],
     newCoins: user.coins ?? 0,
     newFreezes: user.streakFreezes ?? 0,
     newBadges: user.badges ?? [],
     messages: [],
   };
 
-  /* 1️⃣ Already played today */
+  /* 1️⃣ Already active today */
   if (lastActive === today) return result;
 
   result.shouldUpdate = true;
   result.newActiveDates.push(today);
 
-  /* 2️⃣ First ever activity */
+  /* 2️⃣ First ever streak */
   if (!lastActive) {
     result.newStreak = 1;
+    result.status = "FIRST";
     result.messages.push("🔥 Streak Started!");
     return rewardMilestone(result);
   }
 
   const dayGap = diffInDays(lastActive, today);
 
-  /* 3️⃣ Duolingo Rules */
-  if (dayGap === 1) {
-    // Normal continuation
+  /* 3️⃣ Logic Evaluation */
+  if (dayGap <= 1) {
+    // --- Normal continuation (1 day gap or 0 if same day logic failed above) ---
+    // Note: diffInDays might return 0 if called on same day, but we handled that.
+    // dayGap 1 means Yesterday -> Today
     result.newStreak += 1;
-  } else if (dayGap === 2 && result.newFreezes > 0) {
-    // Missed 1 day → Freeze saves streak (NO increment on missed day)
-    result.newFreezes -= 1;
-    result.newStreak += 1;
-    result.messages.push("❄️ Streak Freeze Used!");
+    result.status = "CONTINUED";
+    result.messages.push("🔥 Streak Continued!");
+    return rewardMilestone(result);
   } else {
-    // Hard reset
-    result.newStreak = 1;
-    result.messages.push("💔 Streak Reset. New streak started!");
+    // --- Gap Detected (> 1 day) ---
+    const daysMissed = dayGap - 1;
+
+    if (result.newFreezes >= daysMissed) {
+      // --- FROZEN: Has enough freezes to cover the gap ---
+      result.newFreezes -= daysMissed;
+      // We extend the streak because they technically "saved" it
+      result.newStreak += 1;
+      result.status = "FROZEN";
+
+      // Mark the missed days as "Frozen"
+      for (let i = 1; i <= daysMissed; i++) {
+        const missedDate = getPhDateString(-i);
+        if (!result.newFrozenDates.includes(missedDate)) {
+          result.newFrozenDates.push(missedDate);
+        }
+      }
+
+      result.messages.push(
+        `❄️ Streak Frozen! Used ${daysMissed} freeze(s) to save your streak.`
+      );
+    } else {
+      // --- BROKEN: Not enough freezes ---
+      result.newStreak = 1; // Reset to 1
+      result.status = "BROKEN";
+      result.messages.push("💔 Streak Broken. Starting fresh!");
+    }
   }
 
-  return rewardMilestone(result);
+  return result;
 }
 
 /* --------------------------- MILESTONE REWARD --------------------------- */
 
 function rewardMilestone(result: StreakUpdateResult): StreakUpdateResult {
   const milestone = STREAK_MILESTONES[result.newStreak];
+
   if (!milestone) return result;
 
-  result.newCoins += milestone.coins;
-  result.messages.push(`🎉 ${milestone.title}! +${milestone.coins} Coins`);
+  const alreadyHasBadge =
+    milestone.badge && result.newBadges.includes(milestone.badge);
 
-  if (milestone.badge && !result.newBadges.includes(milestone.badge)) {
-    result.newBadges.push(milestone.badge);
-    result.messages.push(`🏅 Badge Unlocked: ${milestone.title}`);
+  if (!alreadyHasBadge) {
+    result.newCoins += milestone.coins;
+    result.messages.push(`🎉 ${milestone.title}! +${milestone.coins} Coins`);
+
+    if (milestone.badge) {
+      result.newBadges.push(milestone.badge);
+      result.messages.push(`🏅 Badge Unlocked: ${milestone.title}`);
+    }
   }
 
   return result;
