@@ -11,19 +11,16 @@ import {
   DialogTitle,
 } from "~/components/ui/dialog";
 import {
-  Medal,
   Award,
   Crown,
   Calendar,
-  Zap,
-  Shield,
   Info,
   Filter,
   ChevronDown,
   Gamepad2,
-  Clock, // Added for Adventure mode
+  Clock,
 } from "lucide-react";
-import { motion, AnimatePresence } from "framer-motion";
+import { motion } from "framer-motion";
 import { AvatarDisplay } from "./AvatarDisplay";
 import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
@@ -40,14 +37,11 @@ import {
   TooltipTrigger,
 } from "~/components/ui/tooltip";
 import {
-  CrownIcon,
-  FlameIcon,
   MedalBronze,
   MedalGold,
   MedalSilver,
   TrophyIcon,
-  XpOrb,
-  StarIcon, // Ensure StarIcon is imported
+  StarIcon,
 } from "../ui/Icons";
 import { getLeagueFromXP } from "~/lib/leaderboard-logic";
 
@@ -81,8 +75,9 @@ interface LeaderboardUser {
   badges?: string[];
   streaks?: number;
   section?: string;
-  stars?: number; // Added for Challenges mode
-  adventureTime?: number; // Added for Adventure mode (seconds)
+  stars?: number;
+  // REFACTORED: Now using totalRuntime from DB
+  totalRuntime?: number;
 }
 
 const LEADERBOARD_CACHE_KEY = "codeon_leaderboard_cache";
@@ -102,7 +97,7 @@ export function LeaderboardTab() {
     null
   );
   const [sectionFilter, setSectionFilter] = useState("ALL");
-  const [gamemode, setGamemode] = useState("MULTIPLAYER"); // NEW: Gamemode Filter
+  const [gamemode, setGamemode] = useState("MULTIPLAYER");
 
   const [users, setUsers] = useState<LeaderboardUser[]>(() => {
     if (typeof window !== "undefined") {
@@ -134,14 +129,13 @@ export function LeaderboardTab() {
           if (gamemode === "MULTIPLAYER") {
             query = query.order("trophies", { ascending: false });
           } else if (gamemode === "CHALLENGES") {
-            // Assumes 'stars' column exists in DB
-            query = query.order("stars", { ascending: false });
+            query = query.order("stars", { ascending: false }); // Assuming 'stars' exists
           } else if (gamemode === "ADVENTURE") {
-            // Assumes 'adventure_time' column exists in DB (seconds)
-            // Filter out users who haven't completed it (null time)
+            // REFACTORED QUERY: Sort by total_runtime ASC
+            // Filter out '0' values (users who haven't played)
             query = query
-              .not("adventure_time", "is", null)
-              .order("adventure_time", { ascending: true });
+              .gt("total_runtime", 0)
+              .order("total_runtime", { ascending: true });
           }
 
           const { data, error } = await query.limit(100);
@@ -162,8 +156,9 @@ export function LeaderboardTab() {
               badges: u.badges || [],
               streaks: u.streaks || 0,
               section: u.section,
-              stars: u.stars || 0, // Map stars
-              adventureTime: u.adventure_time, // Map adventure_time
+              stars: u.stars || 0,
+              // Map DB column to Interface
+              totalRuntime: u.total_runtime,
             })
           );
 
@@ -182,10 +177,9 @@ export function LeaderboardTab() {
 
       if (!isBackground) setLoading(false);
     },
-    [gamemode] // Dependencies: Re-fetch when gamemode changes
+    [gamemode]
   );
 
-  // Initial Fetch & when gamemode changes
   useEffect(() => {
     fetchUsers(false);
 
@@ -198,13 +192,12 @@ export function LeaderboardTab() {
     return () => window.removeEventListener("focus", onFocus);
   }, [fetchUsers]);
 
-  // --- REAL-TIME LOCAL UPDATE (Only for basic stats) ---
+  // Real-time updates for basic stats
   useEffect(() => {
     if (user && users.length > 0) {
       setUsers((prevUsers) => {
         const index = prevUsers.findIndex((u) => u.id === user.uid);
         if (index !== -1) {
-          // Check simple stats; assuming adventureTime/stars update requires refresh for now
           if (
             prevUsers[index].xp !== user.xp ||
             prevUsers[index].level !== user.level
@@ -237,7 +230,6 @@ export function LeaderboardTab() {
     }
   }, [user?.xp, user?.league, updateProfile]);
 
-  // --- FILTER USERS BASED ON SECTION ---
   const filteredUsers = useMemo(() => {
     if (sectionFilter === "ALL") return users;
     return users.filter((u) =>
@@ -262,7 +254,6 @@ export function LeaderboardTab() {
     visible: { opacity: 1, y: 0 },
   };
 
-  // Helper to get active mode icon
   const ActiveModeIcon =
     GAMEMODES.find((g) => g.id === gamemode)?.icon || TrophyIcon;
 
@@ -279,7 +270,6 @@ export function LeaderboardTab() {
           Hall of Champions
         </h1>
 
-        {/* Filter & Info Row */}
         <div className="flex flex-wrap items-center justify-center gap-3 mt-4 relative z-20">
           <TooltipProvider delayDuration={0}>
             <Tooltip>
@@ -382,13 +372,10 @@ export function LeaderboardTab() {
         </p>
       </motion.div>
 
-      {/* Loading Skeleton */}
       {loading && <LeaderboardSkeleton />}
 
-      {/* Leaderboard Content */}
       {!loading && filteredUsers.length > 0 && (
         <>
-          {/* Top 3 Podium */}
           <motion.div
             className="grid grid-cols-1 md:grid-cols-3 gap-4"
             variants={containerVariants}
@@ -432,7 +419,6 @@ export function LeaderboardTab() {
             </motion.div>
           </motion.div>
 
-          {/* Rest of the Leaderboard */}
           <motion.div
             className="space-y-3"
             variants={containerVariants}
@@ -468,7 +454,6 @@ export function LeaderboardTab() {
         </Card>
       )}
 
-      {/* User's Sticky Rank (Bottom) */}
       {currentUserData && (
         <motion.div
           className="sticky bottom-6 z-20"
@@ -489,7 +474,6 @@ export function LeaderboardTab() {
         </motion.div>
       )}
 
-      {/* --- USER PROFILE MODAL --- */}
       <UserProfileModal
         user={selectedUser}
         onClose={() => setSelectedUser(null)}
@@ -497,8 +481,6 @@ export function LeaderboardTab() {
     </div>
   );
 }
-
-// ... UserProfileModal remains largely same (or you can add stats there too if desired)
 
 function UserProfileModal({
   user,
@@ -544,7 +526,6 @@ function UserProfileModal({
             </div>
           </div>
 
-          {/* Stats Grid */}
           <div className="grid grid-cols-3 gap-3 w-full">
             <div className="p-3 bg-gray-50 dark:bg-gray-800 rounded-2xl flex flex-col items-center justify-center gap-1 border border-gray-100 dark:border-gray-700">
               <TrophyIcon className="w-8 h-8 text-yellow-500" />
@@ -553,7 +534,7 @@ function UserProfileModal({
                 Trophies
               </span>
             </div>
-            {/* Added Stars Stat */}
+
             <div className="p-3 bg-gray-50 dark:bg-gray-800 rounded-2xl flex flex-col items-center justify-center gap-1 border border-gray-100 dark:border-gray-700">
               <StarIcon className="w-8 h-8 text-yellow-400" />
               <span className="text-lg font-bold">{user.stars || 0}</span>
@@ -561,20 +542,20 @@ function UserProfileModal({
                 Stars
               </span>
             </div>
-            {/* Added Adventure Time Stat */}
+
+            {/* Added Total Runtime Stat */}
             <div className="p-3 bg-gray-50 dark:bg-gray-800 rounded-2xl flex flex-col items-center justify-center gap-1 border border-gray-100 dark:border-gray-700">
               <Clock className="w-8 h-8 text-blue-500" />
               <span className="text-lg font-bold">
-                {user.adventureTime ? formatTime(user.adventureTime) : "--"}
+                {user.totalRuntime ? formatTime(user.totalRuntime) : "--"}
               </span>
               <span className="text-[10px] uppercase text-gray-400 font-bold">
-                Fastest Run
+                Total Run Time
               </span>
             </div>
           </div>
 
           <div className="w-full space-y-3">
-            {/* Badges ... (rest same) */}
             <div className="text-sm font-bold uppercase text-gray-400 tracking-wider ml-1">
               Badges Earned
             </div>
@@ -613,7 +594,7 @@ function PodiumCard({
   user,
   rank,
   onClick,
-  gamemode, // Passed Prop
+  gamemode,
 }: {
   user: LeaderboardUser;
   rank: number;
@@ -624,7 +605,6 @@ function PodiumCard({
   const isSecond = rank === 2;
   const isThird = rank === 3;
 
-  // Determine Metric to Display based on Gamemode
   const renderMetric = () => {
     if (gamemode === "MULTIPLAYER") {
       return (
@@ -649,7 +629,7 @@ function PodiumCard({
         <>
           <Clock className={`w-5 h-5 text-blue-400`} />
           <span className="text-lg">
-            {user.adventureTime ? formatTime(user.adventureTime) : "--"}
+            {user.totalRuntime ? formatTime(user.totalRuntime) : "--"}
           </span>
         </>
       );
@@ -736,7 +716,7 @@ function UserRankRow({
   isCurrentUser,
   isSticky = false,
   onClick,
-  gamemode, // Passed Prop
+  gamemode,
 }: {
   user: LeaderboardUser;
   rank: number;
@@ -771,7 +751,6 @@ function UserRankRow({
     }
   }
 
-  // Determine Metric to Display based on Gamemode
   const renderMetric = () => {
     if (gamemode === "MULTIPLAYER") {
       return (
@@ -791,7 +770,7 @@ function UserRankRow({
       return (
         <>
           <Clock className="w-4 h-4 text-blue-500" />
-          {user.adventureTime ? formatTime(user.adventureTime) : "--"}
+          {user.totalRuntime ? formatTime(user.totalRuntime) : "--"}
         </>
       );
     }

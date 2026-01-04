@@ -1,22 +1,17 @@
 // app/components/dashboardmodule/PlayTab.tsx
 import { useNavigate } from "@remix-run/react";
 import { motion } from "framer-motion";
-import {
-  Map,
-  Users,
-  Code2,
-  ArrowRight,
-  Gamepad2,
-  Lock,
-  Trophy,
-  Sparkles,
-} from "lucide-react";
+import { Users, Code2, ArrowRight, Lock } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "~/components/ui/card";
 import { Button } from "~/components/ui/button";
 import { Badge } from "~/components/ui/badge";
 import { useAuth } from "~/contexts/AuthContext";
 import { cn } from "~/lib/utils";
 import { ControllerIcon, MapIcon } from "../ui/Icons";
+
+// 1. Import your MatchHistoryTab component here
+// (Adjust the path if it is in a different folder, e.g., "../matchhistory/MatchHistoryTab")
+import { MatchHistoryTab } from "./MatchHistoryTab";
 
 export function PlayTab() {
   const navigate = useNavigate();
@@ -176,24 +171,10 @@ export function PlayTab() {
         })}
       </div>
 
-      {/* Footer Banner (Optional motivation) */}
-      <motion.div
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
-        transition={{ delay: 0.4 }}
-        className="mt-8 p-6 rounded-2xl bg-gradient-to-r from-indigo-500 to-purple-600 text-white shadow-lg flex items-center justify-between relative overflow-hidden"
-      >
-        <div className="relative z-10">
-          <h3 className="text-lg font-bold flex items-center gap-2">
-            <Sparkles className="w-5 h-5 text-yellow-300" />
-            Daily Streak: 3 Days!
-          </h3>
-          <p className="text-indigo-100 text-sm">
-            Keep it up to earn the "Code Warrior" badge.
-          </p>
-        </div>
-        <div className="absolute right-0 top-0 h-full w-1/3 bg-white/10 skew-x-12" />
-      </motion.div>
+      {/* 2. Replaced Footer Banner with MatchHistoryTab */}
+      <div className="mt-8">
+        <MatchHistoryTab />
+      </div>
     </div>
   );
 }

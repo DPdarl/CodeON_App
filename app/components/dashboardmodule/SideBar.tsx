@@ -86,12 +86,12 @@ export function Sidebar({
       icon: ScrollQuestIcon,
       roles: ALL_ROLES,
     },
-    {
-      id: "match-history",
-      label: "Match History",
-      icon: HistoryIcon,
-      roles: ALL_ROLES,
-    },
+    // {
+    //   id: "match-history",
+    //   label: "Match History",
+    //   icon: HistoryIcon,
+    //   roles: ALL_ROLES,
+    // },
     { id: "streak", label: "Streak", icon: FlameIcon, roles: ALL_ROLES },
     { id: "store", label: "Store", icon: IconStore, roles: ALL_ROLES },
 

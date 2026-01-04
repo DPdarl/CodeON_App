@@ -1,6 +1,7 @@
 // app/components/dashboardmodule/DashboardHeader.tsx
 import { useState } from "react";
 import { Button } from "~/components/ui/button";
+import { Badge } from "~/components/ui/badge";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -17,10 +18,21 @@ import {
   DialogHeader,
   DialogTitle,
 } from "~/components/ui/dialog";
-import { PanelLeftOpen, PanelLeftClose, Moon, LogOut } from "lucide-react";
+import {
+  PanelLeftOpen,
+  PanelLeftClose,
+  Moon,
+  LogOut,
+  Clock,
+  Zap,
+  Heart,
+} from "lucide-react";
 import { AvatarDisplay } from "./AvatarDisplay";
 import { calculateProgress } from "~/lib/leveling-system";
 import { CoinIcon, FlameIcon, HeartIcon } from "../ui/Icons";
+
+// --- NEW IMPORTS ---
+import { useHeartSystem, MAX_HEARTS, HEART_COST } from "~/hooks/useHeartSystem";
 
 interface StatItemProps {
   icon: React.ReactNode;
@@ -37,6 +49,78 @@ function StatItem({ icon, value, color }: StatItemProps) {
         {value}
       </span>
     </div>
+  );
+}
+
+// --- NEW HEART DROPDOWN COMPONENT ---
+function HeartDropdown({ hearts, timeRemaining, buyHearts }: any) {
+  const isFull = hearts >= MAX_HEARTS;
+
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        {/* Styled to match StatItem */}
+        <button className="flex items-center gap-2 bg-gray-100 dark:bg-gray-800 px-3 py-1.5 rounded-full text-lg font-medium transition-transform hover:scale-125 cursor-pointer outline-none focus:ring-2 ring-red-200 dark:ring-red-900">
+          <HeartIcon className="h-6 w-6 text-red-500 fill-red-500" />
+          <span className="text-gray-900 dark:text-gray-100">{hearts}</span>
+          {!isFull && (
+            // Tiny timer next to number if regenerating
+            <span className="text-[10px] text-gray-400 font-mono ml-1">
+              {timeRemaining}
+            </span>
+          )}
+        </button>
+      </DropdownMenuTrigger>
+
+      <DropdownMenuContent align="end" className="w-72 p-2">
+        <DropdownMenuLabel className="flex items-center justify-between">
+          <span>Lives</span>
+          <Badge
+            variant={isFull ? "default" : "outline"}
+            className={
+              isFull ? "bg-green-500" : "text-orange-500 border-orange-500"
+            }
+          >
+            {isFull ? "MAX" : "REGENERATING"}
+          </Badge>
+        </DropdownMenuLabel>
+        <DropdownMenuSeparator />
+
+        {/* Status Section */}
+        <div className="p-3 bg-secondary/30 rounded-md mb-2 space-y-2">
+          <div className="flex items-center justify-between text-sm">
+            <span className="text-muted-foreground">Current Hearts</span>
+            <span className="font-bold">
+              {hearts} / {MAX_HEARTS}
+            </span>
+          </div>
+          {!isFull && (
+            <div className="flex items-center justify-between text-sm">
+              <span className="text-muted-foreground flex items-center gap-1">
+                <Clock className="w-3 h-3" /> Next in
+              </span>
+              <span className="font-mono font-bold text-orange-500">
+                {timeRemaining}
+              </span>
+            </div>
+          )}
+        </div>
+
+        {/* Refill Button */}
+        <Button
+          className="w-full gap-2 font-bold bg-green-500 hover:bg-green-600 text-white"
+          size="lg"
+          disabled={isFull}
+          onClick={() => {
+            if (isFull) return;
+            buyHearts();
+          }}
+        >
+          <Zap className="w-4 h-4 fill-white" />
+          {isFull ? "Hearts are Full" : `Refill Full (${HEART_COST})`}
+        </Button>
+      </DropdownMenuContent>
+    </DropdownMenu>
   );
 }
 
@@ -68,9 +152,13 @@ export function DashboardHeader({
   // --- 1. CALCULATE XP & LEVEL ---
   const { currentLevel, progressPercent } = calculateProgress(user?.xp || 0);
 
-  // --- 2. UPDATED PROGRESS RING MATH (For w-16 / 64px) ---
-  const radius = 28; // Increased radius for bigger ring
-  const center = 32; // Center point (half of 64px)
+  // --- 2. INIT HEART SYSTEM ---
+  // Using the hook ensures the timer runs live in the header
+  const { hearts, timeRemaining, buyHearts } = useHeartSystem(user);
+
+  // --- 3. PROGRESS RING MATH ---
+  const radius = 28;
+  const center = 32;
   const circumference = 2 * Math.PI * radius;
   const strokeDashoffset =
     circumference - (progressPercent / 100) * circumference;
@@ -122,9 +210,12 @@ export function DashboardHeader({
                 icon={<CoinIcon className="h-6 w-6" />}
                 value={stats.coins}
               />
-              <StatItem
-                icon={<HeartIcon className="h-6 w-6" />}
-                value={stats.hearts}
+
+              {/* --- REPLACED STATIC HEART WITH DROPDOWN --- */}
+              <HeartDropdown
+                hearts={hearts}
+                timeRemaining={timeRemaining}
+                buyHearts={buyHearts}
               />
             </div>
           </div>
@@ -134,11 +225,9 @@ export function DashboardHeader({
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <div className="flex items-center space-x-3 cursor-pointer p-1 rounded-xl hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors group select-none">
-                  {/* --- 3. UPDATED AVATAR CONTAINER (w-16 h-16) --- */}
+                  {/* Avatar Container */}
                   <div className="relative flex items-center justify-center w-16 h-16">
-                    {/* Progress Ring SVG */}
                     <svg className="absolute w-full h-full transform -rotate-90">
-                      {/* Background Track */}
                       <circle
                         cx={center}
                         cy={center}
@@ -147,7 +236,6 @@ export function DashboardHeader({
                         className="stroke-gray-200 dark:stroke-gray-700"
                         strokeWidth="6"
                       />
-                      {/* Progress Indicator */}
                       <circle
                         cx={center}
                         cy={center}
@@ -161,7 +249,6 @@ export function DashboardHeader({
                       />
                     </svg>
 
-                    {/* Actual Avatar Image */}
                     <div className="h-14 w-14 rounded-full overflow-hidden border-2 border-white dark:border-gray-800 bg-gray-100 dark:bg-gray-800 z-10">
                       <AvatarDisplay config={user?.avatarConfig} headOnly />
                     </div>

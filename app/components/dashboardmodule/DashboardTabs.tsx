@@ -138,7 +138,7 @@ export function DashboardTabs({
 
       {/* 5. User Reports (SuperAdmin, Admin, Instructor) */}
       {activeTab === "user-reports" && <UserReportTab />}
-      {activeTab === "match-history" && <MatchHistoryTab />}
+      {/* {activeTab === "match-history" && <MatchHistoryTab />} */}
     </div>
   );
 }

@@ -1,18 +1,27 @@
 // app/types/lesson.types.ts
 
+export type ActivityType = "QUIZ" | "BUILDING_BLOCKS" | "MATCHING";
+
+export interface Activity {
+  id: string;
+  type: ActivityType;
+  title: string;
+  data: any; // Flexible data structure for different game types
+}
+
+export interface ArticleSection {
+  title: string;
+  content: string; // Text content
+  codeSnippet?: string; // Optional code block
+}
+
 export interface Lesson {
   id: string;
   title: string;
-  slug: string;
   description: string;
-  order_index: number;
-  xp_reward: number;
-  // We can treat these as the "challenge" props for compatibility
-  difficulty?: "Easy" | "Medium" | "Hard";
-  language?: string;
-}
-
-export interface UserLessonProgress {
-  lesson_id: string;
-  status: "LOCKED" | "COMPLETED";
+  xpReward: number;
+  article: {
+    sections: ArticleSection[];
+  };
+  activities: Activity[];
 }

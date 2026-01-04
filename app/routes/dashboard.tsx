@@ -1,4 +1,3 @@
-// app/routes/dashboard.tsx
 import { useEffect, useState, useRef } from "react";
 import {
   useNavigate,
@@ -220,6 +219,29 @@ export default function Dashboard() {
 
   return (
     <PrivateRoute>
+      {/* Custom Scrollbar Styles injected here */}
+      <style>{`
+        .scrollbar-hide::-webkit-scrollbar {
+            width: 8px;
+            height: 8px;
+        }
+        .scrollbar-hide::-webkit-scrollbar-track {
+            background: transparent; 
+        }
+        .scrollbar-hide::-webkit-scrollbar-thumb {
+            background-color: rgba(156, 163, 175, 0.3); /* Gray-400 with opacity */
+            border-radius: 9999px;
+        }
+        .scrollbar-hide::-webkit-scrollbar-thumb:hover {
+            background-color: rgba(156, 163, 175, 0.5);
+        }
+        /* For Firefox */
+        .scrollbar-hide {
+            scrollbar-width: thin;
+            scrollbar-color: rgba(156, 163, 175, 0.3) transparent;
+        }
+      `}</style>
+
       <div className="flex h-screen overflow-hidden bg-gradient-to-br from-blue-50 to-indigo-100 dark:from-gray-900 dark:to-gray-800 transition-colors duration-300">
         <div
           className={`flex-shrink-0 transition-all duration-300 ${
@@ -235,7 +257,8 @@ export default function Dashboard() {
           />
         </div>
 
-        <div className="flex-1 flex flex-col overflow-y-auto transition-all duration-300">
+        {/* ✅ APPLIED 'scrollbar-hide' CLASS HERE */}
+        <div className="flex-1 flex flex-col overflow-y-auto transition-all duration-300 scrollbar-hide">
           <DashboardHeader
             user={activeUser}
             sidebarCollapsed={sidebarCollapsed}

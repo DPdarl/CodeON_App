@@ -1,3 +1,4 @@
+// app/contexts/AuthContext.tsx
 import {
   createContext,
   useContext,
@@ -38,6 +39,7 @@ export interface UserData {
   badges?: string[];
   googleBound?: boolean;
   birthdate?: string;
+  completedChapters?: string[];
 }
 
 interface AuthContextType {
@@ -46,7 +48,7 @@ interface AuthContextType {
   loginWithStudentId: (
     studentId: string,
     p: string
-  ) => Promise<UserData | null>; // Updated return type
+  ) => Promise<UserData | null>;
   logout: () => Promise<void>;
   signInWithGoogle: () => Promise<boolean>;
   linkGoogleAccount: () => Promise<void>;
@@ -96,12 +98,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       badges: db.badges ?? [],
       googleBound: db.google_bound === true || !!db.google_provider_id,
       birthdate: db.birthdate,
+      completedChapters: db.completed_chapters ?? [],
     }),
     []
   );
 
   const mapUserToDB = useCallback((data: Partial<UserData>) => {
     const db: any = { ...data };
+
     if ("displayName" in db) {
       db.display_name = db.displayName;
       delete db.displayName;
@@ -135,6 +139,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       delete db.googleBound;
     }
 
+    if ("completedChapters" in db) {
+      db.completed_chapters = db.completedChapters;
+      delete db.completedChallenges;
+      delete db.completedChapters;
+    }
+
     delete db.uid;
     delete db.studentId;
     return db;
@@ -152,7 +162,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         .single();
 
       if (error || !data) {
-        // ✅ FIX: Use optional chaining (error?.code) so it doesn't crash if error is null
         if (error?.code !== "PGRST116") {
           console.error("Fetch user error:", error);
         }
@@ -182,6 +191,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         (payload: { new: any }) => {
           setUser((prev) => {
             if (!prev) return prev;
+            // Merges new data properly with fixed mapper
             const updated = { ...prev, ...mapUserFromDB(payload.new) };
             localStorage.setItem(USER_CACHE_KEY, JSON.stringify(updated));
             return updated;
@@ -234,7 +244,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   // ------------------------
   // ACTIONS
   // ------------------------
-
   const refreshSession = async () => {
     const {
       data: { user },
@@ -261,13 +270,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     [user, mapUserToDB, syncUser]
   );
 
-  // ✅ UPDATED: Intelligent Login Flow with Better Debugging
   const loginWithStudentId = async (studentId: string, p: string) => {
     setLoading(true);
-    console.log(`Attempting login for ID: ${studentId}`);
-
     try {
-      // 1. Get user details from DB to find email
       const { data: profile, error: profileError } = await supabase
         .from("users")
         .select("email")
@@ -275,14 +280,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         .single();
 
       if (profileError || !profile?.email) {
-        console.error("Profile Lookup Failed:", profileError);
         setLoading(false);
         throw new Error("Student ID not found in records.");
       }
 
-      console.log(`Found email: ${profile.email}. Trying login...`);
-
-      // 2. Try Standard Login
       const { data: loginData, error: loginError } =
         await supabase.auth.signInWithPassword({
           email: profile.email,
@@ -290,24 +291,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         });
 
       if (!loginError && loginData.user) {
-        console.log("Standard login success.");
         const userData = await fetchUserData(loginData.user);
         setLoading(false);
         return userData;
       }
 
-      console.warn("Standard login failed:", loginError?.message);
-
-      // 3. If Login Fails, try Auto-Claim (Signup)
       if (loginError) {
-        // Strict regex for "IciYYYY-MM-DD"
         const isDefaultFormat = /^Ici\d{4}-\d{2}-\d{2}$/.test(p);
 
         if (isDefaultFormat) {
-          console.log(
-            "Password matches default format. Attempting Auto-Claim (Sign Up)..."
-          );
-
           const { data: signUpData, error: signUpError } =
             await supabase.auth.signUp({
               email: profile.email,
@@ -316,43 +308,24 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             });
 
           if (signUpError) {
-            console.error("Auto-Claim Sign Up Failed:", signUpError.message);
             setLoading(false);
-            // Re-throw the original login error to show "Invalid ID/Pass" to user
             throw loginError;
           }
 
           if (signUpData.user) {
-            console.log("Sign Up successful. Linking profile...");
-
-            // Link Profile
-            const { error: claimError } = await supabase.rpc(
-              "claim_student_profile",
-              {
-                student_id_input: studentId,
-              }
-            );
-
-            if (claimError) console.error("Claim RPC Error:", claimError);
-
-            // Force fetch data
+            await supabase.rpc("claim_student_profile", {
+              student_id_input: studentId,
+            });
             const userData = await fetchUserData(signUpData.user);
             setLoading(false);
             return userData;
-          } else {
-            console.warn(
-              "Sign Up returned no user session. Email confirmation might be ON."
-            );
           }
         }
-
         setLoading(false);
         throw loginError;
       }
-
       return null;
     } catch (error: any) {
-      console.error("Final Login Error:", error.message);
       setLoading(false);
       throw error;
     }

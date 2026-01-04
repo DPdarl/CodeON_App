@@ -1,22 +1,12 @@
-// app/components/dashboardmodule/HomeTab.tsx
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { motion } from "framer-motion";
 import {
-  Trophy,
-  Flame,
-  Star,
-  Map,
   Code2,
-  Terminal,
-  Cpu,
   ArrowRight,
-  Brain,
   Loader2,
-  Play,
-  Crown,
   Zap,
   Sparkles,
-  Compass, // Added for Adventure Icon
+  Compass,
 } from "lucide-react";
 import { Button } from "~/components/ui/button";
 import { Progress } from "~/components/ui/progress";
@@ -42,21 +32,25 @@ export function HomeTab({ onTabChange }: HomeTabProps) {
   const [challenges, setChallenges] = useState<Challenge[]>([]);
   const [loading, setLoading] = useState(true);
 
-  // --- CONNECT GAME LOGIC HOOK ---
+  // --- DYNAMIC PROGRESS STATE ---
+  // Default state is placeholder until data loads
+  const [adventureProgress, setAdventureProgress] = useState({
+    chapter: 1,
+    title: "Loading...",
+    isCompleted: false,
+  });
+
   const { grantXP, levelUpModal, isProcessing } = useGameProgress();
 
-  // 1. Fetch Data from Supabase
+  // 1. Fetch Challenges (Linear Order)
   useEffect(() => {
     const fetchChallenges = async () => {
       try {
         const { data, error } = await supabase.from("challenges").select("*");
-
-        if (error) {
-          throw error;
-        }
-
+        if (error) throw error;
         if (data) {
-          setChallenges(data as Challenge[]);
+          const sorted = (data as Challenge[]).sort((a, b) => a.page - b.page);
+          setChallenges(sorted);
         }
       } catch (error) {
         console.error("Error fetching challenges:", error);
@@ -64,43 +58,91 @@ export function HomeTab({ onTabChange }: HomeTabProps) {
         setLoading(false);
       }
     };
-
     fetchChallenges();
   }, []);
 
-  // 2. Calculate Stats
+  // --- 2. FUNCTION: LOAD CURRENT CHAPTER (Logic from play.adventure.tsx) ---
+  // This calculates the correct chapter based on the user's completed array
+  const loadCurrentChapter = useCallback(async () => {
+    if (!user) return;
+
+    try {
+      // A. Fetch All Lessons to determine order
+      const { data: lessonsData, error: lessonsError } = await supabase
+        .from("lessons")
+        .select("id, title, order_index")
+        .order("order_index", { ascending: true });
+
+      if (lessonsError) console.error("Error fetching lessons:", lessonsError);
+
+      if (lessonsData) {
+        // B. USE THE AUTH CONTEXT ARRAY (The Source of Truth)
+        // We look at the array of IDs stored in the user profile
+        const completedIds = user?.completedChapters || [];
+
+        // C. Find the first lesson that is NOT in that array
+        const nextLesson = lessonsData.find(
+          (l) => !completedIds.includes(l.id)
+        );
+
+        if (nextLesson) {
+          // Found the specific chapter the user is working on
+          setAdventureProgress({
+            chapter: nextLesson.order_index,
+            title: nextLesson.title,
+            isCompleted: false,
+          });
+        } else if (lessonsData.length > 0) {
+          // If no "next" lesson is found, it means they finished them all
+          setAdventureProgress({
+            chapter: lessonsData.length,
+            title: "Mastery Reached",
+            isCompleted: true,
+          });
+        } else {
+          // Fallback if DB is empty
+          setAdventureProgress({
+            chapter: 1,
+            title: "The Beginning",
+            isCompleted: false,
+          });
+        }
+      }
+    } catch (err) {
+      console.error("Failed to calculate current chapter:", err);
+    }
+  }, [user]); // Re-creates function if user object changes
+
+  // Run the function on mount or when user changes
+  useEffect(() => {
+    loadCurrentChapter();
+  }, [loadCurrentChapter]);
+
+  // 3. Calculate Stats
   const progressData = calculateProgress(user?.xp || 0);
 
   const stats = {
-    // Level Info (Hero Section)
     level: progressData.currentLevel,
     currentBarXP: progressData.currentXP,
     maxBarXP: progressData.xpForNextLevel,
-
-    // Competitive Stats (Grid)
     streak: user?.streaks || 0,
     trophies: user?.trophies || 0,
     league: user?.league || "Novice",
+    // Count from context or 0
+    starsEarned: user?.completedChapters?.length || 0,
   };
 
   const handleSelectChallenge = (challenge: Challenge) => {
-    navigate(`/solo-challenge`, {
-      state: { challenge },
-    });
+    navigate(`/solo-challenge`, { state: { challenge } });
   };
 
-  // Animation variants
   const containerVariants = {
     hidden: { opacity: 0 },
-    visible: {
-      opacity: 1,
-      transition: { staggerChildren: 0.1 },
-    },
+    visible: { opacity: 1, transition: { staggerChildren: 0.1 } },
   };
 
   return (
     <div className="max-w-6xl mx-auto space-y-8 pb-12">
-      {/* --- LEVEL UP MODAL --- */}
       <LevelUpModal
         isOpen={levelUpModal.isOpen}
         newLevel={levelUpModal.newLevel}
@@ -108,7 +150,7 @@ export function HomeTab({ onTabChange }: HomeTabProps) {
         onClose={levelUpModal.close}
       />
 
-      {/* --- Hero / Welcome Section --- */}
+      {/* --- Hero Section --- */}
       <motion.div
         initial={{ opacity: 0, y: -20 }}
         animate={{ opacity: 1, y: 0 }}
@@ -129,7 +171,6 @@ export function HomeTab({ onTabChange }: HomeTabProps) {
                 Welcome back, {user?.displayName || "Traveler"}!
               </h1>
 
-              {/* --- TEST BUTTON FOR DEMO --- */}
               <div className="mt-6 flex flex-wrap gap-4 items-center">
                 <Button
                   onClick={() => grantXP(100)}
@@ -153,7 +194,6 @@ export function HomeTab({ onTabChange }: HomeTabProps) {
               </div>
             </div>
 
-            {/* Level / XP Card (Personal Progress) */}
             <div className="bg-black/20 backdrop-blur-sm rounded-2xl p-6 min-w-[280px] border border-white/10">
               <div className="flex justify-between items-end mb-2">
                 <span className="text-2xl font-black flex items-center gap-2">
@@ -178,9 +218,8 @@ export function HomeTab({ onTabChange }: HomeTabProps) {
         </div>
       </motion.div>
 
-      {/* --- Stats Row (Competitive Stats) --- */}
+      {/* --- Stats Row --- */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        {/* 1. Streak */}
         <StatCard
           icon={FlameIcon}
           label="Day Streak"
@@ -189,7 +228,6 @@ export function HomeTab({ onTabChange }: HomeTabProps) {
           bgColor="bg-orange-50 dark:bg-orange-950/30"
           iconClassName="h-6 w-5"
         />
-        {/* 2. Trophies */}
         <StatCard
           icon={TrophyIcon}
           label="Total Trophies"
@@ -197,7 +235,6 @@ export function HomeTab({ onTabChange }: HomeTabProps) {
           color="text-yellow-500"
           bgColor="bg-yellow-50 dark:bg-yellow-950/30"
         />
-        {/* 3. League */}
         <StatCard
           icon={CrownIcon}
           label="Current League"
@@ -205,24 +242,22 @@ export function HomeTab({ onTabChange }: HomeTabProps) {
           color="text-purple-500"
           bgColor="bg-purple-50 dark:bg-purple-950/30"
         />
-        {/* 4. Challenges */}
         <StatCard
           icon={StarIcon}
-          label="Challenges"
-          value={challenges.length.toString()}
+          label="Chapters Done"
+          value={stats.starsEarned.toString()}
           color="text-blue-500"
           bgColor="bg-blue-50 dark:bg-blue-950/30"
         />
       </div>
 
-      {/* --- Adventure Banner (Where you left off) --- */}
+      {/* --- Adventure Banner (Dynamic) --- */}
       <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ delay: 0.3 }}
         className="group relative overflow-hidden rounded-3xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 shadow-md hover:shadow-xl transition-all duration-300"
       >
-        {/* Decorative background gradient */}
         <div className="absolute inset-0 bg-gradient-to-r from-orange-500/5 to-red-500/5 dark:from-orange-900/20 dark:to-red-900/20 opacity-0 group-hover:opacity-100 transition-opacity" />
 
         <div className="relative p-6 md:p-8 flex flex-col md:flex-row items-center justify-between gap-6">
@@ -235,30 +270,46 @@ export function HomeTab({ onTabChange }: HomeTabProps) {
                 <span className="px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider bg-orange-100 text-orange-700 dark:bg-orange-950 dark:text-orange-300">
                   Adventure Mode
                 </span>
+                {adventureProgress.isCompleted && (
+                  <span className="px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider bg-green-100 text-green-700">
+                    Completed
+                  </span>
+                )}
               </div>
               <h3 className="text-2xl font-bold text-gray-900 dark:text-white">
-                Where you left off
+                {adventureProgress.isCompleted
+                  ? "All Adventures Completed!"
+                  : "Where you left off"}
               </h3>
+
               <p className="text-gray-500 dark:text-gray-400 mt-1 max-w-md">
-                You are currently facing challenges in{" "}
-                <span className="font-bold text-orange-600 dark:text-orange-400">
-                  Level {stats.level}
-                </span>
-                . Ready to continue your journey?
+                {adventureProgress.isCompleted ? (
+                  "You have mastered all currently available chapters. Feel free to replay any level."
+                ) : (
+                  <>
+                    You are currently facing challenges in{" "}
+                    <span className="font-bold text-orange-600 dark:text-orange-400">
+                      Chapter {adventureProgress.chapter}:{" "}
+                      {adventureProgress.title}
+                    </span>
+                    . Ready to continue your journey?
+                  </>
+                )}
               </p>
             </div>
           </div>
 
           <Button
-            onClick={() => onTabChange("play")}
+            onClick={() => navigate("/play/adventure")}
             className="w-full md:w-auto h-12 px-8 text-base font-bold bg-orange-600 hover:bg-orange-700 text-white rounded-xl shadow-lg shadow-orange-500/20 transition-transform active:scale-95"
           >
-            Resume Journey <ArrowRight className="w-5 h-5 ml-2" />
+            {adventureProgress.isCompleted ? "Replay Levels" : "Resume Journey"}{" "}
+            <ArrowRight className="w-5 h-5 ml-2" />
           </Button>
         </div>
       </motion.div>
 
-      {/* --- Enhanced Available Challenges Section --- */}
+      {/* --- Practice Arena Carousel --- */}
       <motion.div
         variants={containerVariants}
         initial="hidden"
@@ -272,21 +323,12 @@ export function HomeTab({ onTabChange }: HomeTabProps) {
               Practice Arena
             </h2>
             <p className="text-gray-500 dark:text-gray-400 text-sm mt-1">
-              Sharpen your skills with standalone coding challenges.
+              Complete challenges in order to unlock the next one.
             </p>
           </div>
-          <Button
-            variant="ghost"
-            onClick={() => navigate("/play.challenges")} // Navigate to full challenges page if distinct
-            className="text-indigo-600 dark:text-indigo-400 font-semibold hover:bg-indigo-50 dark:hover:bg-indigo-900/20"
-          >
-            View All <ArrowRight className="w-4 h-4 ml-1" />
-          </Button>
         </div>
 
-        {/* Enhanced Card Container for Carousel */}
         <div className="bg-gradient-to-br from-gray-50 to-white dark:from-gray-900 dark:to-gray-900/50 rounded-[2rem] p-6 border border-gray-100 dark:border-gray-800 shadow-sm relative overflow-hidden">
-          {/* Subtle background decoration */}
           <div className="absolute top-0 right-0 w-64 h-64 bg-indigo-500/5 rounded-full blur-3xl -mr-16 -mt-16 pointer-events-none" />
 
           <div className="relative z-10">
@@ -298,14 +340,12 @@ export function HomeTab({ onTabChange }: HomeTabProps) {
               <SelectionCarousel
                 challenges={challenges}
                 onSelectChallenge={handleSelectChallenge}
+                completedChallenges={user?.completedChapters || []}
               />
             ) : (
               <div className="text-center py-20 rounded-xl border border-dashed border-gray-300 dark:border-gray-700">
                 <p className="text-gray-500 text-lg">
                   No challenges found in the database.
-                </p>
-                <p className="text-sm text-gray-400 mt-2">
-                  (Try adding some to your 'challenges' table!)
                 </p>
               </div>
             )}
