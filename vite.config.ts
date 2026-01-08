@@ -1,10 +1,13 @@
 import { vitePlugin as remix } from "@remix-run/dev";
 import { defineConfig } from "vite";
+import { vercelPreset } from "@vercel/remix/vite"; //
 import path from "path";
 
 export default defineConfig({
   plugins: [
     remix({
+      // Add the Vercel preset here
+      presets: [vercelPreset()], //
       future: {
         v3_fetcherPersist: true,
         v3_relativeSplatPath: true,
