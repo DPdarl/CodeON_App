@@ -1,3 +1,9 @@
 {
-  "framework": "remix"
+  "framework": "remix",
+  "routes": [
+    {
+      "src": "/(.*)",
+      "dest": "/"
+    }
+  ]
 }
