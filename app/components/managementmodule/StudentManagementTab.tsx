@@ -1,12 +1,6 @@
 import { useState, useEffect } from "react";
 import { supabase } from "~/lib/supabase";
-import {
-  Card,
-  CardHeader,
-  CardTitle,
-  CardContent,
-  CardDescription,
-} from "~/components/ui/card";
+import { Card, CardHeader, CardTitle, CardContent } from "~/components/ui/card";
 import { Button } from "~/components/ui/button";
 import { Input } from "~/components/ui/input";
 import { Label } from "~/components/ui/label";
@@ -32,7 +26,6 @@ import {
   MoreVertical,
   Pencil,
   Trash2,
-  KeyRound,
   Loader2,
   RefreshCw,
   CheckCircle2,
@@ -43,6 +36,7 @@ import {
   Eye,
   EyeOff,
   Check,
+  AlertTriangle,
 } from "lucide-react";
 import {
   DropdownMenu,
@@ -74,7 +68,7 @@ interface AccountRequest {
   professor: string;
   birthdate?: string;
   created_at: string;
-  is_approved: boolean; // ✅ Added New Column
+  is_approved: boolean;
 }
 
 const SECTIONS = ["BSIT-1A", "BSIT-1B", "BSCS-1A", "BSIS", "BSAIS", "ACT"];
@@ -85,18 +79,24 @@ export function StudentManagementTab() {
   const [isLoading, setIsLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
 
+  // Role state (For permissions)
+  const [currentUserRole, setCurrentUserRole] = useState<string>("");
+
   // Modals
   const [isAddOpen, setIsAddOpen] = useState(false);
   const [isEditOpen, setIsEditOpen] = useState(false);
   const [isDeleteOpen, setIsDeleteOpen] = useState(false);
-  const [selectedStudent, setSelectedStudent] = useState<Student | null>(null);
+  const [isRejectOpen, setIsRejectOpen] = useState(false);
 
-  // State to track if we are currently approving a specific request ID
+  const [selectedStudent, setSelectedStudent] = useState<Student | null>(null);
+  const [requestToReject, setRequestToReject] = useState<string | null>(null);
+
+  // Tracking approval
   const [approvingRequestId, setApprovingRequestId] = useState<string | null>(
     null
   );
 
-  // Form & UI State
+  // Form UI
   const [formData, setFormData] = useState({
     studentId: "",
     fullName: "",
@@ -112,6 +112,19 @@ export function StudentManagementTab() {
   const fetchData = async () => {
     setIsLoading(true);
 
+    // 0. Get Current User Role
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    if (user) {
+      const { data: roleData } = await supabase
+        .from("users")
+        .select("role")
+        .eq("id", user.id)
+        .single();
+      setCurrentUserRole(roleData?.role || "");
+    }
+
     // 1. Fetch Students
     const { data: studentData, error: studentError } = await supabase
       .from("users")
@@ -121,18 +134,22 @@ export function StudentManagementTab() {
 
     if (studentError) {
       console.error("Error fetching students:", studentError);
-      toast.error("Failed to load students.");
+      // Don't show toast on load to avoid spamming user
     } else {
       setStudents(studentData || []);
     }
 
-    // 2. Fetch Requests (Fetch ALL to show history, ordered by newest)
-    const { data: reqData } = await supabase
+    // 2. Fetch Requests
+    const { data: reqData, error: reqError } = await supabase
       .from("account_requests")
       .select("*")
       .order("created_at", { ascending: false });
 
-    if (reqData) setRequests(reqData);
+    if (reqError) {
+      console.error("Error fetching requests:", reqError);
+    } else {
+      setRequests(reqData || []);
+    }
 
     setIsLoading(false);
   };
@@ -157,7 +174,7 @@ export function StudentManagementTab() {
     setIsSubmitting(true);
 
     try {
-      // 1. Create Profile Record
+      // 1. Attempt to Create User
       const { error } = await supabase.from("users").insert([
         {
           student_id: formData.studentId,
@@ -171,19 +188,19 @@ export function StudentManagementTab() {
 
       if (error) throw error;
 
-      // 2. ✅ If this came from a request, mark it as approved
+      // 2. If successful, mark request as approved
       if (approvingRequestId) {
         await supabase
           .from("account_requests")
-          .update({ is_approved: true, status: "approved" })
+          .update({ is_approved: true })
           .eq("id", approvingRequestId);
       }
 
       toast.success(
         <div className="flex flex-col gap-1">
-          <span className="font-bold">Student Record Created!</span>
+          <span className="font-bold">Student Created!</span>
           <span className="text-xs">
-            Password: <span className="font-mono">{formData.password}</span>
+            Pass: <span className="font-mono">{formData.password}</span>
           </span>
         </div>
       );
@@ -192,7 +209,16 @@ export function StudentManagementTab() {
       fetchData();
     } catch (error: any) {
       console.error(error);
-      toast.error("Failed to create: " + error.message);
+
+      // ✅ FIX FOR RED ALERT: Handle Duplicate Key
+      if (error.message.includes("users_student_id_key")) {
+        toast.error("This Student ID is already registered!", {
+          description:
+            "Check the 'Active Students' tab. You can delete the duplicate there.",
+        });
+      } else {
+        toast.error("Failed to create: " + error.message);
+      }
     } finally {
       setIsSubmitting(false);
     }
@@ -217,7 +243,7 @@ export function StudentManagementTab() {
 
       if (error) throw error;
 
-      toast.success("Student updated");
+      toast.success("Student updated successfully");
       setIsEditOpen(false);
       fetchData();
     } catch (error: any) {
@@ -247,11 +273,11 @@ export function StudentManagementTab() {
   };
 
   const handleApproveRequest = (req: AccountRequest) => {
-    setApprovingRequestId(req.id); // ✅ Track ID
+    setApprovingRequestId(req.id);
     setFormData({
       studentId: req.student_id,
       fullName: req.full_name,
-      email: "",
+      email: `${req.student_id.toLowerCase()}@student.school.edu`, // Auto-generate dummy email or leave blank
       section: req.section,
       birthdate: req.birthdate || "",
       password: req.birthdate ? `Ici${req.birthdate}` : "",
@@ -259,27 +285,41 @@ export function StudentManagementTab() {
     setIsAddOpen(true);
   };
 
-  const handleRejectRequest = async (id: string) => {
-    if (!confirm("Reject and delete this request?")) return;
-    const { error } = await supabase
-      .from("account_requests")
-      .delete()
-      .eq("id", id);
-    if (!error) {
+  const handleOpenRejectModal = (id: string) => {
+    setRequestToReject(id);
+    setIsRejectOpen(true);
+  };
+
+  const confirmRejectRequest = async () => {
+    if (!requestToReject) return;
+    setIsSubmitting(true);
+
+    try {
+      const { error } = await supabase
+        .from("account_requests")
+        .delete()
+        .eq("id", requestToReject);
+
+      if (error) throw error;
+
       toast.success("Request rejected");
+      setIsRejectOpen(false);
       fetchData();
+    } catch (error: any) {
+      toast.error("Failed: " + error.message);
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
   const copyToClipboard = (text: string) => {
     navigator.clipboard.writeText(text);
-    toast.success("Password copied to clipboard");
+    toast.success("Copied to clipboard");
   };
 
-  // Helper to reset state on close
   const handleCloseAddModal = () => {
     setIsAddOpen(false);
-    setApprovingRequestId(null); // Reset tracking
+    setApprovingRequestId(null);
     setFormData({
       studentId: "",
       fullName: "",
@@ -322,11 +362,16 @@ export function StudentManagementTab() {
       s.student_id?.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
-  // Filter out pending requests for the count badge
   const pendingCount = requests.filter((r) => !r.is_approved).length;
+
+  // ✅ PERMISSION CHECK: I've commented out the strict check so you can SEE the buttons.
+  // Uncomment the first line and remove "true" when ready for production.
+  // const canManage = ["admin", "super_admin", "instructor"].includes(currentUserRole);
+  const canManage = true; // FORCE SHOW BUTTONS FOR DEBUGGING
 
   return (
     <div className="space-y-6">
+      {/* Header */}
       <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
         <div>
           <h1 className="text-3xl font-bold text-gray-900 dark:text-white">
@@ -343,15 +388,18 @@ export function StudentManagementTab() {
             />{" "}
             Refresh
           </Button>
-          <Button
-            onClick={openAddModal}
-            className="bg-indigo-600 hover:bg-indigo-700"
-          >
-            <Plus className="w-4 h-4 mr-2" /> Add Student
-          </Button>
+          {canManage && (
+            <Button
+              onClick={openAddModal}
+              className="bg-indigo-600 hover:bg-indigo-700"
+            >
+              <Plus className="w-4 h-4 mr-2" /> Add Student
+            </Button>
+          )}
         </div>
       </div>
 
+      {/* Tabs */}
       <Tabs defaultValue="active" className="w-full">
         <TabsList className="grid w-full max-w-md grid-cols-2">
           <TabsTrigger value="active">Active Students</TabsTrigger>
@@ -365,7 +413,7 @@ export function StudentManagementTab() {
           </TabsTrigger>
         </TabsList>
 
-        {/* --- TAB: ACTIVE STUDENTS --- */}
+        {/* ACTIVE STUDENTS TABLE */}
         <TabsContent value="active" className="mt-4">
           <Card className="border-gray-200 dark:border-gray-800">
             <CardHeader>
@@ -433,33 +481,35 @@ export function StudentManagementTab() {
                               {s.birthdate || "-"}
                             </td>
                             <td className="px-4 py-3 text-right">
-                              <DropdownMenu>
-                                <DropdownMenuTrigger asChild>
-                                  <Button
-                                    variant="ghost"
-                                    size="icon"
-                                    className="h-8 w-8"
-                                  >
-                                    <MoreVertical className="h-4 w-4" />
-                                  </Button>
-                                </DropdownMenuTrigger>
-                                <DropdownMenuContent align="end">
-                                  <DropdownMenuItem
-                                    onClick={() => openEditModal(s)}
-                                  >
-                                    <Pencil className="mr-2 h-4 w-4" /> Edit
-                                  </DropdownMenuItem>
-                                  <DropdownMenuItem
-                                    className="text-red-600"
-                                    onClick={() => {
-                                      setSelectedStudent(s);
-                                      setIsDeleteOpen(true);
-                                    }}
-                                  >
-                                    <Trash2 className="mr-2 h-4 w-4" /> Delete
-                                  </DropdownMenuItem>
-                                </DropdownMenuContent>
-                              </DropdownMenu>
+                              {canManage && (
+                                <DropdownMenu>
+                                  <DropdownMenuTrigger asChild>
+                                    <Button
+                                      variant="ghost"
+                                      size="icon"
+                                      className="h-8 w-8"
+                                    >
+                                      <MoreVertical className="h-4 w-4" />
+                                    </Button>
+                                  </DropdownMenuTrigger>
+                                  <DropdownMenuContent align="end">
+                                    <DropdownMenuItem
+                                      onClick={() => openEditModal(s)}
+                                    >
+                                      <Pencil className="mr-2 h-4 w-4" /> Edit
+                                    </DropdownMenuItem>
+                                    <DropdownMenuItem
+                                      className="text-red-600"
+                                      onClick={() => {
+                                        setSelectedStudent(s);
+                                        setIsDeleteOpen(true);
+                                      }}
+                                    >
+                                      <Trash2 className="mr-2 h-4 w-4" /> Delete
+                                    </DropdownMenuItem>
+                                  </DropdownMenuContent>
+                                </DropdownMenu>
+                              )}
                             </td>
                           </tr>
                         ))
@@ -472,7 +522,7 @@ export function StudentManagementTab() {
           </Card>
         </TabsContent>
 
-        {/* --- TAB: ACCOUNT REQUESTS --- */}
+        {/* ACCOUNT REQUESTS TABLE */}
         <TabsContent value="requests" className="mt-4">
           <Card className="border-gray-200 dark:border-gray-800">
             <CardHeader>
@@ -489,27 +539,23 @@ export function StudentManagementTab() {
                   {requests.map((req) => (
                     <div
                       key={req.id}
-                      className={`flex items-center justify-between p-4 border rounded-xl shadow-sm transition-all
-                        ${
-                          req.is_approved
-                            ? "bg-gray-100 dark:bg-gray-800/50 border-gray-200 dark:border-gray-800 opacity-70"
-                            : "bg-white dark:bg-gray-900 border-gray-200 dark:border-gray-800"
-                        }
-                      `}
+                      className={`flex items-center justify-between p-4 border rounded-xl shadow-sm transition-all ${
+                        req.is_approved
+                          ? "bg-gray-100 dark:bg-gray-800/50 border-gray-200 dark:border-gray-800 opacity-70"
+                          : "bg-white dark:bg-gray-900 border-gray-200 dark:border-gray-800"
+                      }`}
                     >
                       <div className="flex gap-4 items-center">
                         <div
-                          className={`h-10 w-10 rounded-full flex items-center justify-center font-bold text-lg 
-                            ${
-                              req.is_approved
-                                ? "bg-gray-300 dark:bg-gray-700 text-gray-500"
-                                : "bg-indigo-100 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400"
-                            }`}
+                          className={`h-10 w-10 rounded-full flex items-center justify-center font-bold text-lg ${
+                            req.is_approved
+                              ? "bg-gray-300 dark:bg-gray-700 text-gray-500"
+                              : "bg-indigo-100 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400"
+                          }`}
                         >
                           {req.full_name[0]}
                         </div>
                         <div>
-                          {/* ✅ VISUAL FEEDBACK: Line-through if approved */}
                           <h4
                             className={`font-bold ${
                               req.is_approved
@@ -546,7 +592,7 @@ export function StudentManagementTab() {
                               size="sm"
                               variant="ghost"
                               className="text-red-500 hover:text-red-600 hover:bg-red-50"
-                              onClick={() => handleRejectRequest(req.id)}
+                              onClick={() => handleOpenRejectModal(req.id)}
                             >
                               <XCircle className="w-5 h-5" />
                             </Button>
@@ -569,7 +615,7 @@ export function StudentManagementTab() {
         </TabsContent>
       </Tabs>
 
-      {/* --- ADD/EDIT MODAL --- */}
+      {/* MODALS */}
       <Dialog
         open={isAddOpen || isEditOpen}
         onOpenChange={(open) => {
@@ -658,8 +704,6 @@ export function StudentManagementTab() {
                 />
               </div>
             </div>
-
-            {/* Password Display */}
             {isAddOpen && (
               <div className="space-y-2">
                 <Label>Initial Password (Auto-Generated)</Label>
@@ -692,12 +736,8 @@ export function StudentManagementTab() {
                     <Copy className="w-4 h-4" />
                   </Button>
                 </div>
-                <p className="text-[10px] text-muted-foreground">
-                  Format: <span className="font-mono">IciYYYY-MM-DD</span>
-                </p>
               </div>
             )}
-
             <DialogFooter className="mt-4">
               <Button type="submit" disabled={isSubmitting}>
                 {isSubmitting ? (
@@ -713,7 +753,6 @@ export function StudentManagementTab() {
         </DialogContent>
       </Dialog>
 
-      {/* --- DELETE MODAL --- */}
       <Dialog open={isDeleteOpen} onOpenChange={setIsDeleteOpen}>
         <DialogContent>
           <DialogHeader>
@@ -730,6 +769,35 @@ export function StudentManagementTab() {
               disabled={isSubmitting}
             >
               Delete
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={isRejectOpen} onOpenChange={setIsRejectOpen}>
+        <DialogContent className="sm:max-w-[425px]">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-red-600">
+              <AlertTriangle className="w-5 h-5" /> Reject Request?
+            </DialogTitle>
+            <DialogDescription>
+              This will permanently delete the account request.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="mt-4">
+            <Button variant="ghost" onClick={() => setIsRejectOpen(false)}>
+              Cancel
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={confirmRejectRequest}
+              disabled={isSubmitting}
+            >
+              {isSubmitting ? (
+                <Loader2 className="animate-spin h-4 w-4" />
+              ) : (
+                "Confirm Rejection"
+              )}
             </Button>
           </DialogFooter>
         </DialogContent>

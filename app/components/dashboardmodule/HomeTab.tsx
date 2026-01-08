@@ -171,7 +171,7 @@ export function HomeTab({ onTabChange }: HomeTabProps) {
                 Welcome back, {user?.displayName || "Traveler"}!
               </h1>
 
-              <div className="mt-6 flex flex-wrap gap-4 items-center">
+              {/* <div className="mt-6 flex flex-wrap gap-4 items-center">
                 <Button
                   onClick={() => grantXP(100)}
                   disabled={isProcessing}
@@ -191,7 +191,7 @@ export function HomeTab({ onTabChange }: HomeTabProps) {
                 <span className="text-[10px] text-indigo-200 opacity-70">
                   * Click to test Level Up & Leaderboard
                 </span>
-              </div>
+              </div> */}
             </div>
 
             <div className="bg-black/20 backdrop-blur-sm rounded-2xl p-6 min-w-[280px] border border-white/10">
