@@ -9,8 +9,7 @@ import { useAuth } from "~/contexts/AuthContext";
 import { cn } from "~/lib/utils";
 import { ControllerIcon, MapIcon } from "../ui/Icons";
 
-// 1. Import your MatchHistoryTab component here
-// (Adjust the path if it is in a different folder, e.g., "../matchhistory/MatchHistoryTab")
+// Import the Updated MatchHistoryTab
 import { MatchHistoryTab } from "./MatchHistoryTab";
 
 export function PlayTab() {
@@ -41,7 +40,7 @@ export function PlayTab() {
       bgColor: "bg-indigo-500/10",
       borderColor: "hover:border-indigo-500/50",
       route: "/play/multiplayer",
-      minLevel: 5, // Locked until Level 5
+      minLevel: 5,
     },
     {
       id: "challenges",
@@ -58,7 +57,7 @@ export function PlayTab() {
   ];
 
   return (
-    <div className="max-w-5xl mx-auto space-y-8 pb-12 pt-4 px-4">
+    <div className="max-w-7xl mx-auto space-y-8 pb-12 pt-4 px-4">
       {/* Header Section */}
       <motion.div
         initial={{ opacity: 0, y: -20 }}
@@ -171,7 +170,7 @@ export function PlayTab() {
         })}
       </div>
 
-      {/* 2. Replaced Footer Banner with MatchHistoryTab */}
+      {/* History Table */}
       <div className="mt-8">
         <MatchHistoryTab />
       </div>

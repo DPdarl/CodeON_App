@@ -1,4 +1,3 @@
-// app/contexts/AuthContext.tsx
 import {
   createContext,
   useContext,
@@ -42,6 +41,7 @@ export interface UserData {
   completedChapters?: string[];
 }
 
+// ✅ Added 'refreshUser' to interface
 interface AuthContextType {
   user: UserData | null;
   loading: boolean;
@@ -57,6 +57,7 @@ interface AuthContextType {
   updatePassword: (p: string) => Promise<void>;
   syncUser: (data: UserData) => void;
   refreshSession: () => Promise<User | null>;
+  refreshUser: () => Promise<void>; // <--- NEW METHOD
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -174,6 +175,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     },
     [mapUserFromDB]
   );
+
+  // ✅ New Public Method to force refresh user data
+  const refreshUser = useCallback(async () => {
+    const {
+      data: { session },
+    } = await supabase.auth.getSession();
+    if (session?.user) {
+      await fetchUserData(session.user);
+    }
+  }, [fetchUserData]);
 
   const setupRealtime = useCallback(() => {
     if (!user?.uid) return;
@@ -387,8 +398,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       updatePassword,
       syncUser,
       refreshSession,
+      refreshUser, // ✅ Expose new function
     }),
-    [user, loading, loginWithStudentId, updateProfile, syncUser, refreshSession]
+    [
+      user,
+      loading,
+      loginWithStudentId,
+      updateProfile,
+      syncUser,
+      refreshSession,
+      refreshUser,
+    ]
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

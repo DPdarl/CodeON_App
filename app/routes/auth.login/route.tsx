@@ -57,7 +57,7 @@ export default function Login() {
           navigate("/dashboard");
         } else {
           // ✅ Redirect to onboarding if this is their first time
-          navigate("/onboarding");
+          navigate("/auth/onboarding");
         }
       }
     } catch (err: any) {

@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { useNavigate } from "@remix-run/react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
@@ -6,11 +6,9 @@ import {
   Check,
   Lock,
   BookOpen,
-  Star,
   Map as MapIcon,
   Loader2,
   X,
-  ArrowRight,
   Heart,
   Backpack,
   Trophy,
@@ -19,6 +17,10 @@ import {
   Snowflake,
   Clock,
   Zap,
+  Medal,
+  Star,
+  ArrowRight,
+  Gift, // New Icon
 } from "lucide-react";
 import { cn } from "~/lib/utils";
 import { Button } from "~/components/ui/button";
@@ -44,6 +46,7 @@ import {
   DialogHeader,
   DialogTitle,
   DialogFooter,
+  DialogDescription,
 } from "~/components/ui/dialog";
 import { toast } from "sonner";
 
@@ -56,14 +59,64 @@ import {
   QuizActivity,
   BuildingBlocksActivity,
   MatchingActivity,
+  type ActivityHandle,
 } from "~/components/dashboardmodule/ActivityComponents";
 import { AdventureResults } from "~/components/dashboardmodule/AdventureResults";
+import { AdventureCompletedCelebration } from "~/components/dashboardmodule/AdventureCompletedCelebration"; // ✅ NEW COMPONENT
 import { CHAPTER_VISUALS, CSHARP_LESSONS } from "~/data/adventureContent";
+import { useGameSound } from "~/hooks/useGameSound";
 
 const NODE_HEIGHT = 160;
 const NODE_GAP = 32;
 
-// --- REUSABLE HEART DROPDOWN COMPONENT ---
+// --- HELPER: Format Seconds ---
+const formatRuntime = (seconds: number) => {
+  const h = Math.floor(seconds / 3600);
+  const m = Math.floor((seconds % 3600) / 60);
+  const s = seconds % 60;
+
+  if (h > 0) return `${h}h ${m}m ${s}s`;
+  if (m > 0) return `${m}m ${s}s`;
+  return `${s}s`;
+};
+
+// --- COMPONENT: RANK BADGE ---
+function RankBadge({ rank }: { rank: number }) {
+  if (!rank || rank === 0) return null;
+
+  if (rank === 1) {
+    return (
+      <div className="hidden md:flex items-center gap-2 px-4 py-2 bg-yellow-500/10 text-yellow-600 rounded-full font-bold border border-yellow-500/20 shadow-sm">
+        <Medal className="w-4 h-4 fill-yellow-600 text-yellow-600" />
+        <span>Rank 1</span>
+      </div>
+    );
+  }
+  if (rank === 2) {
+    return (
+      <div className="hidden md:flex items-center gap-2 px-4 py-2 bg-slate-200/50 text-slate-600 rounded-full font-bold border border-slate-300 shadow-sm">
+        <Medal className="w-4 h-4 fill-slate-400 text-slate-500" />
+        <span>Rank 2</span>
+      </div>
+    );
+  }
+  if (rank === 3) {
+    return (
+      <div className="hidden md:flex items-center gap-2 px-4 py-2 bg-orange-700/10 text-orange-700 rounded-full font-bold border border-orange-700/20 shadow-sm">
+        <Medal className="w-4 h-4 fill-orange-700 text-orange-700" />
+        <span>Rank 3</span>
+      </div>
+    );
+  }
+  return (
+    <div className="hidden md:flex items-center gap-2 px-4 py-2 bg-secondary/50 text-muted-foreground rounded-full font-bold border border-border">
+      <Trophy className="w-4 h-4" />
+      <span>#{rank}</span>
+    </div>
+  );
+}
+
+// --- REUSABLE HEART DROPDOWN ---
 function HeartDropdown({ hearts, timeRemaining, buyHearts }: any) {
   const isFull = hearts >= MAX_HEARTS;
 
@@ -71,18 +124,11 @@ function HeartDropdown({ hearts, timeRemaining, buyHearts }: any) {
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
         <Button
-          variant="outline"
-          className="flex items-center gap-2 bg-red-50 dark:bg-red-950/30 px-3 py-1.5 h-10 rounded-full border border-red-200 dark:border-red-900 hover:bg-red-100 dark:hover:bg-red-900/50 transition-all"
+          variant="ghost"
+          className="flex items-center gap-1 hover:bg-transparent px-2"
         >
-          <Heart className="w-5 h-5 text-red-500 fill-red-500" />
-          <span className="font-bold text-red-600 dark:text-red-400 text-lg">
-            {hearts}
-          </span>
-          {!isFull && (
-            <span className="text-xs text-red-400/80 font-mono ml-1">
-              {timeRemaining}
-            </span>
-          )}
+          <Heart className="w-6 h-6 text-red-500 fill-red-500" />
+          <span className="font-bold text-red-500 text-lg">{hearts}</span>
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="w-72 p-2">
@@ -136,144 +182,214 @@ function HeartDropdown({ hearts, timeRemaining, buyHearts }: any) {
 }
 
 // --- COMPONENT: ROADMAP NODE ---
-function RoadmapNode({ chapter, status, alignment, onClick, id }: any) {
+function RoadmapNode({
+  chapter,
+  status,
+  alignment,
+  onClick,
+  id,
+  isAdventureComplete,
+}: any) {
   const Icon = chapter.icon;
   const isCompleted = status === "completed";
   const isLocked = status === "locked";
+  const isCurrent = status === "current";
+
+  const isClickable = isCurrent || (isCompleted && isAdventureComplete);
 
   const cardVariants = {
-    hidden: { opacity: 0, x: alignment === "left" ? -20 : 20 },
-    visible: { opacity: 1, x: 0, transition: { delay: 0.1 } },
+    hidden: { opacity: 0, y: 20 },
+    visible: { opacity: 1, y: 0, transition: { delay: 0.1 } },
   };
 
   return (
     <TooltipProvider delayDuration={100}>
       <motion.div
-        id={id} // Used for auto-scroll
-        className="relative w-full h-40"
+        id={id}
+        className="relative w-full h-40 flex items-center"
         initial="hidden"
         whileInView="visible"
         viewport={{ once: true, margin: "-50px" }}
       >
+        {/* --- NODE BUTTON --- */}
+        <div className="absolute left-8 md:left-1/2 -translate-x-1/2 z-10">
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <motion.button
+                whileHover={isClickable ? { scale: 1.15 } : {}}
+                whileTap={isClickable ? { scale: 0.95 } : {}}
+                disabled={!isClickable}
+                onClick={isClickable ? onClick : undefined}
+                className={cn(
+                  "w-16 h-16 md:w-20 md:h-20 rounded-full flex items-center justify-center border-4 border-background transition-all",
+                  isLocked
+                    ? "bg-muted text-muted-foreground"
+                    : cn(
+                        chapter.color,
+                        "text-white shadow-xl ring-4 ring-offset-4 ring-offset-background ring-indigo-500/20"
+                      ),
+                  isCompleted && "ring-green-400/50 border-green-100"
+                )}
+              >
+                {isCompleted ? (
+                  <Check className="w-6 h-6 md:w-8 md:h-8 stroke-[3]" />
+                ) : isLocked ? (
+                  <Lock className="w-6 h-6 md:w-8 md:h-8" />
+                ) : (
+                  <Icon className="w-6 h-6 md:w-8 md:h-8" />
+                )}
+                {status === "current" && (
+                  <span className="absolute inset-0 rounded-full animate-ping opacity-30 bg-white" />
+                )}
+              </motion.button>
+            </TooltipTrigger>
+            <TooltipContent side="top">
+              <p>
+                {isCompleted && !isAdventureComplete
+                  ? "Complete Adventure to Replay"
+                  : isCompleted
+                  ? "Replay Lesson"
+                  : chapter.activityType}
+              </p>
+            </TooltipContent>
+          </Tooltip>
+        </div>
+
+        {/* --- CONTENT CARD --- */}
         <motion.div
           variants={cardVariants}
           className={cn(
-            "absolute w-64 top-1/2 -translate-y-1/2",
+            "absolute w-[calc(100%-6rem)] md:w-64",
+            "left-20",
             alignment === "left"
-              ? "right-[calc(50%+5rem)]"
-              : "left-[calc(50%+5rem)]"
+              ? "md:left-auto md:right-[calc(50%+5rem)]"
+              : "md:left-[calc(50%+5rem)]"
           )}
         >
           <Card
             className={cn(
               "shadow-lg rounded-2xl transition-all border-2",
-              !isLocked
-                ? "hover:scale-105 cursor-pointer hover:border-indigo-400"
-                : "opacity-60 grayscale border-dashed"
+              isClickable ? "hover:scale-105 cursor-pointer" : "cursor-default",
+              isCompleted
+                ? "bg-green-50 border-green-500/30 dark:bg-green-900/20 dark:border-green-500/30"
+                : isLocked
+                ? "opacity-60 grayscale border-dashed"
+                : "hover:border-indigo-400"
             )}
-            onClick={!isLocked ? onClick : undefined}
+            onClick={isClickable ? onClick : undefined}
           >
-            <CardHeader className="pb-2 p-4">
+            <CardHeader className="pb-1 p-3 md:p-4">
               <div className="flex justify-between items-start">
                 <Badge
                   variant={isCompleted ? "default" : "outline"}
                   className={cn(
-                    "mb-2 text-[10px]",
-                    isCompleted ? "bg-green-500 hover:bg-green-600" : ""
+                    "mb-1 md:mb-2 text-[10px]",
+                    isCompleted ? "bg-green-600 hover:bg-green-700" : ""
                   )}
                 >
                   {isCompleted ? "Completed" : `Chapter ${chapter.order_index}`}
                 </Badge>
                 {!isLocked && <BookOpen className="w-3 h-3 text-indigo-500" />}
               </div>
-              <CardTitle className="text-base leading-tight">
+              <CardTitle className="text-sm md:text-base leading-tight">
                 {chapter.title}
               </CardTitle>
             </CardHeader>
-            <CardContent className="p-4 pt-0">
+            <CardContent className="p-3 md:p-4 pt-0">
               <p className="text-xs text-muted-foreground line-clamp-2">
                 {chapter.description}
               </p>
             </CardContent>
           </Card>
         </motion.div>
-
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <motion.button
-              style={{ x: "-50%", y: "0%" }}
-              whileHover={!isLocked ? { scale: 1.15 } : {}}
-              whileTap={!isLocked ? { scale: 0.95 } : {}}
-              disabled={isLocked}
-              onClick={onClick}
-              className={cn(
-                "absolute z-10 w-20 h-20 rounded-full flex items-center justify-center border-4 border-background transition-all",
-                "left-1/2",
-                isLocked
-                  ? "bg-muted text-muted-foreground"
-                  : cn(
-                      chapter.color,
-                      "text-white shadow-xl ring-4 ring-offset-4 ring-offset-background ring-indigo-500/20"
-                    ),
-                isCompleted && "ring-yellow-400/50 border-yellow-100"
-              )}
-            >
-              {isCompleted ? (
-                <Check className="w-8 h-8 stroke-[3]" />
-              ) : isLocked ? (
-                <Lock className="w-8 h-8" />
-              ) : (
-                <Icon className="w-8 h-8" />
-              )}
-              {status === "current" && (
-                <span className="absolute inset-0 rounded-full animate-ping opacity-30 bg-white" />
-              )}
-            </motion.button>
-          </TooltipTrigger>
-          <TooltipContent side={alignment === "left" ? "right" : "left"}>
-            <p>{isCompleted ? "Replay Lesson" : chapter.activityType}</p>
-          </TooltipContent>
-        </Tooltip>
       </motion.div>
     </TooltipProvider>
   );
 }
 
-// --- COMPONENT: REWARD MODAL ---
+// --- COMPONENT: REGRESS CONFIRMATION MODAL ---
+function RegressModal({ open, onClose, onConfirm }: any) {
+  return (
+    <Dialog open={open} onOpenChange={onClose}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2 text-red-600">
+            <RotateCcw className="w-5 h-5" /> Regress Adventure?
+          </DialogTitle>
+          <DialogDescription className="space-y-3 pt-2">
+            <p>
+              This will <strong>reset your chapter progress</strong> to the very
+              beginning.
+            </p>
+            <div className="bg-red-50 dark:bg-red-950/20 border border-red-200 dark:border-red-900 p-3 rounded-lg text-sm">
+              <p className="font-bold text-red-800 dark:text-red-200">
+                What resets:
+              </p>
+              <ul className="list-disc list-inside text-red-600 dark:text-red-300">
+                <li>Completed Chapters (0/10)</li>
+                <li>Adventure Run Time (00:00:00)</li>
+              </ul>
+            </div>
+            <p className="text-sm text-muted-foreground">
+              You will <strong>keep</strong> your XP, Coins, Badges, and
+              Inventory. This is for speed-runners who want to improve their
+              time.
+            </p>
+          </DialogDescription>
+        </DialogHeader>
+        <DialogFooter>
+          <Button variant="ghost" onClick={onClose}>
+            Cancel
+          </Button>
+          <Button variant="destructive" onClick={onConfirm}>
+            Confirm Reset
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+// --- COMPONENT: REWARD MODAL (LEVEL COMPLETION) ---
 function RewardModal({ open, onClose, data }: any) {
+  const { playSound } = useGameSound();
+
   if (!open || !data) return null;
 
   return (
     <Dialog open={open} onOpenChange={onClose}>
-      <DialogContent className="sm:max-w-md text-center">
+      <DialogContent className="sm:max-w-md w-full h-full sm:h-auto max-sm:rounded-none flex flex-col justify-center">
         <DialogHeader>
-          <div className="mx-auto w-20 h-20 bg-yellow-100 rounded-full flex items-center justify-center mb-4 border-4 border-yellow-200">
-            <Trophy className="w-10 h-10 text-yellow-600" />
+          <div className="mx-auto w-24 h-24 bg-yellow-100 rounded-full flex items-center justify-center mb-4 border-4 border-yellow-200 animate-bounce">
+            <Trophy className="w-12 h-12 text-yellow-600" />
           </div>
-          <DialogTitle className="text-2xl font-black text-center text-foreground">
+          <DialogTitle className="text-3xl font-black text-center text-foreground">
             Level Complete!
           </DialogTitle>
         </DialogHeader>
 
-        <div className="space-y-6 py-4">
-          <p className="text-muted-foreground">
-            You've mastered <strong>{data.title}</strong>.
+        <div className="space-y-8 py-6">
+          <p className="text-muted-foreground text-center text-lg">
+            You've mastered <br />
+            <span className="font-bold text-foreground text-xl">
+              {data.title}
+            </span>
           </p>
 
           <div className="grid grid-cols-2 gap-4">
-            <div className="flex flex-col items-center p-4 bg-secondary/50 rounded-xl border-2 border-transparent hover:border-indigo-500/20 transition-colors">
-              <span className="text-3xl font-black text-indigo-500">
+            <div className="flex flex-col items-center p-6 bg-secondary/50 rounded-2xl border-2 border-transparent hover:border-indigo-500/20 transition-colors">
+              <span className="text-4xl font-black text-indigo-500">
                 +{data.xp}
               </span>
-              <span className="text-xs text-muted-foreground uppercase font-bold tracking-wider">
+              <span className="text-sm text-muted-foreground uppercase font-bold tracking-wider mt-1">
                 XP Earned
               </span>
             </div>
-            <div className="flex flex-col items-center p-4 bg-secondary/50 rounded-xl border-2 border-transparent hover:border-yellow-500/20 transition-colors">
-              <span className="text-3xl font-black text-yellow-500">
+            <div className="flex flex-col items-center p-6 bg-secondary/50 rounded-2xl border-2 border-transparent hover:border-yellow-500/20 transition-colors">
+              <span className="text-4xl font-black text-yellow-500">
                 +{data.coins}
               </span>
-              <span className="text-xs text-muted-foreground uppercase font-bold tracking-wider">
+              <span className="text-sm text-muted-foreground uppercase font-bold tracking-wider mt-1">
                 Coins
               </span>
             </div>
@@ -286,14 +402,14 @@ function RewardModal({ open, onClose, data }: any) {
                   ? "Streak Continued!"
                   : "Streak Started!"}
               </p>
-              <p className="text-xs text-orange-600/80 dark:text-orange-400/70">
+              <p className="text-sm text-orange-600/80 dark:text-orange-400/70">
                 {data.streakStatus === "continued"
                   ? "You're on fire! Keep it up."
                   : "Great start. Come back tomorrow!"}
               </p>
             </div>
             <div className="flex flex-col items-center">
-              <span className="text-2xl font-black text-orange-500">
+              <span className="text-3xl font-black text-orange-500">
                 {data.currentStreak}
               </span>
               <span className="text-[10px] font-bold text-orange-400 uppercase">
@@ -303,11 +419,14 @@ function RewardModal({ open, onClose, data }: any) {
           </div>
         </div>
 
-        <DialogFooter className="sm:justify-center">
+        <DialogFooter className="sm:justify-center mt-auto sm:mt-0">
           <Button
-            onClick={onClose}
+            onClick={() => {
+              playSound("claim");
+              onClose();
+            }}
             size="lg"
-            className="w-full font-bold text-md h-12"
+            className="w-full font-bold text-lg h-14 rounded-xl"
           >
             Continue Journey
           </Button>
@@ -317,63 +436,117 @@ function RewardModal({ open, onClose, data }: any) {
   );
 }
 
-// --- COMPONENT: FULL SCREEN LESSON VIEW ---
+// --- COMPONENT: GAME OVER OVERLAY (Stable External Component) ---
+const GameOverOverlay = ({
+  onRefill,
+  onClose,
+  timeRemaining,
+}: {
+  onRefill: () => void;
+  onClose: () => void;
+  timeRemaining: string;
+}) => (
+  <motion.div
+    key="game-over-modal"
+    initial={{ opacity: 0 }}
+    animate={{ opacity: 1 }}
+    exit={{ opacity: 0 }}
+    className="absolute inset-0 z-[60] bg-background/95 backdrop-blur flex items-center justify-center p-4"
+  >
+    <div className="text-center space-y-6 max-w-md w-full bg-card border shadow-2xl p-8 rounded-3xl">
+      <div className="mx-auto w-24 h-24 bg-red-100 rounded-full flex items-center justify-center animate-pulse">
+        <Heart className="w-12 h-12 text-red-500 fill-red-500" />
+      </div>
+      <div>
+        <h2 className="text-3xl font-black text-foreground">Out of Hearts!</h2>
+        <p className="text-muted-foreground mt-2">
+          Wait for regeneration or refill instantly.
+        </p>
+        <div className="mt-4 flex items-center justify-center gap-2 text-sm font-mono text-muted-foreground">
+          <Clock className="w-4 h-4" />
+          Next heart in: {timeRemaining || "20:00"}
+        </div>
+      </div>
+
+      <div className="flex flex-col gap-3 pt-4">
+        <Button
+          onClick={onRefill}
+          size="lg"
+          className="gap-2 w-full font-bold bg-green-500 hover:bg-green-600 text-white"
+        >
+          <Zap className="w-4 h-4 fill-white" />
+          Refill for {HEART_COST} Coins
+        </Button>
+        <Button variant="ghost" onClick={onClose} className="w-full">
+          Give Up & Return
+        </Button>
+      </div>
+    </div>
+  </motion.div>
+);
+
+// --- COMPONENT: FULL SCREEN LESSON VIEW (Old "Page" Style) ---
 function FullScreenLesson({
   chapter,
   onClose,
   onComplete,
   inventory,
   onUseHint,
+  mistakesSet,
+  setMistakesSet,
 }: any) {
   const { user } = useAuth();
   const [step, setStep] = useState<"lesson" | "game">("lesson");
   const [isFinished, setIsFinished] = useState(false);
+  const { playSound } = useGameSound();
 
   // --- DYNAMIC QUEUE FOR RETRIES ---
   const [lessonQueue, setLessonQueue] = useState<any[]>([]);
   const [currentActivityIndex, setCurrentActivityIndex] = useState(0);
   const [originalQuestionCount, setOriginalQuestionCount] = useState(0);
 
-  // Track mistakes by their original ID
-  const [mistakesSet, setMistakesSet] = useState<Set<number>>(new Set());
-
-  // Init Queue
   useEffect(() => {
     if (chapter?.activities) {
-      const queue = chapter.activities.map((act: any, idx: number) => ({
+      const rawActivities = [...chapter.activities];
+      const shuffled = rawActivities.sort(() => Math.random() - 0.5);
+      const queue = shuffled.map((act: any, idx: number) => ({
         ...act,
         _originalId: idx,
       }));
+
       setLessonQueue(queue);
       setOriginalQuestionCount(queue.length);
       setCurrentActivityIndex(0);
     }
   }, [chapter]);
 
-  // Inventory Helper
   const hintCount =
     inventory?.find((i: any) => i.name === "Hint")?.quantity || 0;
 
-  // Time Tracking State
   const [startTime] = useState(Date.now());
+  const [elapsedTime, setElapsedTime] = useState(0);
   const [finalTime, setFinalTime] = useState(0);
 
-  // --- HEART SYSTEM HOOK ---
-  const {
-    hearts,
-    loseHeart,
-    buyHearts,
-    timeRemaining,
-    isGameOver,
-    setIsGameOver,
-  } = useHeartSystem(user);
+  useEffect(() => {
+    if (step === "game" && !isFinished) {
+      const interval = setInterval(() => {
+        setElapsedTime(Math.floor((Date.now() - startTime) / 1000));
+      }, 1000);
+      return () => clearInterval(interval);
+    }
+  }, [step, isFinished, startTime]);
 
-  // --- DUOLINGO FLOW STATE ---
+  const { hearts, loseHeart, buyHearts, timeRemaining, setIsGameOver } =
+    useHeartSystem(user);
+
+  const [showGameOver, setShowGameOver] = useState(false);
+
   const [feedbackStatus, setFeedbackStatus] = useState<
     "idle" | "correct" | "wrong"
   >("idle");
 
   const currentActivity = lessonQueue[currentActivityIndex];
+  const activityRef = useRef<ActivityHandle>(null);
 
   const handleActivitySubmit = async (success: boolean) => {
     if (feedbackStatus !== "idle") return;
@@ -383,26 +556,34 @@ function FullScreenLesson({
     } else {
       setFeedbackStatus("wrong");
 
-      const isDead = await loseHeart();
-
-      if (!isDead) {
-        if (currentActivity && currentActivity._originalId !== undefined) {
-          setMistakesSet((prev) =>
-            new Set(prev).add(currentActivity._originalId)
-          );
+      if (hearts <= 1) {
+        playSound("gameover");
+        setShowGameOver(true);
+        setIsGameOver(true);
+        loseHeart();
+      } else {
+        const isDead = await loseHeart();
+        if (isDead) {
+          playSound("gameover");
+          setShowGameOver(true);
+        } else {
+          if (currentActivity && currentActivity._originalId !== undefined) {
+            setMistakesSet((prev: any) =>
+              new Set(prev).add(currentActivity._originalId)
+            );
+          }
+          setLessonQueue((prev) => [...prev, prev[currentActivityIndex]]);
         }
-        // Push copy to end of queue
-        setLessonQueue((prev) => [...prev, prev[currentActivityIndex]]);
       }
     }
   };
 
   const handleContinue = () => {
     setFeedbackStatus("idle");
-
     if (currentActivityIndex < lessonQueue.length - 1) {
       setCurrentActivityIndex((prev) => prev + 1);
     } else {
+      playSound("complete");
       const endTime = Date.now();
       const durationSeconds = Math.floor((endTime - startTime) / 1000);
       setFinalTime(durationSeconds);
@@ -410,65 +591,11 @@ function FullScreenLesson({
     }
   };
 
-  const handleRetry = () => {
-    if (chapter?.activities) {
-      const queue = chapter.activities.map((act: any, idx: number) => ({
-        ...act,
-        _originalId: idx,
-      }));
-      setLessonQueue(queue);
-    }
-    setCurrentActivityIndex(0);
-    setMistakesSet(new Set());
-    setFeedbackStatus("idle");
-    setStep("lesson");
+  const handleBuyHearts = async () => {
+    await buyHearts();
+    setShowGameOver(false);
     setIsGameOver(false);
   };
-
-  if (isGameOver) {
-    return (
-      <motion.div
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
-        className="fixed inset-0 z-[60] bg-background/95 backdrop-blur flex items-center justify-center p-4"
-      >
-        <div className="text-center space-y-6 max-w-md w-full bg-card border shadow-2xl p-8 rounded-3xl">
-          <div className="mx-auto w-24 h-24 bg-red-100 rounded-full flex items-center justify-center animate-pulse">
-            <Heart className="w-12 h-12 text-red-500 fill-red-500" />
-          </div>
-          <div>
-            <h2 className="text-3xl font-black text-foreground">
-              Out of Hearts!
-            </h2>
-            <p className="text-muted-foreground mt-2">
-              Wait for regeneration or refill instantly.
-            </p>
-            <div className="mt-4 flex items-center justify-center gap-2 text-sm font-mono text-muted-foreground">
-              <Clock className="w-4 h-4" />
-              Next heart in: {timeRemaining || "20:00"}
-            </div>
-          </div>
-
-          <div className="flex flex-col gap-3 pt-4">
-            <Button
-              onClick={() => {
-                buyHearts();
-                setIsGameOver(false);
-              }}
-              size="lg"
-              className="gap-2 w-full font-bold bg-green-500 hover:bg-green-600 text-white"
-            >
-              <Zap className="w-4 h-4 fill-white" />
-              Refill for {HEART_COST} Coins
-            </Button>
-            <Button variant="ghost" onClick={onClose} className="w-full">
-              Give Up & Return
-            </Button>
-          </div>
-        </div>
-      </motion.div>
-    );
-  }
 
   return (
     <motion.div
@@ -477,43 +604,85 @@ function FullScreenLesson({
       exit={{ opacity: 0, y: 50 }}
       className="fixed inset-0 z-50 bg-background flex flex-col"
     >
-      <div className="h-16 border-b bg-background/95 backdrop-blur flex items-center justify-between px-6 shrink-0">
-        <Button variant="ghost" onClick={onClose} className="gap-2">
-          <X className="w-5 h-5" />
-          <span className="hidden sm:inline">Quit Lesson</span>
-        </Button>
+      {/* HEADER */}
+      <div className="pt-6 pb-2 px-4 sm:px-6 w-full max-w-5xl mx-auto flex flex-col gap-3">
+        <div className="flex items-center gap-4 w-full">
+          <Button
+            variant="ghost"
+            onClick={onClose}
+            size="icon"
+            className="shrink-0 text-muted-foreground hover:text-foreground"
+          >
+            <X className="w-6 h-6" />
+          </Button>
 
-        {step === "game" && !isFinished && (
-          <div className="flex items-center gap-6">
+          {step === "game" && !isFinished ? (
+            <div className="flex-1 h-4 bg-secondary rounded-full overflow-hidden relative">
+              <div className="absolute top-1 left-2 right-2 h-1 bg-white/10 rounded-full z-10" />
+              <motion.div
+                className="h-full bg-green-500 rounded-full relative"
+                initial={{ width: 0 }}
+                animate={{
+                  width: `${
+                    (currentActivityIndex / lessonQueue.length) * 100
+                  }%`,
+                }}
+                transition={{ duration: 0.5, ease: "easeInOut" }}
+              >
+                <div className="absolute top-1 left-2 right-2 h-1 bg-white/20 rounded-full" />
+              </motion.div>
+            </div>
+          ) : (
+            <div className="flex-1" />
+          )}
+
+          <div className="flex items-center gap-2 shrink-0">
+            {step === "game" && !isFinished && (
+              <div className="hidden sm:flex items-center gap-3">
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className={cn(
+                    "text-muted-foreground hover:text-yellow-500 hover:bg-yellow-500/10",
+                    hintCount > 0 && "text-yellow-500"
+                  )}
+                  disabled={hintCount <= 0 || feedbackStatus !== "idle"}
+                  onClick={() => activityRef.current?.triggerHint()}
+                >
+                  <Lightbulb className="w-6 h-6 stroke-[2.5]" />
+                </Button>
+                <div className="font-bold text-muted-foreground font-mono">
+                  {formatRuntime(elapsedTime)}
+                </div>
+              </div>
+            )}
             <HeartDropdown
               hearts={hearts}
               timeRemaining={timeRemaining}
               buyHearts={buyHearts}
             />
+          </div>
+        </div>
 
-            <div className="flex-1 w-32 hidden sm:block">
-              <div className="h-2.5 w-full bg-secondary rounded-full overflow-hidden">
-                <motion.div
-                  className="h-full bg-primary"
-                  initial={{ width: 0 }}
-                  animate={{
-                    width: `${
-                      (currentActivityIndex / lessonQueue.length) * 100
-                    }%`,
-                  }}
-                  transition={{ duration: 0.5 }}
-                />
-              </div>
+        {step === "game" && !isFinished && (
+          <div className="flex sm:hidden items-center justify-center gap-6 pb-2 text-sm font-bold text-muted-foreground">
+            <div className="flex items-center gap-2">
+              <Clock className="w-4 h-4" />
+              {formatRuntime(elapsedTime)}
             </div>
+            <button
+              onClick={() => activityRef.current?.triggerHint()}
+              disabled={hintCount <= 0 || feedbackStatus !== "idle"}
+              className={cn(
+                "flex items-center gap-2 disabled:opacity-50",
+                hintCount > 0 && "text-yellow-500"
+              )}
+            >
+              <Lightbulb className="w-4 h-4" />
+              <span>Hint ({hintCount})</span>
+            </button>
           </div>
         )}
-
-        <div className="flex items-center gap-2">
-          <span className="text-sm font-bold hidden sm:inline">
-            {chapter.title}
-          </span>
-          <Badge variant="outline">{step === "lesson" ? "Read" : "Play"}</Badge>
-        </div>
       </div>
 
       <div className="flex-1 relative w-full overflow-hidden">
@@ -567,7 +736,7 @@ function FullScreenLesson({
                     <Button
                       size="lg"
                       onClick={() => setStep("game")}
-                      className="text-lg px-8 h-14 shadow-xl font-bold"
+                      className="text-lg px-8 h-14 shadow-xl font-bold bg-green-500 hover:bg-green-600 text-white"
                     >
                       {chapter.isCompleted
                         ? "Practice Again"
@@ -588,16 +757,26 @@ function FullScreenLesson({
               exit={{ opacity: 0, x: 20 }}
               className="absolute inset-0 overflow-hidden flex flex-col items-center justify-center"
             >
-              <div className="w-full max-w-2xl mx-auto p-6 pb-40 overflow-y-auto h-full flex flex-col justify-center">
+              <AnimatePresence>
+                {showGameOver && (
+                  <GameOverOverlay
+                    onRefill={handleBuyHearts}
+                    onClose={onClose}
+                    timeRemaining={timeRemaining}
+                  />
+                )}
+              </AnimatePresence>
+
+              <div className="w-full max-w-2xl mx-auto p-6 pb-40 overflow-y-auto h-full flex flex-col justify-center custom-scrollbar">
                 {!isFinished ? (
                   <>
                     {currentActivity ? (
                       <div className="space-y-8" key={currentActivityIndex}>
                         <div className="text-center space-y-2">
-                          <h2 className="text-3xl font-bold">
+                          <h2 className="text-2xl md:text-3xl font-black text-foreground">
                             {currentActivity.prompt}
                           </h2>
-                          <p className="text-muted-foreground">
+                          <p className="text-muted-foreground font-medium">
                             Question {currentActivityIndex + 1} of{" "}
                             {lessonQueue.length}
                           </p>
@@ -607,26 +786,29 @@ function FullScreenLesson({
                           <CardContent className="p-0">
                             {currentActivity.type === "QUIZ" && (
                               <QuizActivity
+                                ref={activityRef}
                                 data={currentActivity.data}
                                 onComplete={handleActivitySubmit}
-                                hintCount={hintCount}
                                 onConsumeHint={onUseHint}
+                                disabled={feedbackStatus !== "idle"}
                               />
                             )}
                             {currentActivity.type === "BUILDING_BLOCKS" && (
                               <BuildingBlocksActivity
+                                ref={activityRef}
                                 data={currentActivity.data}
                                 onComplete={handleActivitySubmit}
-                                hintCount={hintCount}
                                 onConsumeHint={onUseHint}
+                                disabled={feedbackStatus !== "idle"}
                               />
                             )}
                             {currentActivity.type === "MATCHING" && (
                               <MatchingActivity
+                                ref={activityRef}
                                 data={currentActivity.data}
                                 onComplete={handleActivitySubmit}
-                                hintCount={hintCount}
                                 onConsumeHint={onUseHint}
+                                disabled={feedbackStatus !== "idle"}
                               />
                             )}
                           </CardContent>
@@ -666,7 +848,7 @@ function FullScreenLesson({
 
               {/* --- FEEDBACK FOOTER --- */}
               <AnimatePresence>
-                {feedbackStatus !== "idle" && (
+                {feedbackStatus !== "idle" && !showGameOver && (
                   <motion.div
                     initial={{ y: 100 }}
                     animate={{ y: 0 }}
@@ -751,14 +933,42 @@ export default function AdventurePage() {
   const [selectedChapter, setSelectedChapter] = useState<any>(null);
   const [maxCompletedOrder, setMaxCompletedOrder] = useState(0);
 
+  const { playSound } = useGameSound();
+  const [showNoHeartsModal, setShowNoHeartsModal] = useState(false);
+
   const [stats, setStats] = useState({
     level: 1,
     completed_chapters: 0,
     total_chapters: 0,
+    total_runtime: 0,
+    rank: 0,
   });
+
+  // ✅ New State for Completion Modal
+  const [showCelebration, setShowCelebration] = useState(false);
+  const [adventureStats, setAdventureStats] = useState({
+    averageAccuracy: 0,
+    isClaimed: false,
+  });
+
+  // Keep track of mistakes in the parent so we can calculate accuracy at the end
+  const [mistakesSet, setMistakesSet] = useState<Set<number>>(new Set());
 
   const [inventory, setInventory] = useState<any[]>([]);
   const [rewardData, setRewardData] = useState<any>(null);
+  const [showRegressConfirm, setShowRegressConfirm] = useState(false);
+
+  // ✅ Check hearts BEFORE entering lesson
+  const handleNodeClick = (chapter: any) => {
+    if (hearts > 0) {
+      // Reset mistakes when starting a new lesson
+      setMistakesSet(new Set());
+      setSelectedChapter(chapter);
+    } else {
+      playSound("gameover");
+      setShowNoHeartsModal(true);
+    }
+  };
 
   const loadAdventureProgress = useCallback(async () => {
     if (!user) return;
@@ -766,13 +976,72 @@ export default function AdventurePage() {
     try {
       setLoading(true);
 
+      // 1. Fetch User Stats (Including new adventure_rewards_claimed)
       const { data: userStats, error: statsError } = await supabase
         .from("users")
-        .select("level, completed_chapters, hints, streak_freezes")
+        .select(
+          "level, xp, completed_chapters, hints, streak_freezes, total_runtime, adventure_rewards_claimed"
+        )
         .eq("id", user.uid)
         .single();
 
       if (statsError) console.error("Error fetching stats:", statsError);
+
+      // 2. Fetch Match History to Calculate Average Accuracy
+      const { data: history } = await supabase
+        .from("match_history")
+        .select("results")
+        .eq("user_id", user.uid)
+        .ilike("mode", "Adventure%");
+
+      let totalAccuracy = 0;
+      let count = 0;
+
+      if (history && history.length > 0) {
+        history.forEach((match) => {
+          // Assume first result is the user's
+          const result = match.results?.[0];
+          if (result && result.accuracy) {
+            const accNum = parseInt(
+              result.accuracy.toString().replace("%", ""),
+              10
+            );
+            if (!isNaN(accNum)) {
+              totalAccuracy += accNum;
+              count++;
+            }
+          }
+        });
+      }
+      const avgAccuracy = count > 0 ? Math.round(totalAccuracy / count) : 0;
+
+      // Update adventure stats state
+      setAdventureStats({
+        averageAccuracy: avgAccuracy,
+        isClaimed: userStats?.adventure_rewards_claimed || false,
+      });
+
+      const currentXp = userStats?.xp || 0;
+      let rank = 0;
+
+      const restrictedRoles = ["superadmin", "admin", "instructor"];
+
+      if (!restrictedRoles.includes(user.role || "")) {
+        const { count: higherXpCount, error: rankError } = await supabase
+          .from("users")
+          .select("*", { count: "exact", head: true })
+          .gt("xp", currentXp)
+          .eq("role", "user");
+
+        if (rankError) {
+          console.error("Error fetching rank:", rankError);
+          rank = 0;
+        } else {
+          rank = (higherXpCount || 0) + 1;
+        }
+      } else {
+        rank = 0;
+      }
 
       const { data: dbLessons } = await supabase
         .from("lessons")
@@ -798,6 +1067,8 @@ export default function AdventurePage() {
           level: userStats.level || 1,
           completed_chapters: completedChaptersArray.length,
           total_chapters: totalChapters,
+          total_runtime: userStats.total_runtime || 0,
+          rank: rank,
         });
 
         const items = [
@@ -852,7 +1123,6 @@ export default function AdventurePage() {
     loadAdventureProgress();
   }, [loadAdventureProgress]);
 
-  // --- UX: AUTO SCROLL TO ACTIVE NODE ---
   useEffect(() => {
     const timer = setTimeout(() => {
       if (!loading && lessons.length > 0) {
@@ -885,7 +1155,6 @@ export default function AdventurePage() {
       .eq("id", user.uid);
 
     if (error) {
-      console.error("Hint db failed:", error);
       setInventory((prev) =>
         prev.map((i) =>
           i.name === "Hint" ? { ...i, quantity: hintItem.quantity } : i
@@ -898,6 +1167,62 @@ export default function AdventurePage() {
     return true;
   };
 
+  const handleRegress = async () => {
+    if (!user) return;
+
+    const { error } = await supabase
+      .from("users")
+      .update({
+        completed_chapters: [],
+        total_runtime: 0,
+        adventure_rewards_claimed: false, // Reset rewards claim too
+      })
+      .eq("id", user.uid);
+
+    if (error) {
+      toast.error("Failed to regress.");
+      return;
+    }
+
+    setStats((prev) => ({ ...prev, completed_chapters: 0, total_runtime: 0 }));
+    setAdventureStats((prev) => ({ ...prev, isClaimed: false })); // Reset local state
+    setMaxCompletedOrder(0);
+    setLessons((prev) => prev.map((l) => ({ ...l, isCompleted: false })));
+    setShowRegressConfirm(false);
+    toast.success("Adventure Reset! Good luck speedrunning.");
+  };
+
+  // ✅ ONE-TIME CLAIM FUNCTION
+  const handleClaimGrandPrize = async () => {
+    if (!user) return;
+    try {
+      // Update DB
+      const { error } = await supabase
+        .from("users")
+        .update({
+          adventure_rewards_claimed: true,
+          coins: (user.coins || 0) + 500,
+          xp: (user.xp || 0) + 1000,
+        })
+        .eq("id", user.uid);
+
+      if (error) throw error;
+
+      // Update Local State
+      setAdventureStats((prev) => ({ ...prev, isClaimed: true }));
+      syncUser({
+        ...user,
+        coins: (user.coins || 0) + 500,
+        xp: (user.xp || 0) + 1000,
+      });
+
+      toast.success("🏆 Grand Prize Claimed!");
+    } catch (err) {
+      console.error("Claim error:", err);
+      toast.error("Failed to claim rewards.");
+    }
+  };
+
   const recordChapterCompletion = async (
     coinsEarned: number,
     lessonId: string,
@@ -905,17 +1230,13 @@ export default function AdventurePage() {
   ) => {
     if (!user) return;
 
-    // 1. Fetch current data
     const { data: userData, error: fetchError } = await supabase
       .from("users")
       .select("coins, completed_chapters, total_runtime, badges")
       .eq("id", user.uid)
       .single();
 
-    if (fetchError || !userData) {
-      console.error("Error fetching user:", fetchError);
-      return;
-    }
+    if (fetchError || !userData) return;
 
     const currentChapters: string[] = userData.completed_chapters || [];
     const isReplay = currentChapters.includes(lessonId);
@@ -925,12 +1246,10 @@ export default function AdventurePage() {
       updatedChapters.push(lessonId);
     }
 
-    // 2. RUNTIME OVERWRITE LOGIC
     let currentTotalTime = userData.total_runtime || 0;
     let newTotalTime = currentTotalTime;
 
     if (isReplay) {
-      // Fetch OLD time from progress table to subtract it
       const { data: oldProgress } = await supabase
         .from("user_lesson_progress")
         .select("completion_time")
@@ -939,15 +1258,11 @@ export default function AdventurePage() {
         .single();
 
       const oldTime = oldProgress?.completion_time || 0;
-
-      // Overwrite: (Total - Old + New)
       newTotalTime = Math.max(0, currentTotalTime - oldTime) + timeTaken;
     } else {
-      // New: Just add
       newTotalTime = currentTotalTime + timeTaken;
     }
 
-    // 3. BADGE LOGIC
     let currentBadges = userData.badges || [];
     let badgeUnlocked = false;
     const BADGE_NAME = "Adventure Champion";
@@ -961,7 +1276,6 @@ export default function AdventurePage() {
 
     const newCoins = (userData.coins || 0) + coinsEarned;
 
-    // 4. Update DB
     const { error: updateError } = await supabase
       .from("users")
       .update({
@@ -972,13 +1286,12 @@ export default function AdventurePage() {
       })
       .eq("id", user.uid);
 
-    if (updateError) {
-      console.error("Update failed:", updateError);
-      toast.error(`Save Failed: ${updateError.message}`);
-    } else {
+    if (!updateError) {
       setStats((prev) => ({
         ...prev,
         completed_chapters: updatedChapters.length,
+        total_runtime: newTotalTime,
+        badges: currentBadges,
       }));
 
       setLessons((prevLessons) =>
@@ -998,9 +1311,6 @@ export default function AdventurePage() {
 
       if (badgeUnlocked) {
         toast.success("🏆 BADGE UNLOCKED: Adventure Champion!", {
-          description:
-            "You completed every chapter in the journey. Amazing work!",
-          duration: 6000,
           style: {
             border: "2px solid #EAB308",
             backgroundColor: "#FEF9C3",
@@ -1017,6 +1327,9 @@ export default function AdventurePage() {
       ? (currentChapterIndex - 1) * (NODE_HEIGHT + NODE_GAP) + NODE_HEIGHT / 2
       : 0;
 
+  const isAdventureFinished =
+    stats.completed_chapters >= lessons.length && lessons.length > 0;
+
   const handleChapterComplete = async (timeTaken: number) => {
     if (!selectedChapter || !user) return;
 
@@ -1025,27 +1338,55 @@ export default function AdventurePage() {
 
     grantXP(xpEarned);
 
+    // 1. Calculate Accuracy for History
+    const totalQuestions = selectedChapter.activities?.length || 0;
+    const accuracy =
+      totalQuestions > 0
+        ? Math.max(
+            0,
+            Math.round(
+              ((totalQuestions - mistakesSet.size) / totalQuestions) * 100
+            )
+          )
+        : 100;
+
+    // 2. Record to Match History
+    await supabase.from("match_history").insert({
+      mode: `Adventure: ${selectedChapter.title}`,
+      played_at: new Date().toISOString(),
+      winner_name: user.displayName || "Player",
+      participants_count: 1,
+      user_id: user.uid,
+      duration_seconds: timeTaken,
+      results: [
+        {
+          rank: 1,
+          name: user.displayName || "Player",
+          score: xpEarned,
+          accuracy: `${accuracy}%`,
+          time: timeTaken,
+        },
+      ],
+    });
+
     await recordChapterCompletion(coinsEarned, selectedChapter.id, timeTaken);
 
+    // ... (Streak Logic) ...
     const getLocalYYYYMMDD = (d: Date) => {
       const offset = d.getTimezoneOffset() * 60000;
       return new Date(d.getTime() - offset).toISOString().split("T")[0];
     };
-
-    const now = new Date();
-    const today = getLocalYYYYMMDD(now);
-
+    const today = getLocalYYYYMMDD(new Date());
     const lastActive = user.activeDates?.[user.activeDates.length - 1];
-    const playedToday = lastActive === today;
 
     let streakStatus: "started" | "continued" | "none" = "started";
     let newStreak = user.streaks || 0;
 
-    const yesterdayDate = new Date();
-    yesterdayDate.setDate(yesterdayDate.getDate() - 1);
-    const yesterdayStr = getLocalYYYYMMDD(yesterdayDate);
+    if (lastActive !== today) {
+      const yesterday = new Date();
+      yesterday.setDate(yesterday.getDate() - 1);
+      const yesterdayStr = getLocalYYYYMMDD(yesterday);
 
-    if (!playedToday) {
       if (lastActive === yesterdayStr) {
         streakStatus = "continued";
         newStreak += 1;
@@ -1053,7 +1394,6 @@ export default function AdventurePage() {
         streakStatus = "started";
         newStreak = 1;
       }
-
       const newDates = [...(user.activeDates || []), today];
       syncUser({ ...user, streaks: newStreak, activeDates: newDates });
       await supabase
@@ -1064,7 +1404,7 @@ export default function AdventurePage() {
       streakStatus = "continued";
     }
 
-    const { error } = await supabase.from("user_lesson_progress").upsert(
+    await supabase.from("user_lesson_progress").upsert(
       {
         user_id: user.uid,
         lesson_id: selectedChapter.id,
@@ -1075,8 +1415,6 @@ export default function AdventurePage() {
       { onConflict: "user_id, lesson_id" }
     );
 
-    if (error) console.error("Error saving lesson progress:", error);
-
     setRewardData({
       title: selectedChapter.title,
       xp: xpEarned,
@@ -1085,6 +1423,7 @@ export default function AdventurePage() {
       currentStreak: newStreak,
     });
 
+    await loadAdventureProgress();
     setSelectedChapter(null);
   };
 
@@ -1097,11 +1436,42 @@ export default function AdventurePage() {
 
   return (
     <div className="min-h-screen bg-background p-6">
+      {/* 1. Level Completion Reward */}
       <RewardModal
         open={!!rewardData}
         onClose={() => setRewardData(null)}
         data={rewardData}
       />
+      {/* 2. Regress Confirm */}
+      <RegressModal
+        open={showRegressConfirm}
+        onClose={() => setShowRegressConfirm(false)}
+        onConfirm={handleRegress}
+      />
+      {/* 3. Grand Prize Celebration */}
+      <AdventureCompletedCelebration
+        isOpen={showCelebration}
+        onClose={() => setShowCelebration(false)}
+        onClaim={handleClaimGrandPrize}
+        stats={{
+          totalRuntime: stats.total_runtime,
+          averageAccuracy: adventureStats.averageAccuracy,
+          isClaimed: adventureStats.isClaimed,
+        }}
+      />
+
+      <AnimatePresence>
+        {showNoHeartsModal && (
+          <GameOverOverlay
+            onRefill={async () => {
+              await buyHearts();
+              setShowNoHeartsModal(false);
+            }}
+            onClose={() => setShowNoHeartsModal(false)}
+            timeRemaining={timeRemaining}
+          />
+        )}
+      </AnimatePresence>
 
       <AnimatePresence>
         {!selectedChapter && (
@@ -1112,14 +1482,50 @@ export default function AdventurePage() {
             className="max-w-4xl mx-auto space-y-8 pb-24"
           >
             <div className="flex flex-col gap-6">
-              <Button
-                variant="ghost"
-                className="w-fit -ml-4 text-muted-foreground hover:text-foreground"
-                onClick={() => navigate("/dashboard")}
-              >
-                <ArrowLeft className="w-4 h-4 mr-2" /> Back to Dashboard
-              </Button>
-              <div className="flex items-center justify-between">
+              <div className="flex justify-between items-center">
+                <Button
+                  variant="ghost"
+                  className="w-fit -ml-4 text-muted-foreground hover:text-foreground"
+                  onClick={() => (window.location.href = "/dashboard")}
+                >
+                  <ArrowLeft className="w-4 h-4 mr-2" /> Back to Dashboard
+                </Button>
+
+                {/* --- BUTTONS AREA --- */}
+                <div className="flex gap-2">
+                  {/* NEW: Grand Prize Button */}
+                  {isAdventureFinished && (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className={cn(
+                        "gap-2 border-yellow-500 text-yellow-600 hover:bg-yellow-50 dark:hover:bg-yellow-900/20",
+                        !adventureStats.isClaimed &&
+                          "animate-pulse shadow-[0_0_10px_rgba(234,179,8,0.5)]"
+                      )}
+                      onClick={() => setShowCelebration(true)}
+                    >
+                      <Gift className="w-4 h-4" />
+                      {adventureStats.isClaimed
+                        ? "View Certificate"
+                        : "Claim Prize"}
+                    </Button>
+                  )}
+
+                  {isAdventureFinished && (
+                    <Button
+                      variant="destructive"
+                      size="sm"
+                      className="gap-2"
+                      onClick={() => setShowRegressConfirm(true)}
+                    >
+                      <RotateCcw className="w-4 h-4" /> Regress
+                    </Button>
+                  )}
+                </div>
+              </div>
+
+              <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
                 <div className="flex items-center gap-4">
                   <div className="p-3 bg-indigo-100 dark:bg-indigo-900/20 rounded-2xl">
                     <MapIcon className="w-8 h-8 text-indigo-600 dark:text-indigo-400" />
@@ -1134,7 +1540,7 @@ export default function AdventurePage() {
                   </div>
                 </div>
 
-                <div className="flex gap-2">
+                <div className="flex gap-2 w-full md:w-auto justify-end">
                   <TooltipProvider>
                     <DropdownMenu>
                       <DropdownMenuTrigger asChild>
@@ -1150,67 +1556,51 @@ export default function AdventurePage() {
                         <DropdownMenuLabel>Backpack</DropdownMenuLabel>
                         <DropdownMenuSeparator />
                         {inventory.length > 0 ? (
-                          inventory.map((item, idx) => {
-                            const ItemIcon = item.icon;
-                            return (
-                              <Tooltip key={idx} delayDuration={0}>
-                                <TooltipTrigger asChild>
-                                  <DropdownMenuItem className="flex justify-between cursor-pointer py-3">
-                                    <div className="flex items-center gap-3">
-                                      <div
-                                        className={cn(
-                                          "p-1 rounded-md bg-secondary",
-                                          item.color
-                                        )}
-                                      >
-                                        <ItemIcon className="w-4 h-4" />
-                                      </div>
-                                      <span className="font-medium">
-                                        {item.name}
-                                      </span>
-                                    </div>
-                                    <Badge
-                                      variant="secondary"
-                                      className="h-5 px-1.5 font-bold"
-                                    >
-                                      {item.quantity}x
-                                    </Badge>
-                                  </DropdownMenuItem>
-                                </TooltipTrigger>
-                                <TooltipContent
-                                  side="right"
-                                  className="max-w-[200px] ml-2"
+                          inventory.map((item, idx) => (
+                            <DropdownMenuItem
+                              key={idx}
+                              className="flex justify-between cursor-pointer py-3"
+                            >
+                              <div className="flex items-center gap-3">
+                                <div
+                                  className={cn(
+                                    "p-1 rounded-md bg-secondary",
+                                    item.color
+                                  )}
                                 >
-                                  <p>{item.description}</p>
-                                </TooltipContent>
-                              </Tooltip>
-                            );
-                          })
+                                  <item.icon className="w-4 h-4" />
+                                </div>
+                                <span className="font-medium">{item.name}</span>
+                              </div>
+                              <Badge
+                                variant="secondary"
+                                className="h-5 px-1.5 font-bold"
+                              >
+                                {item.quantity}x
+                              </Badge>
+                            </DropdownMenuItem>
+                          ))
                         ) : (
                           <div className="p-4 text-sm text-muted-foreground text-center">
-                            Your backpack is empty. <br /> Visit the shop to buy
-                            power-ups!
+                            Your backpack is empty.
                           </div>
                         )}
                       </DropdownMenuContent>
                     </DropdownMenu>
                   </TooltipProvider>
 
-                  <div className="hidden md:flex items-center gap-2 px-4 py-2 bg-yellow-500/10 text-yellow-600 rounded-full font-bold border border-yellow-500/20">
-                    <Star className="w-4 h-4 fill-yellow-600" /> Level{" "}
-                    {stats.level}
-                  </div>
+                  <RankBadge rank={stats.rank} />
 
                   <TooltipProvider>
                     <Tooltip delayDuration={0}>
                       <TooltipTrigger asChild>
                         <div className="hidden md:flex items-center gap-2 px-4 py-2 bg-blue-500/10 text-blue-600 rounded-full font-bold border border-blue-500/20 cursor-default">
-                          <Trophy className="w-4 h-4 fill-blue-600" />
-                          {stats.completed_chapters} / {stats.total_chapters}
+                          <Clock className="w-4 h-4 text-blue-600" />
+                          {formatRuntime(stats.total_runtime)}
                         </div>
                       </TooltipTrigger>
                       <TooltipContent>
-                        <p>Chapters Completed</p>
+                        <p>Total Adventure Time</p>
                       </TooltipContent>
                     </Tooltip>
                   </TooltipProvider>
@@ -1225,40 +1615,36 @@ export default function AdventurePage() {
             </div>
 
             <div className="relative w-full mt-12">
-              <div className="absolute top-0 left-1/2 -translate-x-1/2 h-full w-2 bg-muted rounded-full" />
+              <div className="absolute top-0 left-8 md:left-1/2 -translate-x-1/2 h-full w-2 bg-muted rounded-full" />
               <motion.div
                 initial={{ height: 0 }}
                 animate={{ height: progressHeight }}
                 transition={{ duration: 1.5, ease: "easeInOut" }}
-                className="absolute top-0 left-1/2 -translate-x-1/2 w-2 bg-gradient-to-b from-green-400 to-green-600 rounded-full z-0 shadow-[0_0_15px_rgba(34,197,94,0.6)]"
+                className="absolute top-0 left-8 md:left-1/2 -translate-x-1/2 w-2 bg-gradient-to-b from-green-400 to-green-600 rounded-full z-0 shadow-[0_0_15px_rgba(34,197,94,0.6)]"
               />
-              <div className="relative z-10 flex flex-col items-center gap-8">
+              <div className="relative z-10 flex flex-col gap-8">
                 {lessons.map((chapter, index) => {
                   const level = index + 1;
                   let status: "locked" | "current" | "completed" = "locked";
-
-                  if (chapter.isCompleted) {
-                    status = "completed";
-                  } else if (level === maxCompletedOrder + 1) {
-                    status = "current";
-                  }
+                  if (chapter.isCompleted) status = "completed";
+                  else if (level === maxCompletedOrder + 1) status = "current";
 
                   return (
                     <RoadmapNode
                       key={chapter.id}
-                      // --- UX: Pass ID to Current Node for Scrolling ---
                       id={
                         status === "current" ? "active-chapter-node" : undefined
                       }
                       chapter={chapter}
                       status={status}
                       alignment={index % 2 === 0 ? "left" : "right"}
-                      onClick={() => setSelectedChapter(chapter)}
+                      isAdventureComplete={isAdventureFinished}
+                      onClick={() => handleNodeClick(chapter)}
                     />
                   );
                 })}
               </div>
-              <div className="flex justify-center mt-12">
+              <div className="flex justify-start md:justify-center mt-12 pl-2 md:pl-0">
                 <motion.div
                   initial={{ scale: 0 }}
                   whileInView={{ scale: 1 }}
@@ -1279,6 +1665,8 @@ export default function AdventurePage() {
             onComplete={handleChapterComplete}
             inventory={inventory}
             onUseHint={handleConsumeHint}
+            mistakesSet={mistakesSet}
+            setMistakesSet={setMistakesSet}
           />
         )}
       </AnimatePresence>

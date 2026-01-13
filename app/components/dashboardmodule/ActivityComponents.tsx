@@ -1,111 +1,92 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, forwardRef, useImperativeHandle } from "react";
 import { Button } from "~/components/ui/button";
-import { Check, RefreshCcw, AlertCircle, Lightbulb } from "lucide-react";
+import { Check, RefreshCcw } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { cn } from "~/lib/utils";
-import { Badge } from "~/components/ui/badge";
+import { useGameSound } from "~/hooks/useGameSound"; // ✅ IMPORT HOOK
 
-// --- SHARED HINT BUTTON COMPONENT ---
-function HintButton({
-  count,
-  onClick,
-  disabled,
-}: {
-  count: number;
-  onClick: () => void;
-  disabled?: boolean;
-}) {
-  return (
-    <div className="flex justify-center pb-4">
-      <Button
-        variant="outline"
-        size="sm"
-        disabled={count <= 0 || disabled}
-        onClick={onClick}
-        className="gap-2 border-yellow-500/50 hover:bg-yellow-500/10 text-yellow-600 dark:text-yellow-400"
-      >
-        <Lightbulb
-          className={cn(
-            "w-4 h-4",
-            count > 0 ? "fill-yellow-500 text-yellow-500" : ""
-          )}
-        />
-        <span>Use Hint</span>
-        <Badge
-          variant="secondary"
-          className="ml-1 bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-400"
-        >
-          {count}
-        </Badge>
-      </Button>
-    </div>
-  );
+// Interface for the Ref to trigger hints
+export interface ActivityHandle {
+  triggerHint: () => Promise<void>;
 }
 
 // --- 1. QUIZ COMPONENT ---
-export function QuizActivity({
-  data,
-  onComplete,
-  hintCount, // NEW PROP
-  onConsumeHint, // NEW PROP
-}: {
-  data: any;
-  onComplete: (success: boolean) => void;
-  hintCount: number;
-  onConsumeHint: () => Promise<boolean>;
-}) {
+export const QuizActivity = forwardRef<
+  ActivityHandle,
+  {
+    data: any;
+    onComplete: (success: boolean) => void;
+    onConsumeHint: () => Promise<boolean>;
+    disabled?: boolean;
+  }
+>(({ data, onComplete, onConsumeHint, disabled = false }, ref) => {
+  const { playSound } = useGameSound(); // ✅ INIT AUDIO
   const [selected, setSelected] = useState<number | null>(null);
   const [isChecked, setIsChecked] = useState(false);
-  const [disabledOptions, setDisabledOptions] = useState<number[]>([]); // Track removed options
+  const [disabledOptions, setDisabledOptions] = useState<number[]>([]);
+
+  const [shuffledOptions, setShuffledOptions] = useState<string[]>([]);
+  const [correctShuffledIndex, setCorrectShuffledIndex] = useState<number>(-1);
 
   useEffect(() => {
-    setSelected(null);
-    setIsChecked(false);
-    setDisabledOptions([]);
+    if (data && data.options) {
+      const optionsWithOriginalIndex = data.options.map(
+        (opt: string, index: number) => ({
+          value: opt,
+          originalIndex: index,
+          isCorrect: opt === data.answer,
+        })
+      );
+
+      const shuffled = [...optionsWithOriginalIndex].sort(
+        () => Math.random() - 0.5
+      );
+
+      setShuffledOptions(shuffled.map((item) => item.value));
+      setCorrectShuffledIndex(shuffled.findIndex((item) => item.isCorrect));
+
+      setSelected(null);
+      setIsChecked(false);
+      setDisabledOptions([]);
+    }
   }, [data]);
+
+  useImperativeHandle(ref, () => ({
+    triggerHint: async () => {
+      const success = await onConsumeHint();
+      if (!success) return;
+
+      const wrongIndices = shuffledOptions
+        .map((_, idx) => idx)
+        .filter(
+          (idx) =>
+            idx !== correctShuffledIndex && !disabledOptions.includes(idx)
+        );
+
+      const shuffledWrong = wrongIndices.sort(() => 0.5 - Math.random());
+      const toDisable = shuffledWrong.slice(0, 2);
+
+      setDisabledOptions((prev) => [...prev, ...toDisable]);
+    },
+  }));
 
   if (!data || !data.options || !Array.isArray(data.options)) return null;
 
-  const correctIndex = data.options.findIndex(
-    (opt: string) => opt === data.answer
-  );
-
   const handleSubmit = () => {
     setIsChecked(true);
-    const isCorrect = selected === correctIndex;
+    const isCorrect = selected === correctShuffledIndex;
+
+    // ✅ PLAY RESULT SOUND
+    if (isCorrect) playSound("correct");
+    else playSound("wrong");
+
     onComplete(isCorrect);
   };
 
-  // --- HINT LOGIC: REMOVE 2 WRONG ANSWERS ---
-  const handleUseHint = async () => {
-    const success = await onConsumeHint();
-    if (!success) return;
-
-    // Find all wrong indices that aren't already disabled
-    const wrongIndices = data.options
-      .map((_: any, idx: number) => idx)
-      .filter(
-        (idx: number) => idx !== correctIndex && !disabledOptions.includes(idx)
-      );
-
-    // Shuffle and pick up to 2 to disable
-    const shuffled = wrongIndices.sort(() => 0.5 - Math.random());
-    const toDisable = shuffled.slice(0, 2);
-
-    setDisabledOptions((prev) => [...prev, ...toDisable]);
-  };
+  const isInteractionDisabled = isChecked || disabled;
 
   return (
     <div className="space-y-6 w-full max-w-lg mx-auto">
-      {/* Hint Button */}
-      <HintButton
-        count={hintCount}
-        onClick={handleUseHint}
-        disabled={
-          isChecked || disabledOptions.length >= data.options.length - 1
-        }
-      />
-
       {data.question && (
         <div className="bg-secondary/30 p-6 rounded-2xl border border-border">
           <h3 className="text-xl md:text-2xl font-bold text-center text-foreground leading-snug">
@@ -115,16 +96,16 @@ export function QuizActivity({
       )}
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        {data.options.map((opt: string, idx: number) => {
-          const isDisabled = disabledOptions.includes(idx);
+        {shuffledOptions.map((opt: string, idx: number) => {
+          const isOptionDisabled = disabledOptions.includes(idx);
           let style =
             "border-2 border-transparent bg-secondary/50 hover:border-indigo-500";
 
-          if (isDisabled) {
+          if (isOptionDisabled) {
             style =
               "opacity-30 cursor-not-allowed bg-gray-100 dark:bg-gray-800 border-transparent scale-95";
           } else if (isChecked) {
-            if (idx === correctIndex)
+            if (idx === correctShuffledIndex)
               style = "bg-green-500 text-white border-green-600 shadow-lg";
             else if (selected === idx)
               style = "bg-red-500 text-white border-red-600";
@@ -137,9 +118,21 @@ export function QuizActivity({
           return (
             <motion.div
               key={idx}
-              whileTap={!isChecked && !isDisabled ? { scale: 0.98 } : {}}
-              onClick={() => !isChecked && !isDisabled && setSelected(idx)}
-              className={`p-5 rounded-xl cursor-pointer font-bold text-lg transition-all text-left ${style}`}
+              whileTap={
+                !isInteractionDisabled && !isOptionDisabled
+                  ? { scale: 0.98 }
+                  : {}
+              }
+              onClick={() => {
+                if (!isInteractionDisabled && !isOptionDisabled) {
+                  playSound("click"); // ✅ PLAY CLICK
+                  setSelected(idx);
+                }
+              }}
+              className={cn(
+                `p-5 rounded-xl cursor-pointer font-bold text-lg transition-all text-left ${style}`,
+                isInteractionDisabled && "cursor-default"
+              )}
             >
               {opt}
             </motion.div>
@@ -148,10 +141,10 @@ export function QuizActivity({
       </div>
       <Button
         onClick={handleSubmit}
-        disabled={selected === null || isChecked}
+        disabled={selected === null || isInteractionDisabled}
         className={cn(
           "w-full h-14 text-xl font-black rounded-xl transition-all shadow-xl",
-          isChecked && selected === correctIndex
+          isChecked && selected === correctShuffledIndex
             ? "bg-green-500 hover:bg-green-600 text-white"
             : isChecked
             ? "bg-red-500 hover:bg-red-600 text-white"
@@ -159,27 +152,27 @@ export function QuizActivity({
         )}
       >
         {isChecked
-          ? selected === correctIndex
+          ? selected === correctShuffledIndex
             ? "Correct! 🎉"
             : "Incorrect ❌"
           : "Check Answer"}
       </Button>
     </div>
   );
-}
+});
+QuizActivity.displayName = "QuizActivity";
 
 // --- 2. BUILDING BLOCKS COMPONENT ---
-export function BuildingBlocksActivity({
-  data,
-  onComplete,
-  hintCount, // NEW PROP
-  onConsumeHint, // NEW PROP
-}: {
-  data: any;
-  onComplete: (success: boolean) => void;
-  hintCount: number;
-  onConsumeHint: () => Promise<boolean>;
-}) {
+export const BuildingBlocksActivity = forwardRef<
+  ActivityHandle,
+  {
+    data: any;
+    onComplete: (success: boolean) => void;
+    onConsumeHint: () => Promise<boolean>;
+    disabled?: boolean;
+  }
+>(({ data, onComplete, onConsumeHint, disabled = false }, ref) => {
+  const { playSound } = useGameSound(); // ✅ INIT AUDIO
   const [currentOrder, setCurrentOrder] = useState<string[]>([]);
   const [pool, setPool] = useState<string[]>([]);
   const [isWrong, setIsWrong] = useState(false);
@@ -194,52 +187,43 @@ export function BuildingBlocksActivity({
     }
   }, [data]);
 
+  useImperativeHandle(ref, () => ({
+    triggerHint: async () => {
+      const nextIndexNeeded = currentOrder.length;
+      if (nextIndexNeeded >= data.correctOrder.length) return;
+
+      const correctOriginalIndex = data.correctOrder[nextIndexNeeded];
+      const correctValue = data.segments[correctOriginalIndex];
+      const isInPool = pool.includes(correctValue);
+
+      if (!isInPool) {
+        handleReset();
+        return;
+      }
+
+      const success = await onConsumeHint();
+      if (!success) return;
+
+      setPool((prev) => {
+        const idx = prev.indexOf(correctValue);
+        if (idx > -1) {
+          const newPool = [...prev];
+          newPool.splice(idx, 1);
+          return newPool;
+        }
+        return prev;
+      });
+
+      setCurrentOrder((prev) => [...prev, correctValue]);
+      setIsWrong(false);
+    },
+  }));
+
   if (!data || !data.segments) return null;
 
-  // --- HINT LOGIC: AUTO-PLACE NEXT BLOCK ---
-  const handleUseHint = async () => {
-    // 1. Identify the next correct block needed
-    const nextIndexNeeded = currentOrder.length;
-
-    // If completed, do nothing
-    if (nextIndexNeeded >= data.correctOrder.length) return;
-
-    // The index in the ORIGINAL segments array that corresponds to the correct answer for this position
-    const correctOriginalIndex = data.correctOrder[nextIndexNeeded];
-    const correctValue = data.segments[correctOriginalIndex];
-
-    // 2. Check if it's available in the pool
-    const isInPool = pool.includes(correctValue);
-
-    if (!isInPool) {
-      // Edge Case: If the user already placed the correct block but in the wrong earlier spot (rare if logic holds),
-      // or if logic dictates resetting. For simplicity, if the pool doesn't have it, reset.
-      handleReset();
-      return; // User has to click hint again after reset
-    }
-
-    // 3. Consume Hint
-    const success = await onConsumeHint();
-    if (!success) return;
-
-    // 4. Move block from Pool to Order
-    setPool((prev) => {
-      // Remove only the first instance of the correct value found
-      const idx = prev.indexOf(correctValue);
-      if (idx > -1) {
-        const newPool = [...prev];
-        newPool.splice(idx, 1);
-        return newPool;
-      }
-      return prev;
-    });
-
-    setCurrentOrder((prev) => [...prev, correctValue]);
-    setIsWrong(false);
-  };
-
   const handleSelect = (segment: string) => {
-    // Only allow manual select if no error state (optional UX choice)
+    if (disabled) return;
+    playSound("click"); // ✅ PLAY CLICK
     const index = pool.indexOf(segment);
     if (index > -1) {
       const newPool = [...pool];
@@ -250,9 +234,20 @@ export function BuildingBlocksActivity({
     }
   };
 
+  const handleRemoveBlock = (indexToRemove: number) => {
+    if (disabled) return;
+    playSound("click"); // ✅ PLAY CLICK
+    const blockToRemove = currentOrder[indexToRemove];
+    const newOrder = currentOrder.filter((_, idx) => idx !== indexToRemove);
+    setCurrentOrder(newOrder);
+    setPool((prev) => [...prev, blockToRemove]);
+    setIsWrong(false);
+  };
+
   const handleReset = () => {
-    // Return everything to pool
-    setPool([...pool, ...currentOrder]); // Simplified reset (might lose shuffle, but functional)
+    if (disabled) return;
+    playSound("click");
+    setPool([...pool, ...currentOrder]);
     setCurrentOrder([]);
     setIsWrong(false);
   };
@@ -265,8 +260,10 @@ export function BuildingBlocksActivity({
       JSON.stringify(currentOrder) === JSON.stringify(expectedStringArray);
 
     if (isCorrect) {
+      playSound("correct"); // ✅ CORRECT
       onComplete(true);
     } else {
+      playSound("wrong"); // ✅ WRONG
       setIsWrong(true);
       const btn = document.getElementById("run-code-btn");
       if (btn) btn.classList.add("animate-shake");
@@ -279,14 +276,7 @@ export function BuildingBlocksActivity({
 
   return (
     <div className="space-y-8 w-full max-w-2xl mx-auto">
-      {/* Hint Button */}
-      <HintButton
-        count={hintCount}
-        onClick={handleUseHint}
-        disabled={currentOrder.length === data.correctOrder.length} // Disable if full
-      />
-
-      {/* Code Area */}
+      {/* Code Area (Compiler) */}
       <div
         className={cn(
           "min-h-[140px] p-6 bg-zinc-950 rounded-2xl border-4 border-dashed flex flex-wrap gap-3 content-start transition-all shadow-inner",
@@ -300,14 +290,19 @@ export function BuildingBlocksActivity({
         )}
         <AnimatePresence>
           {currentOrder.map((s, i) => (
-            <motion.span
+            <motion.button
+              layout
               initial={{ scale: 0 }}
               animate={{ scale: 1 }}
+              exit={{ scale: 0 }}
               key={`${s}-${i}`}
-              className="px-4 py-3 bg-indigo-600 text-white rounded-lg font-mono text-lg font-bold shadow-lg border-b-4 border-indigo-800"
+              onClick={() => handleRemoveBlock(i)}
+              disabled={disabled}
+              className="px-4 py-3 bg-indigo-600 text-white rounded-lg font-mono text-lg font-bold shadow-lg border-b-4 border-indigo-800 hover:bg-red-500 hover:border-red-700 transition-colors"
+              title="Click to remove"
             >
               {s}
-            </motion.span>
+            </motion.button>
           ))}
         </AnimatePresence>
       </div>
@@ -317,13 +312,15 @@ export function BuildingBlocksActivity({
         <AnimatePresence>
           {pool.map((s, i) => (
             <motion.button
+              layout
               key={`${s}-${i}`}
               initial={{ opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.5 }}
-              whileTap={{ scale: 0.95 }}
+              whileTap={!disabled ? { scale: 0.95 } : {}}
               onClick={() => handleSelect(s)}
-              className="px-4 py-3 bg-white dark:bg-zinc-800 border-2 border-zinc-200 dark:border-zinc-700 rounded-xl shadow-sm font-mono text-lg font-semibold hover:border-indigo-500 hover:text-indigo-500 hover:shadow-md transition-all border-b-4 active:border-b-2 active:translate-y-0.5"
+              disabled={disabled}
+              className="px-4 py-3 bg-white dark:bg-zinc-800 border-2 border-zinc-200 dark:border-zinc-700 rounded-xl shadow-sm font-mono text-lg font-semibold hover:border-indigo-500 hover:text-indigo-500 hover:shadow-md transition-all border-b-4 active:border-b-2 active:translate-y-0.5 disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {s}
             </motion.button>
@@ -336,7 +333,8 @@ export function BuildingBlocksActivity({
         <Button
           variant="outline"
           onClick={handleReset}
-          className="h-14 w-14 rounded-xl border-2 hover:bg-red-50 hover:text-red-600 hover:border-red-200"
+          disabled={disabled}
+          className="h-14 w-14 rounded-xl border-2 hover:bg-red-50 hover:text-red-600 hover:border-red-200 disabled:opacity-50"
         >
           <RefreshCcw className="w-6 h-6" />
         </Button>
@@ -349,36 +347,44 @@ export function BuildingBlocksActivity({
               ? "bg-red-500 hover:bg-red-600 text-white"
               : "bg-green-600 hover:bg-green-700 text-white"
           )}
-          disabled={currentOrder.length === 0}
+          disabled={currentOrder.length === 0 || disabled}
         >
           {isWrong ? "Incorrect Code" : "Run Code ▶"}
         </Button>
       </div>
     </div>
   );
-}
+});
+BuildingBlocksActivity.displayName = "BuildingBlocksActivity";
 
 // --- 3. MATCHING COMPONENT ---
-export function MatchingActivity({
-  data,
-  onComplete,
-  hintCount, // NEW PROP
-  onConsumeHint, // NEW PROP
-}: {
-  data: any;
-  onComplete: (success: boolean) => void;
-  hintCount: number;
-  onConsumeHint: () => Promise<boolean>;
-}) {
+export const MatchingActivity = forwardRef<
+  ActivityHandle,
+  {
+    data: any;
+    onComplete: (success: boolean) => void;
+    onConsumeHint: () => Promise<boolean>;
+    disabled?: boolean;
+  }
+>(({ data, onComplete, onConsumeHint, disabled = false }, ref) => {
+  const { playSound } = useGameSound(); // ✅ INIT AUDIO
   const [selectedLeft, setSelectedLeft] = useState<string | null>(null);
   const [matched, setMatched] = useState<string[]>([]);
+
+  const [shuffledLeft, setShuffledLeft] = useState<any[]>([]);
   const [shuffledRight, setShuffledRight] = useState<any[]>([]);
 
   useEffect(() => {
     setSelectedLeft(null);
     setMatched([]);
     if (data && data.pairs) {
-      const rights = [...data.pairs].map((p: any) => ({
+      const lefts = data.pairs.map((p: any) => ({
+        val: p.left,
+        pairId: p.left,
+      }));
+      setShuffledLeft(lefts.sort(() => Math.random() - 0.5));
+
+      const rights = data.pairs.map((p: any) => ({
         val: p.right,
         originalLeft: p.left,
       }));
@@ -386,45 +392,48 @@ export function MatchingActivity({
     }
   }, [data]);
 
-  // --- HINT LOGIC: AUTO MATCH ONE PAIR ---
-  const handleUseHint = async () => {
-    const success = await onConsumeHint();
-    if (!success) return;
+  useImperativeHandle(ref, () => ({
+    triggerHint: async () => {
+      const success = await onConsumeHint();
+      if (!success) return;
 
-    // Find the first unmatched pair
-    const firstUnmatched = data.pairs.find(
-      (p: any) => !matched.includes(p.left)
-    );
-    if (!firstUnmatched) return;
+      const firstUnmatched = data.pairs.find(
+        (p: any) => !matched.includes(p.left)
+      );
+      if (!firstUnmatched) return;
 
-    const newMatched = [...matched, firstUnmatched.left];
-    setMatched(newMatched);
+      const newMatched = [...matched, firstUnmatched.left];
+      setMatched(newMatched);
+      playSound("correct"); // Hint match sound
 
-    // Check win condition immediately
-    if (newMatched.length === data.pairs.length) {
-      setTimeout(() => onComplete(true), 500);
-    }
-  };
+      if (newMatched.length === data.pairs.length) {
+        setTimeout(() => onComplete(true), 500);
+      }
+    },
+  }));
 
   if (!data || !data.pairs) return null;
 
   const handleLeftClick = (leftVal: string) => {
-    if (matched.includes(leftVal)) return;
+    if (disabled || matched.includes(leftVal)) return;
+    playSound("click"); // ✅ CLICK
     setSelectedLeft(leftVal);
   };
 
   const handleRightClick = (rightObj: any) => {
-    if (!selectedLeft) return;
+    if (disabled || !selectedLeft) return;
 
     if (selectedLeft === rightObj.originalLeft) {
       const newMatched = [...matched, selectedLeft];
       setMatched(newMatched);
       setSelectedLeft(null);
+      playSound("correct"); // ✅ MATCH CORRECT
 
       if (newMatched.length === data.pairs.length) {
         setTimeout(() => onComplete(true), 500);
       }
     } else {
+      playSound("wrong"); // ✅ MATCH WRONG
       const grid = document.getElementById("matching-grid");
       if (grid) {
         grid.classList.add("animate-shake");
@@ -437,55 +446,55 @@ export function MatchingActivity({
 
   return (
     <div className="space-y-6 w-full max-w-3xl mx-auto">
-      <HintButton
-        count={hintCount}
-        onClick={handleUseHint}
-        disabled={matched.length === data.pairs.length}
-      />
-
       <div id="matching-grid" className="w-full grid grid-cols-2 gap-6">
+        {/* Left Column */}
         <div className="flex flex-col gap-4">
-          {data.pairs.map((pair: any, idx: number) => {
-            const isMatched = matched.includes(pair.left);
-            const isSelected = selectedLeft === pair.left;
+          {shuffledLeft.map((item: any, idx: number) => {
+            const isMatched = matched.includes(item.val);
+            const isSelected = selectedLeft === item.val;
 
             return (
               <motion.button
+                layout
                 key={`left-${idx}`}
-                whileTap={{ scale: 0.98 }}
-                onClick={() => handleLeftClick(pair.left)}
-                disabled={isMatched}
+                whileTap={!disabled && !isMatched ? { scale: 0.98 } : {}}
+                onClick={() => handleLeftClick(item.val)}
+                disabled={isMatched || disabled}
                 className={cn(
                   "h-24 p-4 rounded-2xl border-b-4 flex items-center justify-center text-base font-bold transition-all shadow-sm",
                   isMatched
                     ? "bg-green-100 border-green-400 text-green-800 opacity-60 dark:bg-green-900/30 dark:border-green-800 dark:text-green-400"
                     : isSelected
                     ? "bg-indigo-100 border-indigo-500 text-indigo-800 dark:bg-indigo-900/40 dark:border-indigo-500 dark:text-indigo-300 transform scale-105 shadow-md"
-                    : "bg-white dark:bg-zinc-800 border-zinc-200 dark:border-zinc-700 hover:border-indigo-300 dark:hover:border-indigo-700"
+                    : "bg-white dark:bg-zinc-800 border-zinc-200 dark:border-zinc-700 hover:border-indigo-300 dark:hover:border-indigo-700",
+                  disabled && "opacity-50 cursor-not-allowed"
                 )}
               >
                 {isMatched && <Check className="w-5 h-5 mr-2 text-green-600" />}
-                {pair.left}
+                {item.val}
               </motion.button>
             );
           })}
         </div>
 
+        {/* Right Column */}
         <div className="flex flex-col gap-4">
           {shuffledRight.map((item: any, idx: number) => {
             const isMatched = matched.includes(item.originalLeft);
 
             return (
               <motion.button
+                layout
                 key={`right-${idx}`}
-                whileTap={!isMatched ? { scale: 0.98 } : {}}
+                whileTap={!disabled && !isMatched ? { scale: 0.98 } : {}}
                 onClick={() => handleRightClick(item)}
-                disabled={isMatched}
+                disabled={isMatched || disabled}
                 className={cn(
                   "h-24 p-4 rounded-2xl border-b-4 flex items-center justify-center text-base font-bold transition-all shadow-sm",
                   isMatched
                     ? "bg-green-100 border-green-400 text-green-800 opacity-60 dark:bg-green-900/30 dark:border-green-800 dark:text-green-400"
-                    : "bg-white dark:bg-zinc-800 border-zinc-200 dark:border-zinc-700 hover:border-indigo-300 dark:hover:border-indigo-700"
+                    : "bg-white dark:bg-zinc-800 border-zinc-200 dark:border-zinc-700 hover:border-indigo-300 dark:hover:border-indigo-700",
+                  disabled && "opacity-50 cursor-not-allowed"
                 )}
               >
                 {item.val}
@@ -496,4 +505,5 @@ export function MatchingActivity({
       </div>
     </div>
   );
-}
+});
+MatchingActivity.displayName = "MatchingActivity";

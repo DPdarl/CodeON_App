@@ -1,4 +1,3 @@
-// app/components/dashboardmodule/DashboardHeader.tsx
 import { useState } from "react";
 import { Button } from "~/components/ui/button";
 import { Badge } from "~/components/ui/badge";
@@ -25,14 +24,14 @@ import {
   LogOut,
   Clock,
   Zap,
-  Heart,
 } from "lucide-react";
 import { AvatarDisplay } from "./AvatarDisplay";
 import { calculateProgress } from "~/lib/leveling-system";
 import { CoinIcon, FlameIcon, HeartIcon } from "../ui/Icons";
-
-// --- NEW IMPORTS ---
 import { useHeartSystem, MAX_HEARTS, HEART_COST } from "~/hooks/useHeartSystem";
+
+// ... (Keep StatItem and HeartDropdown exactly as you had them) ...
+// (I am omitting them here to save space, but DO NOT DELETE THEM)
 
 interface StatItemProps {
   icon: React.ReactNode;
@@ -52,26 +51,21 @@ function StatItem({ icon, value, color }: StatItemProps) {
   );
 }
 
-// --- NEW HEART DROPDOWN COMPONENT ---
 function HeartDropdown({ hearts, timeRemaining, buyHearts }: any) {
   const isFull = hearts >= MAX_HEARTS;
-
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        {/* Styled to match StatItem */}
         <button className="flex items-center gap-2 bg-gray-100 dark:bg-gray-800 px-3 py-1.5 rounded-full text-lg font-medium transition-transform hover:scale-125 cursor-pointer outline-none focus:ring-2 ring-red-200 dark:ring-red-900">
           <HeartIcon className="h-6 w-6 text-red-500 fill-red-500" />
           <span className="text-gray-900 dark:text-gray-100">{hearts}</span>
           {!isFull && (
-            // Tiny timer next to number if regenerating
             <span className="text-[10px] text-gray-400 font-mono ml-1">
               {timeRemaining}
             </span>
           )}
         </button>
       </DropdownMenuTrigger>
-
       <DropdownMenuContent align="end" className="w-72 p-2">
         <DropdownMenuLabel className="flex items-center justify-between">
           <span>Lives</span>
@@ -85,8 +79,6 @@ function HeartDropdown({ hearts, timeRemaining, buyHearts }: any) {
           </Badge>
         </DropdownMenuLabel>
         <DropdownMenuSeparator />
-
-        {/* Status Section */}
         <div className="p-3 bg-secondary/30 rounded-md mb-2 space-y-2">
           <div className="flex items-center justify-between text-sm">
             <span className="text-muted-foreground">Current Hearts</span>
@@ -105,16 +97,11 @@ function HeartDropdown({ hearts, timeRemaining, buyHearts }: any) {
             </div>
           )}
         </div>
-
-        {/* Refill Button */}
         <Button
           className="w-full gap-2 font-bold bg-green-500 hover:bg-green-600 text-white"
           size="lg"
           disabled={isFull}
-          onClick={() => {
-            if (isFull) return;
-            buyHearts();
-          }}
+          onClick={() => !isFull && buyHearts()}
         >
           <Zap className="w-4 h-4 fill-white" />
           {isFull ? "Hearts are Full" : `Refill Full (${HEART_COST})`}
@@ -148,15 +135,9 @@ export function DashboardHeader({
   onLogout,
 }: DashboardHeaderProps) {
   const [showLogoutDialog, setShowLogoutDialog] = useState(false);
-
-  // --- 1. CALCULATE XP & LEVEL ---
   const { currentLevel, progressPercent } = calculateProgress(user?.xp || 0);
-
-  // --- 2. INIT HEART SYSTEM ---
-  // Using the hook ensures the timer runs live in the header
   const { hearts, timeRemaining, buyHearts } = useHeartSystem(user);
 
-  // --- 3. PROGRESS RING MATH ---
   const radius = 28;
   const center = 32;
   const circumference = 2 * Math.PI * radius;
@@ -174,15 +155,17 @@ export function DashboardHeader({
 
   return (
     <>
-      <header className="border-b bg-white/80 dark:bg-gray-900/80 backdrop-blur-sm sticky top-0 z-10 transition-colors">
+      <header
+        className={`border-b bg-gray-100 dark:bg-gray-900 sticky top-0 z-10 transition-colors`}
+      >
         <div className="px-4 py-2 flex items-center justify-between">
-          {/* Left: Sidebar Toggle */}
+          {/* Left: Sidebar Toggle (HIDDEN ON MOBILE) */}
           <div className="flex-none">
             <Button
               variant="ghost"
               size="icon"
               onClick={onToggleSidebar}
-              className="h-9 w-9"
+              className="h-9 w-9 hidden md:inline-flex" // ✅ UPDATED: Hidden on mobile
             >
               {sidebarCollapsed ? (
                 <PanelLeftOpen className="h-5 w-5" />
@@ -195,13 +178,10 @@ export function DashboardHeader({
           {/* Center: Stats Bar */}
           <div className="flex-1 flex justify-center no-scrollbar mx-4">
             <div className="flex items-center space-x-3 md:space-x-6">
-              {/* Level Stat (Text Only) */}
               <div className="flex items-center gap-2 bg-yellow-100 dark:bg-yellow-900/30 px-3 py-1.5 rounded-full text-lg font-black text-yellow-600 dark:text-yellow-400 transition-transform hover:scale-125 cursor-default">
                 Lvl {currentLevel}
               </div>
-
               <div className="h-6 w-px bg-gray-300 dark:bg-gray-700 hidden sm:block" />
-
               <StatItem
                 icon={<FlameIcon className="h-6 w-5" />}
                 value={stats.streaks}
@@ -210,8 +190,6 @@ export function DashboardHeader({
                 icon={<CoinIcon className="h-6 w-6" />}
                 value={stats.coins}
               />
-
-              {/* --- REPLACED STATIC HEART WITH DROPDOWN --- */}
               <HeartDropdown
                 hearts={hearts}
                 timeRemaining={timeRemaining}
@@ -220,12 +198,11 @@ export function DashboardHeader({
             </div>
           </div>
 
-          {/* Right: User Profile & Menu */}
+          {/* Right: User Profile */}
           <div className="flex-none">
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <div className="flex items-center space-x-3 cursor-pointer p-1 rounded-xl hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors group select-none">
-                  {/* Avatar Container */}
                   <div className="relative flex items-center justify-center w-16 h-16">
                     <svg className="absolute w-full h-full transform -rotate-90">
                       <circle
@@ -248,12 +225,10 @@ export function DashboardHeader({
                         strokeDashoffset={strokeDashoffset}
                       />
                     </svg>
-
                     <div className="h-14 w-14 rounded-full overflow-hidden border-2 border-white dark:border-gray-800 bg-gray-100 dark:bg-gray-800 z-10">
                       <AvatarDisplay config={user?.avatarConfig} headOnly />
                     </div>
                   </div>
-
                   <div className="hidden md:block text-left">
                     <p className="text-sm font-bold text-gray-900 dark:text-gray-100 group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors">
                       {user?.displayName || "User"}
@@ -264,10 +239,9 @@ export function DashboardHeader({
                   </div>
                 </div>
               </DropdownMenuTrigger>
-
               <DropdownMenuContent align="end" className="w-56">
                 <DropdownMenuLabel>
-                  My Account
+                  My Account{" "}
                   <span className="ml-2 text-xs font-normal text-muted-foreground bg-gray-100 dark:bg-gray-800 px-1.5 py-0.5 rounded capitalize">
                     {user?.role || "Student"}
                   </span>
@@ -277,17 +251,14 @@ export function DashboardHeader({
                   onClick={onSwitchTheme}
                   className="cursor-pointer"
                 >
-                  <Moon className="mr-2 h-4 w-4" />
-                  <span>Switch Theme</span>
+                  <Moon className="mr-2 h-4 w-4" /> <span>Switch Theme</span>
                 </DropdownMenuItem>
                 <DropdownMenuSeparator />
                 <DropdownMenuItem
-                  onSelect={(e) => e.preventDefault()}
                   onClick={() => setShowLogoutDialog(true)}
                   className="cursor-pointer text-red-600 focus:text-red-600 focus:bg-red-50 dark:focus:bg-red-950/20"
                 >
-                  <LogOut className="mr-2 h-4 w-4" />
-                  <span>Logout</span>
+                  <LogOut className="mr-2 h-4 w-4" /> <span>Logout</span>
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
@@ -295,14 +266,13 @@ export function DashboardHeader({
         </div>
       </header>
 
-      {/* Logout Confirmation Dialog */}
+      {/* Logout Dialog */}
       <Dialog open={showLogoutDialog} onOpenChange={setShowLogoutDialog}>
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Sign out?</DialogTitle>
             <DialogDescription>
-              Are you sure you want to sign out? You will need to log back in to
-              access your dashboard.
+              Are you sure you want to sign out?
             </DialogDescription>
           </DialogHeader>
           <DialogFooter className="gap-2 sm:gap-0">

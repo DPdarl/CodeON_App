@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { motion } from "framer-motion";
 import {
   Code2,
@@ -24,16 +24,21 @@ import { LevelUpModal } from "./LevelUpModal";
 
 interface HomeTabProps {
   onTabChange: (tab: string) => void;
+  isActive?: boolean;
 }
 
-export function HomeTab({ onTabChange }: HomeTabProps) {
-  const { user } = useAuth();
+export function HomeTab({ onTabChange, isActive = true }: HomeTabProps) {
+  const { user, refreshUser } = useAuth();
   const navigate = useNavigate();
+
   const [challenges, setChallenges] = useState<Challenge[]>([]);
   const [loading, setLoading] = useState(true);
 
+  // ✅ FIX: Use a Ref to track if we have fetched data for this 'activation'
+  // This prevents the infinite loop caused by user updates triggering re-renders
+  const hasFetchedRef = useRef(false);
+
   // --- DYNAMIC PROGRESS STATE ---
-  // Default state is placeholder until data loads
   const [adventureProgress, setAdventureProgress] = useState({
     chapter: 1,
     title: "Loading...",
@@ -42,32 +47,13 @@ export function HomeTab({ onTabChange }: HomeTabProps) {
 
   const { grantXP, levelUpModal, isProcessing } = useGameProgress();
 
-  // 1. Fetch Challenges (Linear Order)
-  useEffect(() => {
-    const fetchChallenges = async () => {
-      try {
-        const { data, error } = await supabase.from("challenges").select("*");
-        if (error) throw error;
-        if (data) {
-          const sorted = (data as Challenge[]).sort((a, b) => a.page - b.page);
-          setChallenges(sorted);
-        }
-      } catch (error) {
-        console.error("Error fetching challenges:", error);
-      } finally {
-        setLoading(false);
-      }
-    };
-    fetchChallenges();
-  }, []);
-
-  // --- 2. FUNCTION: LOAD CURRENT CHAPTER (Logic from play.adventure.tsx) ---
-  // This calculates the correct chapter based on the user's completed array
+  // --- LOAD CURRENT CHAPTER LOGIC ---
+  // Memoized based on user.completedChapters ID array, not the whole user object
+  // to prevent unnecessary re-calculations.
   const loadCurrentChapter = useCallback(async () => {
     if (!user) return;
 
     try {
-      // A. Fetch All Lessons to determine order
       const { data: lessonsData, error: lessonsError } = await supabase
         .from("lessons")
         .select("id, title, order_index")
@@ -76,31 +62,24 @@ export function HomeTab({ onTabChange }: HomeTabProps) {
       if (lessonsError) console.error("Error fetching lessons:", lessonsError);
 
       if (lessonsData) {
-        // B. USE THE AUTH CONTEXT ARRAY (The Source of Truth)
-        // We look at the array of IDs stored in the user profile
         const completedIds = user?.completedChapters || [];
-
-        // C. Find the first lesson that is NOT in that array
         const nextLesson = lessonsData.find(
           (l) => !completedIds.includes(l.id)
         );
 
         if (nextLesson) {
-          // Found the specific chapter the user is working on
           setAdventureProgress({
             chapter: nextLesson.order_index,
             title: nextLesson.title,
             isCompleted: false,
           });
         } else if (lessonsData.length > 0) {
-          // If no "next" lesson is found, it means they finished them all
           setAdventureProgress({
             chapter: lessonsData.length,
             title: "Mastery Reached",
             isCompleted: true,
           });
         } else {
-          // Fallback if DB is empty
           setAdventureProgress({
             chapter: 1,
             title: "The Beginning",
@@ -111,12 +90,51 @@ export function HomeTab({ onTabChange }: HomeTabProps) {
     } catch (err) {
       console.error("Failed to calculate current chapter:", err);
     }
-  }, [user]); // Re-creates function if user object changes
+  }, [user?.completedChapters]); // ✅ Only depend on the array, not the full user object
 
-  // Run the function on mount or when user changes
+  // --- DATA FETCHING FUNCTION ---
+  const fetchData = useCallback(async () => {
+    setLoading(true);
+    try {
+      // 1. Fetch Challenges
+      const { data: challengeData, error: challengeError } = await supabase
+        .from("challenges")
+        .select("*");
+
+      if (challengeError) throw challengeError;
+      if (challengeData) {
+        const sorted = (challengeData as Challenge[]).sort(
+          (a, b) => a.page - b.page
+        );
+        setChallenges(sorted);
+      }
+
+      // 2. Refresh User Data (Silent update)
+      // This updates the Context, but our Ref prevents the Loop
+      if (refreshUser) await refreshUser();
+
+      // 3. Recalculate chapter
+      await loadCurrentChapter();
+    } catch (error) {
+      console.error("Error refreshing home tab:", error);
+    } finally {
+      setLoading(false);
+    }
+  }, [refreshUser, loadCurrentChapter]);
+
+  // --- ✅ FIXED AUTO REFRESH EFFECT ---
   useEffect(() => {
-    loadCurrentChapter();
-  }, [loadCurrentChapter]);
+    if (isActive) {
+      // Only fetch if we haven't done so for this activation
+      if (!hasFetchedRef.current) {
+        fetchData();
+        hasFetchedRef.current = true;
+      }
+    } else {
+      // Reset the flag when we leave the tab, so it refreshes next time we click it
+      hasFetchedRef.current = false;
+    }
+  }, [isActive, fetchData]);
 
   // 3. Calculate Stats
   const progressData = calculateProgress(user?.xp || 0);
@@ -128,7 +146,6 @@ export function HomeTab({ onTabChange }: HomeTabProps) {
     streak: user?.streaks || 0,
     trophies: user?.trophies || 0,
     league: user?.league || "Novice",
-    // Count from context or 0
     starsEarned: user?.completedChapters?.length || 0,
   };
 
@@ -141,13 +158,20 @@ export function HomeTab({ onTabChange }: HomeTabProps) {
     visible: { opacity: 1, transition: { staggerChildren: 0.1 } },
   };
 
+  const isAdminOrSuper = user?.role === "admin" || user?.role === "superadmin";
+
   return (
     <div className="max-w-6xl mx-auto space-y-8 pb-12">
       <LevelUpModal
         isOpen={levelUpModal.isOpen}
         newLevel={levelUpModal.newLevel}
         rewards={levelUpModal.rewards}
-        onClose={levelUpModal.close}
+        onClose={() => {
+          levelUpModal.close();
+          // Optional: force refresh after level up
+          hasFetchedRef.current = false;
+          fetchData();
+        }}
       />
 
       {/* --- Hero Section --- */}
@@ -171,27 +195,30 @@ export function HomeTab({ onTabChange }: HomeTabProps) {
                 Welcome back, {user?.displayName || "Traveler"}!
               </h1>
 
-              {/* <div className="mt-6 flex flex-wrap gap-4 items-center">
-                <Button
-                  onClick={() => grantXP(100)}
-                  disabled={isProcessing}
-                  variant="secondary"
-                  size="sm"
-                  className="bg-white/20 hover:bg-white/30 text-white border-0 transition-all active:scale-95"
-                >
-                  {isProcessing ? (
-                    <span className="animate-pulse">Adding...</span>
-                  ) : (
-                    <>
-                      <Zap className="w-4 h-4 mr-2 text-yellow-300 fill-yellow-300" />{" "}
-                      Test: Give 100 XP
-                    </>
-                  )}
-                </Button>
-                <span className="text-[10px] text-indigo-200 opacity-70">
-                  * Click to test Level Up & Leaderboard
-                </span>
-              </div> */}
+              {/* ✅ TEST BUTTON: ONLY FOR ADMINS */}
+              {isAdminOrSuper && (
+                <div className="mt-6 flex flex-wrap gap-4 items-center">
+                  <Button
+                    onClick={() => grantXP(100)}
+                    disabled={isProcessing}
+                    variant="secondary"
+                    size="sm"
+                    className="bg-white/20 hover:bg-white/30 text-white border-0 transition-all active:scale-95"
+                  >
+                    {isProcessing ? (
+                      <span className="animate-pulse">Adding...</span>
+                    ) : (
+                      <>
+                        <Zap className="w-4 h-4 mr-2 text-yellow-300 fill-yellow-300" />{" "}
+                        Test: Give 100 XP
+                      </>
+                    )}
+                  </Button>
+                  <span className="text-[10px] text-indigo-200 opacity-70">
+                    * Admin Only: Test Level Up
+                  </span>
+                </div>
+              )}
             </div>
 
             <div className="bg-black/20 backdrop-blur-sm rounded-2xl p-6 min-w-[280px] border border-white/10">

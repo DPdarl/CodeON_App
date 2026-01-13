@@ -1,5 +1,4 @@
-// app/components/dashboardmodule/StreakTab.tsx
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react"; // ✅ Added useMemo
 import { useAuth } from "~/contexts/AuthContext";
 import { Card, CardContent, CardHeader, CardTitle } from "~/components/ui/card";
 import { Button } from "~/components/ui/button";
@@ -47,6 +46,9 @@ const itemVariants = {
   visible: { y: 0, opacity: 1 },
 };
 
+// ✅ FIX 1: Define a static empty array outside the component
+const NO_DATES: string[] = [];
+
 /* --------------------------- COMPONENT --------------------------- */
 
 export function StreakTab() {
@@ -66,10 +68,12 @@ export function StreakTab() {
 
   const currentStreak = user?.streaks || 0;
   const freezeCount = user?.streakFreezes || 0;
-  const activeDatesRaw = user?.activeDates || [];
-  const frozenDatesRaw = (user as any)?.frozenDates || [];
 
-  // Determine Visual State (Orange, Blue, Gray)
+  // ✅ FIX 2: Use the static array to ensure reference stability
+  const activeDatesRaw = user?.activeDates || NO_DATES;
+  const frozenDatesRaw = (user as any)?.frozenDates || NO_DATES;
+
+  // Determine Visual State
   const visualState = getStreakState(user);
   const todayDate = getPhDateString();
   const hasPlayedToday = activeDatesRaw.includes(todayDate);
@@ -92,30 +96,21 @@ export function StreakTab() {
       new Date().toLocaleString("en-US", { timeZone: "Asia/Manila" })
     );
 
-    // Set display month
     setCurrentMonth(today.toLocaleString("default", { month: "long" }));
 
     const year = today.getFullYear();
     const month = today.getMonth();
-
-    // First day of current month
     const firstDay = new Date(year, month, 1).getDay();
-    // Total days in current month
     const daysInMonth = new Date(year, month + 1, 0).getDate();
 
     const days: any[] = [];
 
-    // Add padding for previous month
     for (let i = 0; i < firstDay; i++) {
       days.push({ isPadding: true });
     }
 
-    // Build day objects
     for (let d = 1; d <= daysInMonth; d++) {
-      // Create a date object for this specific day (noon to avoid dst/boundary issues)
       const dateObj = new Date(year, month, d, 12, 0, 0);
-
-      // Format to YYYY-MM-DD using our consistent logic
       const dateStr = new Intl.DateTimeFormat("en-CA", {
         timeZone: "Asia/Manila",
         year: "numeric",
@@ -131,13 +126,21 @@ export function StreakTab() {
         isToday,
         isActive: activeDatesRaw.includes(dateStr),
         isFrozen: frozenDatesRaw.includes(dateStr),
-        // If the date string is "greater" than today's string, it's future
         isFuture: dateStr > todayDate,
       });
     }
 
     setCalendarDays(days);
-  }, [currentStreak, activeDatesRaw, frozenDatesRaw, todayDate]);
+
+    // ✅ FIX 3: JSON.stringify ensures we only re-run if the *content* changes, not the memory reference.
+    // This completely stops the infinite loop.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [
+    currentStreak,
+    JSON.stringify(activeDatesRaw),
+    JSON.stringify(frozenDatesRaw),
+    todayDate,
+  ]);
 
   /* --------------------------- TEST BUTTON --------------------------- */
 
@@ -164,7 +167,6 @@ export function StreakTab() {
         frozenDates: result.newFrozenDates,
       });
 
-      // Show Status Modal
       setStreakStatusModal({
         show: true,
         status: result.status,
@@ -242,7 +244,6 @@ export function StreakTab() {
       >
         <DialogContent className="sm:max-w-sm text-center">
           <div className="flex flex-col items-center gap-4 py-4">
-            {/* FROZEN STATE */}
             {streakStatusModal.status === "FROZEN" && (
               <>
                 <div className="w-24 h-24 rounded-full bg-blue-100 dark:bg-blue-900/30 flex items-center justify-center mb-2 animate-bounce">
@@ -258,7 +259,6 @@ export function StreakTab() {
               </>
             )}
 
-            {/* BROKEN STATE */}
             {streakStatusModal.status === "BROKEN" && (
               <>
                 <div className="w-24 h-24 rounded-full bg-gray-200 dark:bg-gray-800 flex items-center justify-center mb-2 grayscale">
@@ -273,7 +273,6 @@ export function StreakTab() {
               </>
             )}
 
-            {/* CONTINUED / FIRST STATE */}
             {(streakStatusModal.status === "CONTINUED" ||
               streakStatusModal.status === "FIRST") && (
               <>
@@ -373,7 +372,7 @@ export function StreakTab() {
   );
 }
 
-// --- Sub-components ---
+// --- Sub-components (KEEP THESE AS THEY WERE) ---
 
 function CurrentStreakCard({
   streak,
@@ -659,7 +658,6 @@ function StreakMilestonesCard({
   );
 }
 
-// Simple Trophy Icon for Modal
 function TrophyIcon({ className }: { className?: string }) {
   return <Award className={className} />;
 }

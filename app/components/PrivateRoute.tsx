@@ -21,7 +21,7 @@ export const PrivateRoute: React.FC<PrivateRouteProps> = ({ children }) => {
   // If we aren't loading, OR if we are refreshing but didn't find a user...
   // Redirect to login.
   if (!user && !loading) {
-    return <Navigate to="/login" replace />;
+    return <Navigate to="/auth/login" replace />;
   }
 
   // If we have a user (even if 'loading' is true in the background), show the app.

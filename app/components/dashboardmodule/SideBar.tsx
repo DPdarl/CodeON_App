@@ -1,22 +1,10 @@
 // app/components/dashboardmodule/SideBar.tsx
 import {
-  Home,
-  Users, // Used for Student Management
-  Crown,
-  Scroll,
-  Flame,
+  MoreHorizontal,
   Settings,
   LogOut,
-  Gamepad2,
-  Store,
-  UserCircle,
-  MoreHorizontal,
   Info,
-  GraduationCap, // Student Management
   UserCog, // Instructor Management
-  ShieldAlert, // Admin Management
-  FileText,
-  HistoryIcon, // User Reports
 } from "lucide-react";
 import { useState, useRef, useEffect } from "react";
 import {
@@ -37,7 +25,7 @@ import {
   FlameIcon,
   HomeIcon,
   IconStore,
-  InstructorIcon,
+  // InstructorIcon, // Use UserCog import instead if missing
   ProfileIcon,
   ReportIcon,
   ScrollQuestIcon,
@@ -64,7 +52,6 @@ export function Sidebar({
   const dropdownRef = useRef<HTMLDivElement>(null);
 
   // --- NAVIGATION CONFIGURATION ---
-  // Define allowed roles for RBAC
   const ALL_ROLES = ["superadmin", "admin", "instructor", "user"];
   const STAFF_ROLES = ["superadmin", "admin", "instructor"];
   const ADMIN_ROLES = ["superadmin", "admin"];
@@ -86,12 +73,6 @@ export function Sidebar({
       icon: ScrollQuestIcon,
       roles: ALL_ROLES,
     },
-    // {
-    //   id: "match-history",
-    //   label: "Match History",
-    //   icon: HistoryIcon,
-    //   roles: ALL_ROLES,
-    // },
     { id: "streak", label: "Streak", icon: FlameIcon, roles: ALL_ROLES },
     { id: "store", label: "Store", icon: IconStore, roles: ALL_ROLES },
 
@@ -180,21 +161,25 @@ export function Sidebar({
 
   return (
     <>
+      {/* UPDATED CLASS: 
+          Removed 'w-64'/'w-24' fixed widths. 
+          Added 'w-full' so it fills the parent container (Desktop Sidebar or Mobile Drawer).
+      */}
       <div
-        className={`bg-white dark:bg-gray-900 border-r shadow-sm flex flex-col h-full transition-all duration-300 ${
-          collapsed ? "w-24" : "w-64"
-        }`}
+        className={`bg-gray-150 dark:bg-gray-900 border-r shadow-sm flex flex-col h-full w-full transition-all duration-300`}
       >
         {/* Logo Section */}
         <div className="px-3 py-6 border-b">
-          <div className="flex items-center  ">
-            <CoinIcon className="h-8 w-8 mx-3" />
+          <div
+            className={`flex items-center ${collapsed ? "justify-center" : ""}`}
+          >
+            <CoinIcon className="h-8 w-8 mx-3 flex-shrink-0" />
             {!collapsed && (
-              <div className="flex flex-col">
-                <h1 className="text-xl font-bold leading-tight font-pixelify dark:text-white">
+              <div className="flex flex-col overflow-hidden">
+                <h1 className="text-xl font-bold leading-tight font-pixelify dark:text-white truncate">
                   CodeON
                 </h1>
-                <span className="text-xs text-muted-foreground leading-tight capitalize">
+                <span className="text-xs text-muted-foreground leading-tight capitalize truncate">
                   {userRole} View
                 </span>
               </div>

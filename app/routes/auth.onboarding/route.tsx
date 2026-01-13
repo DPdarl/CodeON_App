@@ -26,16 +26,14 @@ export default function Onboarding() {
     setIsSaving(true);
 
     try {
-      console.log("Saving profile...");
+      console.log("Saving profile..."); // 1. Attempt DB Update
 
-      // 1. Attempt DB Update
       await updateProfile({
         avatarConfig,
         isOnboarded: true,
-      });
+      }); // 2. Success Feedback
 
-      // 2. Success Feedback
-      console.log("Profile saved! Redirecting...");
+      toast.success("Welcome to CodeON!"); // Using sonner for consistent UI
 
       const audio = new Audio("/success.mp3");
       audio.volume = 0.5;
@@ -46,16 +44,15 @@ export default function Onboarding() {
         spread: 70,
         origin: { y: 0.6 },
         colors: ["#a855f7", "#ec4899", "#3b82f6"],
-      });
+      }); // 3. Navigate
 
-      // 3. Delay slightly for effect, then Force Navigation
+      // Try React Router navigation first. If issues persist, revert to window.location
       setTimeout(() => {
-        // Force a hard navigation to ensure loaders re-run
-        window.location.href = "/dashboard";
+        navigate("/dashboard", { replace: true });
       }, 1000);
     } catch (error: any) {
       console.error("Failed to save avatar:", error);
-      alert(`Save failed: ${error.message || "Unknown error"}`);
+      toast.error(`Save failed: ${error.message || "Unknown error"}`);
       setIsSaving(false);
     }
   };

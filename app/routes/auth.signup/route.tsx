@@ -64,7 +64,7 @@ export default function SignUp() {
       if (data.session) {
         // Session exists! Wait briefly for AuthContext to sync, then redirect
         setTimeout(() => {
-          navigate("/onboarding");
+          navigate("/auth/onboarding");
         }, 500);
       } else if (data.user) {
         // If no session, fallback to manual login logic (rare if confirm is off)
@@ -75,11 +75,11 @@ export default function SignUp() {
 
         if (loginData.session) {
           setTimeout(() => {
-            navigate("/onboarding");
+            navigate("/auth/onboarding");
           }, 500);
         } else {
           alert("Account created! Please log in.");
-          navigate("/login");
+          navigate("/auth/login");
         }
       }
     } catch (err: any) {
@@ -285,7 +285,7 @@ export default function SignUp() {
           <p className="text-center text-sm text-gray-600">
             Already have an account?{" "}
             <Link
-              to="/login"
+              to="/auth/login"
               className="font-bold text-purple-600 hover:underline"
             >
               Sign in
