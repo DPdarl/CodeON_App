@@ -41,7 +41,6 @@ export interface UserData {
   completedChapters?: string[];
 }
 
-// ✅ Added 'refreshUser' to interface
 interface AuthContextType {
   user: UserData | null;
   loading: boolean;
@@ -50,14 +49,14 @@ interface AuthContextType {
     p: string
   ) => Promise<UserData | null>;
   logout: () => Promise<void>;
-  signInWithGoogle: () => Promise<boolean>;
+  signInWithGoogle: () => Promise<void>; // Changed return to void for cleaner usage
   linkGoogleAccount: () => Promise<void>;
   unlinkGoogleAccount: () => Promise<void>;
   updateProfile: (data: Partial<UserData>) => Promise<void>;
   updatePassword: (p: string) => Promise<void>;
   syncUser: (data: UserData) => void;
   refreshSession: () => Promise<User | null>;
-  refreshUser: () => Promise<void>; // <--- NEW METHOD
+  refreshUser: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -69,7 +68,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const channelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
 
   // ------------------------
-  // Utils
+  // Mappers
   // ------------------------
   const mapUserFromDB = useCallback(
     (db: any): UserData => ({
@@ -139,10 +138,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       db.google_bound = db.googleBound;
       delete db.googleBound;
     }
-
     if ("completedChapters" in db) {
       db.completed_chapters = db.completedChapters;
-      delete db.completedChallenges;
       delete db.completedChapters;
     }
 
@@ -152,31 +149,37 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   // ------------------------
-  // Fetch & Sync
+  // Fetch & Sync Logic
   // ------------------------
   const fetchUserData = useCallback(
     async (authUser: User) => {
-      const { data, error } = await supabase
-        .from("users")
-        .select("*")
-        .eq("id", authUser.id)
-        .single();
+      try {
+        const { data, error } = await supabase
+          .from("users")
+          .select("*")
+          .eq("id", authUser.id)
+          .single();
 
-      if (error || !data) {
-        if (error?.code !== "PGRST116") {
-          console.error("Fetch user error:", error);
+        if (error) {
+          // If using Google Auth, the 'public.users' row might not exist yet if the trigger failed.
+          console.error("Fetch user error:", error.message);
+          return null;
         }
-        return null;
+
+        if (data) {
+          const mapped = mapUserFromDB(data);
+          setUser(mapped);
+          localStorage.setItem(USER_CACHE_KEY, JSON.stringify(mapped));
+          return mapped;
+        }
+      } catch (err) {
+        console.error("Unexpected error fetching user data:", err);
       }
-      const mapped = mapUserFromDB(data);
-      setUser(mapped);
-      localStorage.setItem(USER_CACHE_KEY, JSON.stringify(mapped));
-      return mapped;
+      return null;
     },
     [mapUserFromDB]
   );
 
-  // ✅ New Public Method to force refresh user data
   const refreshUser = useCallback(async () => {
     const {
       data: { session },
@@ -186,6 +189,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }, [fetchUserData]);
 
+  // ------------------------
+  // Realtime Subscription
+  // ------------------------
   const setupRealtime = useCallback(() => {
     if (!user?.uid) return;
     if (channelRef.current) channelRef.current.unsubscribe();
@@ -202,7 +208,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         (payload: { new: any }) => {
           setUser((prev) => {
             if (!prev) return prev;
-            // Merges new data properly with fixed mapper
             const updated = { ...prev, ...mapUserFromDB(payload.new) };
             localStorage.setItem(USER_CACHE_KEY, JSON.stringify(updated));
             return updated;
@@ -212,6 +217,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       .subscribe();
   }, [user?.uid, mapUserFromDB]);
 
+  // Visibility Change Listener
   useEffect(() => {
     if (!user) return;
     setupRealtime();
@@ -228,37 +234,59 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     };
   }, [user?.uid, setupRealtime, fetchUserData]);
 
+  // ------------------------
+  // Main Auth Listener (FIXED)
+  // ------------------------
   useEffect(() => {
-    supabase.auth.getSession().then(({ data }) => {
-      if (data.session?.user) {
-        fetchUserData(data.session.user).finally(() => setLoading(false));
+    let mounted = true;
+
+    // 1. Initial Session Check
+    const initSession = async () => {
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+
+      if (session?.user) {
+        await fetchUserData(session.user);
       } else {
+        // Clear cache if no session
+        setUser(null);
+        localStorage.removeItem(USER_CACHE_KEY);
+      }
+      if (mounted) setLoading(false);
+    };
+
+    initSession();
+
+    // 2. Auth State Change Listener
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange(async (event, session) => {
+      console.log("Supabase Auth Event:", event);
+
+      if (event === "SIGNED_IN" || event === "TOKEN_REFRESHED") {
+        if (session?.user) {
+          await fetchUserData(session.user);
+        }
+      } else if (event === "SIGNED_OUT") {
+        setUser(null);
+        localStorage.removeItem(USER_CACHE_KEY);
         setLoading(false);
       }
     });
 
-    const { data: listener } = supabase.auth.onAuthStateChange(
-      (event, session) => {
-        if (event === "SIGNED_OUT") {
-          setUser(null);
-          localStorage.removeItem(USER_CACHE_KEY);
-          setLoading(false);
-        }
-        if (session?.user) {
-          fetchUserData(session.user);
-        }
-      }
-    );
-    return () => listener.subscription.unsubscribe();
+    return () => {
+      mounted = false;
+      subscription.unsubscribe();
+    };
   }, [fetchUserData]);
 
   // ------------------------
-  // ACTIONS
+  // Login / Logout / Link
   // ------------------------
   const refreshSession = async () => {
     const {
       data: { user },
-      error,
     } = await supabase.auth.getUser();
     if (user) {
       await fetchUserData(user);
@@ -308,6 +336,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
 
       if (loginError) {
+        // Fallback for default passwords/first time creation
         const isDefaultFormat = /^Ici\d{4}-\d{2}-\d{2}$/.test(p);
 
         if (isDefaultFormat) {
@@ -324,6 +353,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           }
 
           if (signUpData.user) {
+            // Claim the pre-made student profile
             await supabase.rpc("claim_student_profile", {
               student_id_input: studentId,
             });
@@ -349,11 +379,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   const signInWithGoogle = async () => {
+    // Note: This promise resolves when the redirect starts, not when auth finishes.
     await supabase.auth.signInWithOAuth({
       provider: "google",
-      options: { redirectTo: window.location.origin + "/dashboard" },
+      options: {
+        redirectTo: window.location.origin + "/dashboard",
+      },
     });
-    return false;
   };
 
   const linkGoogleAccount = async () => {
@@ -398,13 +430,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       updatePassword,
       syncUser,
       refreshSession,
-      refreshUser, // ✅ Expose new function
+      refreshUser,
     }),
     [
       user,
       loading,
       loginWithStudentId,
+      logout,
+      signInWithGoogle,
+      linkGoogleAccount,
+      unlinkGoogleAccount,
       updateProfile,
+      updatePassword,
       syncUser,
       refreshSession,
       refreshUser,
