@@ -95,8 +95,20 @@ export default function Login() {
 
   return (
     <div className="min-h-screen w-full flex bg-white dark:bg-gray-900 relative transition-colors duration-300">
-      <div className="absolute top-4 right-4 z-50">
-        <ThemeToggle />
+      <div className="absolute top-0 left-0 w-full p-4 flex items-center justify-between z-50 pointer-events-none">
+        {/* Mobile Logo */}
+        <div className="lg:hidden pointer-events-auto">
+          <img
+            src="/assets/icons/coinv2.png"
+            alt="CodeON Logo"
+            className="w-12 h-12 object-contain"
+          />
+        </div>
+
+        {/* Theme Toggle */}
+        <div className="ml-auto pointer-events-auto">
+          <ThemeToggle />
+        </div>
       </div>
 
       {/* --- Left Side: Visuals --- */}
@@ -133,7 +145,7 @@ export default function Login() {
               Student Access
             </h2>
             <p className="mt-2 text-gray-600 dark:text-gray-400">
-              Please log in with your university credentials.
+              Please log in with your student ID and password.
             </p>
           </div>
 
@@ -148,13 +160,13 @@ export default function Login() {
             <form onSubmit={handleSubmit} className="space-y-5">
               <div className="space-y-2">
                 <Label htmlFor="studentId" className="text-base">
-                  Student ID No.
+                  Student ID No. / Email
                 </Label>
                 <div className="relative">
                   <User className="absolute left-4 top-3.5 h-5 w-5 text-gray-400" />
                   <Input
                     id="studentId"
-                    placeholder="e.g., 2023-10245"
+                    placeholder="e.g., 2023-1024-IC or email@school.edu"
                     required
                     className="pl-12 h-12 text-lg font-mono"
                     value={studentId}
@@ -181,6 +193,7 @@ export default function Login() {
                   <Input
                     id="password"
                     type={showPassword ? "text" : "password"}
+                    placeholder="IciYYYY-MM-DD"
                     required
                     className="pl-12 pr-12 h-12 text-lg"
                     value={password}
@@ -393,7 +406,7 @@ function RequestAccountModal({
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="sm:max-w-[425px]">
+      <DialogContent className="w-[95vw] max-w-[425px] max-h-[90vh] overflow-y-auto rounded-xl">
         <DialogHeader>
           <DialogTitle>Request Account Access</DialogTitle>
           <DialogDescription>
@@ -404,10 +417,10 @@ function RequestAccountModal({
 
         {!success ? (
           <form onSubmit={handleRequest} className="space-y-4 py-4">
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label>Student No.</Label>
-                <Input name="studentNo" required placeholder="202X-XXXX" />
+                <Input name="studentNo" required placeholder="202X-XXXX-IC" />
               </div>
               <div className="space-y-2">
                 <Label>Section</Label>
@@ -416,12 +429,12 @@ function RequestAccountModal({
                     <SelectValue placeholder="Select" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="BSIT-1A">BSIT-1A</SelectItem>
-                    <SelectItem value="BSIT-1B">BSIT-1B</SelectItem>
-                    <SelectItem value="BSCS-1A">BSCS-1A</SelectItem>
+                    <SelectItem value="BSIS 1-1">BSIS 1-1</SelectItem>
+                    <SelectItem value="BSIS 1-2">BSIS 1-2</SelectItem>
+                    <SelectItem value="BSCS 1-1">BSCS 1-1</SelectItem>
+                    <SelectItem value="BSCS 1-2 ">BSCS 1-2</SelectItem>
+                    <SelectItem value="ACT 1-1">ACT 1-1</SelectItem>
                     <SelectItem value="BSAIS">BSAIS</SelectItem>
-                    <SelectItem value="ACT">ACT</SelectItem>
-                    <SelectItem value="BSIS">BSIS</SelectItem>
                   </SelectContent>
                 </Select>
               </div>

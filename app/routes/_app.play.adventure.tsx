@@ -63,8 +63,11 @@ import {
 } from "~/components/dashboardmodule/ActivityComponents";
 import { AdventureResults } from "~/components/dashboardmodule/AdventureResults";
 import { AdventureCompletedCelebration } from "~/components/dashboardmodule/AdventureCompletedCelebration"; // ✅ NEW COMPONENT
+import { AdventureSkeleton } from "~/components/dashboardmodule/AdventureSkeleton"; // ✅ NEW COMPONENT
 import { CHAPTER_VISUALS, CSHARP_LESSONS } from "~/data/adventureContent";
+import { trackQuestEvent } from "~/lib/quest-tracker";
 import { useGameSound } from "~/hooks/useGameSound";
+import { calculateStreakUpdate } from "~/lib/streak-logic";
 
 const NODE_HEIGHT = 160;
 const NODE_GAP = 32;
@@ -81,36 +84,63 @@ const formatRuntime = (seconds: number) => {
 };
 
 // --- COMPONENT: RANK BADGE ---
-function RankBadge({ rank }: { rank: number }) {
+// --- COMPONENT: RANK BADGE ---
+function RankBadge({
+  rank,
+  className,
+}: {
+  rank: number | string;
+  className?: string;
+}) {
   if (!rank || rank === 0) return null;
 
   if (rank === 1) {
     return (
-      <div className="hidden md:flex items-center gap-2 px-4 py-2 bg-yellow-500/10 text-yellow-600 rounded-full font-bold border border-yellow-500/20 shadow-sm">
-        <Medal className="w-4 h-4 fill-yellow-600 text-yellow-600" />
+      <div
+        className={cn(
+          "flex items-center gap-2 px-3 py-1 md:px-4 md:py-2 bg-yellow-500/10 text-yellow-600 rounded-full font-bold border border-yellow-500/20 shadow-sm text-xs md:text-sm",
+          className,
+        )}
+      >
+        <Medal className="w-3 h-3 md:w-4 md:h-4 fill-yellow-600 text-yellow-600" />
         <span>Rank 1</span>
       </div>
     );
   }
   if (rank === 2) {
     return (
-      <div className="hidden md:flex items-center gap-2 px-4 py-2 bg-slate-200/50 text-slate-600 rounded-full font-bold border border-slate-300 shadow-sm">
-        <Medal className="w-4 h-4 fill-slate-400 text-slate-500" />
+      <div
+        className={cn(
+          "flex items-center gap-2 px-3 py-1 md:px-4 md:py-2 bg-slate-200 text-slate-600 rounded-full font-bold border border-slate-300 shadow-sm text-xs md:text-sm",
+          className,
+        )}
+      >
+        <Medal className="w-3 h-3 md:w-4 md:h-4 fill-slate-300 text-slate-500" />
         <span>Rank 2</span>
       </div>
     );
   }
   if (rank === 3) {
     return (
-      <div className="hidden md:flex items-center gap-2 px-4 py-2 bg-orange-700/10 text-orange-700 rounded-full font-bold border border-orange-700/20 shadow-sm">
-        <Medal className="w-4 h-4 fill-orange-700 text-orange-700" />
+      <div
+        className={cn(
+          "flex items-center gap-2 px-3 py-1 md:px-4 md:py-2 bg-orange-100 text-orange-700 rounded-full font-bold border border-orange-200 shadow-sm text-xs md:text-sm",
+          className,
+        )}
+      >
+        <Medal className="w-3 h-3 md:w-4 md:h-4 fill-orange-400 text-orange-600" />
         <span>Rank 3</span>
       </div>
     );
   }
   return (
-    <div className="hidden md:flex items-center gap-2 px-4 py-2 bg-secondary/50 text-muted-foreground rounded-full font-bold border border-border">
-      <Trophy className="w-4 h-4" />
+    <div
+      className={cn(
+        "flex items-center gap-2 px-3 py-1 md:px-4 md:py-2 bg-secondary/50 text-muted-foreground rounded-full font-bold border border-border text-xs md:text-sm",
+        className,
+      )}
+    >
+      <Trophy className="w-3 h-3 md:w-4 md:h-4" />
       <span>#{rank}</span>
     </div>
   );
@@ -226,9 +256,9 @@ function RoadmapNode({
                     ? "bg-muted text-muted-foreground"
                     : cn(
                         chapter.color,
-                        "text-white shadow-xl ring-4 ring-offset-4 ring-offset-background ring-indigo-500/20"
+                        "text-white shadow-xl ring-4 ring-offset-4 ring-offset-background ring-indigo-500/20",
                       ),
-                  isCompleted && "ring-green-400/50 border-green-100"
+                  isCompleted && "ring-green-400/50 border-green-100",
                 )}
               >
                 {isCompleted ? (
@@ -263,7 +293,7 @@ function RoadmapNode({
             "left-20",
             alignment === "left"
               ? "md:left-auto md:right-[calc(50%+5rem)]"
-              : "md:left-[calc(50%+5rem)]"
+              : "md:left-[calc(50%+5rem)]",
           )}
         >
           <Card
@@ -274,7 +304,7 @@ function RoadmapNode({
                 ? "bg-green-50 border-green-500/30 dark:bg-green-900/20 dark:border-green-500/30"
                 : isLocked
                 ? "opacity-60 grayscale border-dashed"
-                : "hover:border-indigo-400"
+                : "hover:border-indigo-400",
             )}
             onClick={isClickable ? onClick : undefined}
           >
@@ -284,7 +314,7 @@ function RoadmapNode({
                   variant={isCompleted ? "default" : "outline"}
                   className={cn(
                     "mb-1 md:mb-2 text-[10px]",
-                    isCompleted ? "bg-green-600 hover:bg-green-700" : ""
+                    isCompleted ? "bg-green-600 hover:bg-green-700" : "",
                   )}
                 >
                   {isCompleted ? "Completed" : `Chapter ${chapter.order_index}`}
@@ -350,85 +380,26 @@ function RegressModal({ open, onClose, onConfirm }: any) {
   );
 }
 
-// --- COMPONENT: REWARD MODAL (LEVEL COMPLETION) ---
-function RewardModal({ open, onClose, data }: any) {
-  const { playSound } = useGameSound();
-
-  if (!open || !data) return null;
-
+// --- COMPONENT: EXIT CONFIRMATION MODAL ---
+function ExitConfirmModal({ open, onClose, onConfirm }: any) {
   return (
     <Dialog open={open} onOpenChange={onClose}>
-      <DialogContent className="sm:max-w-md w-full h-full sm:h-auto max-sm:rounded-none flex flex-col justify-center">
+      <DialogContent>
         <DialogHeader>
-          <div className="mx-auto w-24 h-24 bg-yellow-100 rounded-full flex items-center justify-center mb-4 border-4 border-yellow-200 animate-bounce">
-            <Trophy className="w-12 h-12 text-yellow-600" />
-          </div>
-          <DialogTitle className="text-3xl font-black text-center text-foreground">
-            Level Complete!
+          <DialogTitle className="flex items-center gap-2 text-red-600">
+            <X className="w-5 h-5" /> Exit Activity?
           </DialogTitle>
+          <DialogDescription className="pt-2">
+            If you leave now, your progress in this lesson will be lost and
+            cannot be saved.
+          </DialogDescription>
         </DialogHeader>
-
-        <div className="space-y-8 py-6">
-          <p className="text-muted-foreground text-center text-lg">
-            You've mastered <br />
-            <span className="font-bold text-foreground text-xl">
-              {data.title}
-            </span>
-          </p>
-
-          <div className="grid grid-cols-2 gap-4">
-            <div className="flex flex-col items-center p-6 bg-secondary/50 rounded-2xl border-2 border-transparent hover:border-indigo-500/20 transition-colors">
-              <span className="text-4xl font-black text-indigo-500">
-                +{data.xp}
-              </span>
-              <span className="text-sm text-muted-foreground uppercase font-bold tracking-wider mt-1">
-                XP Earned
-              </span>
-            </div>
-            <div className="flex flex-col items-center p-6 bg-secondary/50 rounded-2xl border-2 border-transparent hover:border-yellow-500/20 transition-colors">
-              <span className="text-4xl font-black text-yellow-500">
-                +{data.coins}
-              </span>
-              <span className="text-sm text-muted-foreground uppercase font-bold tracking-wider mt-1">
-                Coins
-              </span>
-            </div>
-          </div>
-
-          <div className="bg-orange-50 dark:bg-orange-950/30 border border-orange-200 dark:border-orange-900/50 p-4 rounded-xl flex items-center justify-between">
-            <div className="text-left">
-              <p className="font-bold text-orange-700 dark:text-orange-400 text-sm">
-                {data.streakStatus === "continued"
-                  ? "Streak Continued!"
-                  : "Streak Started!"}
-              </p>
-              <p className="text-sm text-orange-600/80 dark:text-orange-400/70">
-                {data.streakStatus === "continued"
-                  ? "You're on fire! Keep it up."
-                  : "Great start. Come back tomorrow!"}
-              </p>
-            </div>
-            <div className="flex flex-col items-center">
-              <span className="text-3xl font-black text-orange-500">
-                {data.currentStreak}
-              </span>
-              <span className="text-[10px] font-bold text-orange-400 uppercase">
-                Days
-              </span>
-            </div>
-          </div>
-        </div>
-
-        <DialogFooter className="sm:justify-center mt-auto sm:mt-0">
-          <Button
-            onClick={() => {
-              playSound("claim");
-              onClose();
-            }}
-            size="lg"
-            className="w-full font-bold text-lg h-14 rounded-xl"
-          >
-            Continue Journey
+        <DialogFooter>
+          <Button variant="ghost" onClick={onClose}>
+            Stay
+          </Button>
+          <Button variant="destructive" onClick={onConfirm}>
+            Exit Lesson
           </Button>
         </DialogFooter>
       </DialogContent>
@@ -537,7 +508,7 @@ function FullScreenLesson({
   }, [step, isFinished, startTime]);
 
   const { hearts, loseHeart, buyHearts, timeRemaining, setIsGameOver } =
-    useHeartSystem(user);
+    useHeartSystem();
 
   const [showGameOver, setShowGameOver] = useState(false);
 
@@ -569,7 +540,7 @@ function FullScreenLesson({
         } else {
           if (currentActivity && currentActivity._originalId !== undefined) {
             setMistakesSet((prev: any) =>
-              new Set(prev).add(currentActivity._originalId)
+              new Set(prev).add(currentActivity._originalId),
             );
           }
           setLessonQueue((prev) => [...prev, prev[currentActivityIndex]]);
@@ -597,6 +568,24 @@ function FullScreenLesson({
     setIsGameOver(false);
   };
 
+  const [showExitConfirm, setShowExitConfirm] = useState(false);
+
+  // Handle X button click
+  const handleCloseAttempt = () => {
+    // If in game and not finished, show confirm
+    if (step === "game" && !isFinished) {
+      setShowExitConfirm(true);
+    } else {
+      // Otherwise just close (article view or finished view)
+      onClose();
+    }
+  };
+
+  const confirmExit = () => {
+    setShowExitConfirm(false);
+    onClose();
+  };
+
   return (
     <motion.div
       initial={{ opacity: 0, y: 50 }}
@@ -604,12 +593,18 @@ function FullScreenLesson({
       exit={{ opacity: 0, y: 50 }}
       className="fixed inset-0 z-50 bg-background flex flex-col"
     >
+      <ExitConfirmModal
+        open={showExitConfirm}
+        onClose={() => setShowExitConfirm(false)}
+        onConfirm={confirmExit}
+      />
+
       {/* HEADER */}
       <div className="pt-6 pb-2 px-4 sm:px-6 w-full max-w-5xl mx-auto flex flex-col gap-3">
         <div className="flex items-center gap-4 w-full">
           <Button
             variant="ghost"
-            onClick={onClose}
+            onClick={handleCloseAttempt}
             size="icon"
             className="shrink-0 text-muted-foreground hover:text-foreground"
           >
@@ -644,7 +639,7 @@ function FullScreenLesson({
                   size="icon"
                   className={cn(
                     "text-muted-foreground hover:text-yellow-500 hover:bg-yellow-500/10",
-                    hintCount > 0 && "text-yellow-500"
+                    hintCount > 0 && "text-yellow-500",
                   )}
                   disabled={hintCount <= 0 || feedbackStatus !== "idle"}
                   onClick={() => activityRef.current?.triggerHint()}
@@ -675,7 +670,7 @@ function FullScreenLesson({
               disabled={hintCount <= 0 || feedbackStatus !== "idle"}
               className={cn(
                 "flex items-center gap-2 disabled:opacity-50",
-                hintCount > 0 && "text-yellow-500"
+                hintCount > 0 && "text-yellow-500",
               )}
             >
               <Lightbulb className="w-4 h-4" />
@@ -831,8 +826,8 @@ function FullScreenLesson({
                               Math.round(
                                 ((originalQuestionCount - mistakesSet.size) /
                                   originalQuestionCount) *
-                                  100
-                              )
+                                  100,
+                              ),
                             )
                           : 100,
                       totalQuestions: originalQuestionCount,
@@ -858,7 +853,7 @@ function FullScreenLesson({
                       "absolute bottom-0 left-0 right-0 p-6 border-t-2 z-50 flex flex-col sm:flex-row items-center justify-between gap-4 shadow-2xl",
                       feedbackStatus === "correct"
                         ? "bg-green-100 border-green-200 dark:bg-green-950/90 dark:border-green-900"
-                        : "bg-red-100 border-red-200 dark:bg-red-950/90 dark:border-red-900"
+                        : "bg-red-100 border-red-200 dark:bg-red-950/90 dark:border-red-900",
                     )}
                   >
                     <div className="flex items-center gap-4 w-full sm:w-auto">
@@ -867,7 +862,7 @@ function FullScreenLesson({
                           "w-12 h-12 rounded-full flex shrink-0 items-center justify-center border-4 bg-white",
                           feedbackStatus === "correct"
                             ? "border-green-500 text-green-600"
-                            : "border-red-500 text-red-600"
+                            : "border-red-500 text-red-600",
                         )}
                       >
                         {feedbackStatus === "correct" ? (
@@ -882,7 +877,7 @@ function FullScreenLesson({
                             "text-2xl font-black",
                             feedbackStatus === "correct"
                               ? "text-green-700 dark:text-green-400"
-                              : "text-red-700 dark:text-red-400"
+                              : "text-red-700 dark:text-red-400",
                           )}
                         >
                           {feedbackStatus === "correct"
@@ -904,7 +899,7 @@ function FullScreenLesson({
                         "w-full sm:w-auto min-w-[150px] font-black text-lg h-12 border-b-4 active:border-b-0 active:translate-y-1 transition-all",
                         feedbackStatus === "correct"
                           ? "bg-green-500 hover:bg-green-600 text-white border-green-700 shadow-green-900/20"
-                          : "bg-red-500 hover:bg-red-600 text-white border-red-700 shadow-red-900/20"
+                          : "bg-red-500 hover:bg-red-600 text-white border-red-700 shadow-red-900/20",
                       )}
                     >
                       CONTINUE
@@ -923,10 +918,11 @@ function FullScreenLesson({
 // --- MAIN PAGE ---
 export default function AdventurePage() {
   const navigate = useNavigate();
-  const { user, syncUser } = useAuth();
+  const { user, syncUser, refreshUser } = useAuth();
   const { grantXP } = useGameProgress();
+  const bottomRef = useRef<HTMLDivElement>(null);
 
-  const { hearts, timeRemaining, buyHearts } = useHeartSystem(user);
+  const { hearts, timeRemaining, buyHearts } = useHeartSystem();
 
   const [lessons, setLessons] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -941,7 +937,7 @@ export default function AdventurePage() {
     completed_chapters: 0,
     total_chapters: 0,
     total_runtime: 0,
-    rank: 0,
+    rank: 0 as number | string,
   });
 
   // ✅ New State for Completion Modal
@@ -953,9 +949,11 @@ export default function AdventurePage() {
 
   // Keep track of mistakes in the parent so we can calculate accuracy at the end
   const [mistakesSet, setMistakesSet] = useState<Set<number>>(new Set());
+  const [hintsUsedCount, setHintsUsedCount] = useState(0); // ADDED
 
   const [inventory, setInventory] = useState<any[]>([]);
-  const [rewardData, setRewardData] = useState<any>(null);
+
+  // const [rewardData, setRewardData] = useState<any>(null); // Removed RewardData state as RewardModal is processed
   const [showRegressConfirm, setShowRegressConfirm] = useState(false);
 
   // ✅ Check hearts BEFORE entering lesson
@@ -963,6 +961,7 @@ export default function AdventurePage() {
     if (hearts > 0) {
       // Reset mistakes when starting a new lesson
       setMistakesSet(new Set());
+      setHintsUsedCount(0); // Reset hints
       setSelectedChapter(chapter);
     } else {
       playSound("gameover");
@@ -974,13 +973,13 @@ export default function AdventurePage() {
     if (!user) return;
 
     try {
-      setLoading(true);
+      // setLoading(true); // <--- REMOVED to prevent flicker on refresh
 
       // 1. Fetch User Stats (Including new adventure_rewards_claimed)
       const { data: userStats, error: statsError } = await supabase
         .from("users")
         .select(
-          "level, xp, completed_chapters, hints, streak_freezes, total_runtime, adventure_rewards_claimed"
+          "level, xp, completed_chapters, hints, streak_freezes, total_runtime, adventure_rewards_claimed",
         )
         .eq("id", user.uid)
         .single();
@@ -1004,7 +1003,7 @@ export default function AdventurePage() {
           if (result && result.accuracy) {
             const accNum = parseInt(
               result.accuracy.toString().replace("%", ""),
-              10
+              10,
             );
             if (!isNaN(accNum)) {
               totalAccuracy += accNum;
@@ -1015,32 +1014,50 @@ export default function AdventurePage() {
       }
       const avgAccuracy = count > 0 ? Math.round(totalAccuracy / count) : 0;
 
-      // Update adventure stats state
       setAdventureStats({
         averageAccuracy: avgAccuracy,
         isClaimed: userStats?.adventure_rewards_claimed || false,
       });
 
-      const currentXp = userStats?.xp || 0;
-      let rank = 0;
-
+      // --- CALCULATE RANK (Match Leaderboard Logic) ---
+      let rank: number | string = 0;
       const restrictedRoles = ["superadmin", "admin", "instructor"];
+      const currentRuntime = userStats?.total_runtime || 0;
 
-      if (!restrictedRoles.includes(user.role || "")) {
-        const { count: higherXpCount, error: rankError } = await supabase
+      // Only calculate rank if user is valid and has played
+      if (!restrictedRoles.includes(user.role || "") && currentRuntime > 0) {
+        // Fetch top 1000 users for client-side sorting
+        const { data: allUsers } = await supabase
           .from("users")
-          .select("*", { count: "exact", head: true })
-          .gt("xp", currentXp)
-          .eq("role", "user");
+          .select("id, xp, total_runtime, completed_chapters")
+          .eq("role", "user")
+          .gt("total_runtime", 0)
+          .limit(1000);
 
-        if (rankError) {
-          console.error("Error fetching rank:", rankError);
-          rank = 0;
-        } else {
-          rank = (higherXpCount || 0) + 1;
+        if (allUsers) {
+          // Client-side Sort: Chapters (DESC) -> Time (ASC) -> XP (DESC) -> ID (ASC)
+          allUsers.sort((a, b) => {
+            const chaptersA = a.completed_chapters?.length || 0;
+            const chaptersB = b.completed_chapters?.length || 0;
+            if (chaptersA !== chaptersB) return chaptersB - chaptersA;
+
+            const timeA = a.total_runtime || 999999999;
+            const timeB = b.total_runtime || 999999999;
+            if (timeA !== timeB) return timeA - timeB;
+
+            if (a.xp !== b.xp) return (b.xp || 0) - (a.xp || 0);
+
+            return a.id.localeCompare(b.id);
+          });
+
+          // Find user index
+          const index = allUsers.findIndex((u) => u.id === user.uid);
+          if (index !== -1) {
+            rank = index + 1;
+          } else {
+            rank = "1000+"; // User not in top 1000
+          }
         }
-      } else {
-        rank = 0;
       }
 
       const { data: dbLessons } = await supabase
@@ -1054,7 +1071,7 @@ export default function AdventurePage() {
       let maxOrder = 0;
       if (dbLessons) {
         const completedDbLessons = dbLessons.filter((l) =>
-          completedChaptersArray.includes(l.id)
+          completedChaptersArray.includes(l.id),
         );
         if (completedDbLessons.length > 0) {
           maxOrder = Math.max(...completedDbLessons.map((l) => l.order_index));
@@ -1146,8 +1163,11 @@ export default function AdventurePage() {
 
     const newQuantity = hintItem.quantity - 1;
     setInventory((prev) =>
-      prev.map((i) => (i.name === "Hint" ? { ...i, quantity: newQuantity } : i))
+      prev.map((i) =>
+        i.name === "Hint" ? { ...i, quantity: newQuantity } : i,
+      ),
     );
+    setHintsUsedCount((prev) => prev + 1); // Track usage
 
     const { error } = await supabase
       .from("users")
@@ -1157,8 +1177,8 @@ export default function AdventurePage() {
     if (error) {
       setInventory((prev) =>
         prev.map((i) =>
-          i.name === "Hint" ? { ...i, quantity: hintItem.quantity } : i
-        )
+          i.name === "Hint" ? { ...i, quantity: hintItem.quantity } : i,
+        ),
       );
       toast.error("Failed to use hint.");
       return false;
@@ -1189,6 +1209,7 @@ export default function AdventurePage() {
     setMaxCompletedOrder(0);
     setLessons((prev) => prev.map((l) => ({ ...l, isCompleted: false })));
     setShowRegressConfirm(false);
+    refreshUser(); // ✅ Refresh global stats
     toast.success("Adventure Reset! Good luck speedrunning.");
   };
 
@@ -1215,6 +1236,7 @@ export default function AdventurePage() {
         coins: (user.coins || 0) + 500,
         xp: (user.xp || 0) + 1000,
       });
+      refreshUser(); // ✅ Refresh global stats
 
       toast.success("🏆 Grand Prize Claimed!");
     } catch (err) {
@@ -1226,7 +1248,7 @@ export default function AdventurePage() {
   const recordChapterCompletion = async (
     coinsEarned: number,
     lessonId: string,
-    timeTaken: number
+    timeTaken: number,
   ) => {
     if (!user) return;
 
@@ -1298,7 +1320,7 @@ export default function AdventurePage() {
         prevLessons.map((l) => {
           if (l.id === lessonId) return { ...l, isCompleted: true };
           return l;
-        })
+        }),
       );
 
       const justCompletedLesson = lessons.find((l) => l.id === lessonId);
@@ -1322,126 +1344,155 @@ export default function AdventurePage() {
   };
 
   const currentChapterIndex = maxCompletedOrder + 1;
-  const progressHeight =
+  const maxLineHeight =
+    Math.max(0, lessons.length - 1) * (NODE_HEIGHT + NODE_GAP) +
+    NODE_HEIGHT / 2;
+
+  const calculatedProgress =
     currentChapterIndex > 1
       ? (currentChapterIndex - 1) * (NODE_HEIGHT + NODE_GAP) + NODE_HEIGHT / 2
       : 0;
 
+  const progressHeight = Math.min(calculatedProgress, maxLineHeight);
+
   const isAdventureFinished =
     stats.completed_chapters >= lessons.length && lessons.length > 0;
 
-  const handleChapterComplete = async (timeTaken: number) => {
-    if (!selectedChapter || !user) return;
-
-    const xpEarned = selectedChapter.xp_reward || 50;
-    const coinsEarned = Math.floor(xpEarned / 10);
-
-    grantXP(xpEarned);
-
-    // 1. Calculate Accuracy for History
-    const totalQuestions = selectedChapter.activities?.length || 0;
-    const accuracy =
-      totalQuestions > 0
-        ? Math.max(
-            0,
-            Math.round(
-              ((totalQuestions - mistakesSet.size) / totalQuestions) * 100
-            )
-          )
-        : 100;
-
-    // 2. Record to Match History
-    await supabase.from("match_history").insert({
-      mode: `Adventure: ${selectedChapter.title}`,
-      played_at: new Date().toISOString(),
-      winner_name: user.displayName || "Player",
-      participants_count: 1,
-      user_id: user.uid,
-      duration_seconds: timeTaken,
-      results: [
-        {
-          rank: 1,
-          name: user.displayName || "Player",
-          score: xpEarned,
-          accuracy: `${accuracy}%`,
-          time: timeTaken,
-        },
-      ],
-    });
-
-    await recordChapterCompletion(coinsEarned, selectedChapter.id, timeTaken);
-
-    // ... (Streak Logic) ...
-    const getLocalYYYYMMDD = (d: Date) => {
-      const offset = d.getTimezoneOffset() * 60000;
-      return new Date(d.getTime() - offset).toISOString().split("T")[0];
-    };
-    const today = getLocalYYYYMMDD(new Date());
-    const lastActive = user.activeDates?.[user.activeDates.length - 1];
-
-    let streakStatus: "started" | "continued" | "none" = "started";
-    let newStreak = user.streaks || 0;
-
-    if (lastActive !== today) {
-      const yesterday = new Date();
-      yesterday.setDate(yesterday.getDate() - 1);
-      const yesterdayStr = getLocalYYYYMMDD(yesterday);
-
-      if (lastActive === yesterdayStr) {
-        streakStatus = "continued";
-        newStreak += 1;
-      } else {
-        streakStatus = "started";
-        newStreak = 1;
-      }
-      const newDates = [...(user.activeDates || []), today];
-      syncUser({ ...user, streaks: newStreak, activeDates: newDates });
-      await supabase
-        .from("users")
-        .update({ streaks: newStreak, active_dates: newDates })
-        .eq("id", user.uid);
-    } else {
-      streakStatus = "continued";
+  // Auto-scroll to bottom on finish
+  useEffect(() => {
+    if (isAdventureFinished) {
+      setTimeout(() => {
+        bottomRef.current?.scrollIntoView({
+          behavior: "smooth",
+          block: "center",
+        });
+      }, 1000);
     }
+  }, [isAdventureFinished]);
 
-    await supabase.from("user_lesson_progress").upsert(
-      {
+  const handleChapterComplete = async (timeTaken: number) => {
+    try {
+      if (!selectedChapter || !user) return;
+
+      // 1. Capture Data & CLOSE MODAL IMMEDIATELY
+      // We close the modal first to prevent "Article View" glitch and make it snappy.
+      const chapter = selectedChapter;
+      setSelectedChapter(null); // <--- Close UI
+
+      const xpEarned = chapter.xp_reward || 50;
+      const coinsEarned = Math.floor(xpEarned / 10);
+
+      grantXP(xpEarned);
+
+      // 2. Calculate Accuracy for History
+      const totalQuestions = chapter.activities?.length || 0;
+      const correctAnswers = Math.max(0, totalQuestions - mistakesSet.size);
+      const accuracy =
+        totalQuestions > 0
+          ? Math.round((correctAnswers / totalQuestions) * 100)
+          : 100;
+
+      // --- QUEST TRACKING ---
+      // 1. Quiz Master: Answer questions correctly
+      if (correctAnswers > 0) {
+        await trackQuestEvent(user.uid, "quiz_answers", correctAnswers);
+      }
+
+      // 2. Scholar: 100% Accuracy
+      if (accuracy === 100) {
+        await trackQuestEvent(user.uid, "perfect_quizzes", 1);
+      }
+
+      // 3. Speed Runner: Complete < 60s
+      if (timeTaken < 60) {
+        await trackQuestEvent(user.uid, "speed_runs", 1);
+      }
+
+      // 4. Steady Hand: No Hints used
+      if (hintsUsedCount === 0) {
+        await trackQuestEvent(user.uid, "levels_without_hints", 1);
+      }
+      // ----------------------
+
+      // 3. Record to Match History
+      await supabase.from("match_history").insert({
+        mode: `Adventure: ${chapter.title}`,
+        played_at: new Date().toISOString(),
+        winner_name: user.displayName || "Player",
+        participants_count: 1,
         user_id: user.uid,
-        lesson_id: selectedChapter.id,
-        status: "completed",
-        completed_at: new Date().toISOString(),
-        completion_time: timeTaken,
-      },
-      { onConflict: "user_id, lesson_id" }
-    );
+        duration_seconds: timeTaken,
+        results: [
+          {
+            rank: 1,
+            name: user.displayName || "Player",
+            score: xpEarned,
+            accuracy: `${accuracy}%`,
+            time: timeTaken,
+          },
+        ],
+      });
 
-    setRewardData({
-      title: selectedChapter.title,
-      xp: xpEarned,
-      coins: coinsEarned,
-      streakStatus: streakStatus,
-      currentStreak: newStreak,
-    });
+      await recordChapterCompletion(coinsEarned, chapter.id, timeTaken);
 
-    await loadAdventureProgress();
-    setSelectedChapter(null);
+      console.log(
+        "[AdventureDebug] Lesson Complete. Calling calculateStreakUpdate...",
+      );
+      // ... (Streak Logic - CENTRALIZED) ...
+      const streakResult = calculateStreakUpdate(user);
+      console.log("[AdventureDebug] Streak Result:", streakResult);
+
+      // We always use the new streak value, whether it updated or not
+      const newStreak = streakResult.newStreak;
+
+      // If we need to update DB (streak changed or day added)
+      if (streakResult.shouldUpdate) {
+        syncUser({
+          ...user,
+          streaks: streakResult.newStreak,
+          activeDates: streakResult.newActiveDates,
+          streakFreezes: streakResult.newFreezes,
+          frozenDates: streakResult.newFrozenDates,
+          coins: streakResult.newCoins,
+        });
+
+        await supabase
+          .from("users")
+          .update({
+            streaks: streakResult.newStreak,
+            active_dates: streakResult.newActiveDates,
+            streak_freezes: streakResult.newFreezes,
+            frozen_dates: streakResult.newFrozenDates,
+          })
+          .eq("id", user.uid);
+      }
+
+      await supabase.from("user_lesson_progress").upsert(
+        {
+          user_id: user.uid,
+          lesson_id: chapter.id,
+          status: "completed",
+          completed_at: new Date().toISOString(),
+          completion_time: timeTaken,
+        },
+        { onConflict: "user_id, lesson_id" },
+      );
+
+      // Finally refresh stats in background
+      await loadAdventureProgress();
+      refreshUser();
+    } catch (err: any) {
+      console.error("[Adventure] Critical Error:", err);
+      alert(
+        "❌ Critical Error completing lesson: " + (err.message || String(err)),
+      );
+    }
   };
 
-  if (loading)
-    return (
-      <div className="flex h-screen items-center justify-center">
-        <Loader2 className="animate-spin" />
-      </div>
-    );
+  if (loading) return <AdventureSkeleton />;
 
   return (
     <div className="min-h-screen bg-background p-6">
-      {/* 1. Level Completion Reward */}
-      <RewardModal
-        open={!!rewardData}
-        onClose={() => setRewardData(null)}
-        data={rewardData}
-      />
       {/* 2. Regress Confirm */}
       <RegressModal
         open={showRegressConfirm}
@@ -1493,24 +1544,7 @@ export default function AdventurePage() {
 
                 {/* --- BUTTONS AREA --- */}
                 <div className="flex gap-2">
-                  {/* NEW: Grand Prize Button */}
-                  {isAdventureFinished && (
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className={cn(
-                        "gap-2 border-yellow-500 text-yellow-600 hover:bg-yellow-50 dark:hover:bg-yellow-900/20",
-                        !adventureStats.isClaimed &&
-                          "animate-pulse shadow-[0_0_10px_rgba(234,179,8,0.5)]"
-                      )}
-                      onClick={() => setShowCelebration(true)}
-                    >
-                      <Gift className="w-4 h-4" />
-                      {adventureStats.isClaimed
-                        ? "View Certificate"
-                        : "Claim Prize"}
-                    </Button>
-                  )}
+                  {/* REMOVED: Grand Prize Button from here to fix overflow */}
 
                   {isAdventureFinished && (
                     <Button
@@ -1565,7 +1599,7 @@ export default function AdventurePage() {
                                 <div
                                   className={cn(
                                     "p-1 rounded-md bg-secondary",
-                                    item.color
+                                    item.color,
                                   )}
                                 >
                                   <item.icon className="w-4 h-4" />
@@ -1589,7 +1623,7 @@ export default function AdventurePage() {
                     </DropdownMenu>
                   </TooltipProvider>
 
-                  <RankBadge rank={stats.rank} />
+                  <RankBadge rank={stats.rank as number | string} />
 
                   <TooltipProvider>
                     <Tooltip delayDuration={0}>
@@ -1615,7 +1649,10 @@ export default function AdventurePage() {
             </div>
 
             <div className="relative w-full mt-12">
-              <div className="absolute top-0 left-8 md:left-1/2 -translate-x-1/2 h-full w-2 bg-muted rounded-full" />
+              <div
+                className="absolute top-0 left-8 md:left-1/2 -translate-x-1/2 w-2 bg-muted rounded-full"
+                style={{ height: maxLineHeight }}
+              />
               <motion.div
                 initial={{ height: 0 }}
                 animate={{ height: progressHeight }}
@@ -1644,14 +1681,44 @@ export default function AdventurePage() {
                   );
                 })}
               </div>
-              <div className="flex justify-start md:justify-center mt-12 pl-2 md:pl-0">
+              <div
+                ref={bottomRef}
+                className="flex flex-col items-center justify-center gap-6 mt-16 pl-0 md:pl-0 pb-12"
+              >
                 <motion.div
                   initial={{ scale: 0 }}
                   whileInView={{ scale: 1 }}
-                  className="w-24 h-24 bg-gradient-to-br from-yellow-100 to-yellow-200 dark:from-yellow-900/40 dark:to-yellow-800/20 rounded-full flex items-center justify-center border-4 border-yellow-400 shadow-xl z-10"
+                  className="w-28 h-28 bg-gradient-to-br from-yellow-100 to-yellow-200 dark:from-yellow-900/40 dark:to-yellow-800/20 rounded-full flex items-center justify-center border-4 border-yellow-400 shadow-xl z-10 relative"
                 >
-                  <Star className="w-12 h-12 text-yellow-600 fill-yellow-500" />
+                  <Star className="w-14 h-14 text-yellow-600 fill-yellow-500" />
+
+                  {/* Glowing Effect Behind */}
+                  <div className="absolute inset-0 bg-yellow-400/20 blur-xl rounded-full -z-10 animate-pulse" />
                 </motion.div>
+
+                {isAdventureFinished && (
+                  <motion.div
+                    initial={{ opacity: 0, x: -20 }}
+                    whileInView={{ opacity: 1, x: 0 }}
+                    transition={{ delay: 0.2 }}
+                  >
+                    <Button
+                      variant="outline"
+                      size="lg"
+                      className={cn(
+                        "gap-2 border-yellow-500 text-yellow-600 hover:bg-yellow-50 dark:hover:bg-yellow-900/20 h-12 px-6 text-base font-bold shadow-md rounded-xl",
+                        !adventureStats.isClaimed &&
+                          "animate-bounce shadow-[0_0_15px_rgba(234,179,8,0.6)]",
+                      )}
+                      onClick={() => setShowCelebration(true)}
+                    >
+                      <Gift className="w-5 h-5" />
+                      {adventureStats.isClaimed
+                        ? "View Certificate"
+                        : "Claim Prize"}
+                    </Button>
+                  </motion.div>
+                )}
               </div>
             </div>
           </motion.div>
