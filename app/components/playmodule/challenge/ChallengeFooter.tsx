@@ -9,8 +9,13 @@ import {
   List,
   Maximize2,
   Loader2,
+  PenLine,
+  Lock,
 } from "lucide-react";
 import { Button } from "~/components/ui/button";
+import { toast } from "sonner";
+
+import { ConfirmationModal } from "./ConfirmationModal"; // [NEW]
 
 interface ChallengeFooterProps {
   onRun?: () => void;
@@ -28,7 +33,13 @@ const ChallengeFooter = ({ onRun, onSubmit }: ChallengeFooterProps) => {
     output,
     isLoading,
     isExecuting,
+    isReviewMode, // [NEW]
+    handleRetry, // [NEW]
+    isMobileEditMode, // [NEW] Needed for toggle
+    setIsMobileEditMode, // [NEW] Needed for toggle
   } = useChallengeContext();
+
+  const [isRetryModalOpen, setIsRetryModalOpen] = React.useState(false); // [NEW]
 
   const isFirst = currentChallengeIndex === 0;
   const isLast = currentChallengeIndex === challenges.length - 1;
@@ -49,39 +60,92 @@ const ChallengeFooter = ({ onRun, onSubmit }: ChallengeFooterProps) => {
 
       {/* Center: Actions */}
       <div className="flex items-center gap-3">
-        <Button
-          onClick={() => {
-            handleRun();
-            onRun?.();
-          }}
-          variant="secondary"
-          className="border border-border font-semibold gap-2 min-w-[80px]"
-          disabled={isExecuting}
-        >
-          {isExecuting ? (
-            <Loader2 className="w-4 h-4 animate-spin" />
-          ) : (
-            <Play className="w-4 h-4" />
-          )}
-          {isExecuting ? "Running..." : "Run"}
-        </Button>
+        {isReviewMode ? (
+          <Button
+            onClick={() => setIsRetryModalOpen(true)}
+            className="bg-yellow-500 hover:bg-yellow-600 text-white font-bold min-w-[140px] shadow-sm animate-pulse"
+          >
+            Retry Challenge
+          </Button>
+        ) : (
+          <>
+            <Button
+              onClick={() => {
+                handleRun();
+                onRun?.();
+              }}
+              variant="secondary"
+              className="border border-border font-semibold gap-2 min-w-[80px]"
+              disabled={isExecuting}
+            >
+              {isExecuting ? (
+                <Loader2 className="w-4 h-4 animate-spin" />
+              ) : (
+                <Play className="w-4 h-4" />
+              )}
+              {isExecuting ? "Running..." : "Run"}
+            </Button>
 
-        <Button
-          onClick={() => {
-            handleComplete();
-            onSubmit?.();
-          }}
-          className="bg-primary hover:bg-primary/90 text-primary-foreground font-bold min-w-[140px] shadow-sm"
-        >
-          Submit Answer
-        </Button>
+            <Button
+              onClick={() => {
+                handleComplete();
+                onSubmit?.();
+              }}
+              className="bg-primary hover:bg-primary/90 text-primary-foreground font-bold min-w-[140px] shadow-sm"
+            >
+              Submit Answer
+            </Button>
+          </>
+        )}
       </div>
+
+      {/* Right: Toggle (Mobile Only) */}
+      {!isReviewMode && (
+        <div className="md:hidden flex items-center">
+          <Button
+            onClick={() => {
+              const newMode = !isMobileEditMode;
+              setIsMobileEditMode(newMode);
+              if (newMode) {
+                toast.success("Edit Mode: Keyboard enabled");
+              } else {
+                toast.info("Read Mode: Keyboard disabled for scrolling");
+              }
+            }}
+            variant="ghost"
+            size="sm"
+            className={`h-10 px-3 gap-2 border transition-all ${
+              isMobileEditMode
+                ? "bg-blue-100 text-blue-700 border-blue-200 dark:bg-blue-900/30 dark:text-blue-300 dark:border-blue-800"
+                : "bg-gray-100 text-gray-600 border-transparent dark:bg-gray-800 dark:text-gray-400"
+            }`}
+          >
+            {isMobileEditMode ? <PenLine size={16} /> : <Lock size={16} />}
+            <span className="text-xs font-semibold">
+              {isMobileEditMode ? "Edit" : "Read"}
+            </span>
+          </Button>
+        </div>
+      )}
 
       {/* Right: Navigation (Compact on Mobile) */}
       {/* Right: Navigation (Compact on Mobile) */}
       <div className="flex items-center gap-2 md:gap-3">
         {/* Removed Back/Next buttons as requested */}
       </div>
+
+      <ConfirmationModal
+        isOpen={isRetryModalOpen}
+        title="Retry Challenge?"
+        description="Are you sure you want to retry? Your previous code and runtime will be reset."
+        confirmText="Retry"
+        variant="warning"
+        onConfirm={() => {
+          handleRetry();
+          setIsRetryModalOpen(false);
+        }}
+        onCancel={() => setIsRetryModalOpen(false)}
+      />
     </footer>
   );
 };

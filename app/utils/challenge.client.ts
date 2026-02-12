@@ -63,7 +63,7 @@ export const saveChallengeProgress = async (
       .from("match_history")
       .insert({
         user_id: userId, // Link to the user
-        mode: "challenge",
+        mode: `Challenge: Machine Problem ${challenge.id} : ${challenge.title}`,
         winner_name: "You",
         participants_count: 1,
         results: {
@@ -125,9 +125,9 @@ export const saveChallengeProgress = async (
 export const fetchUserProgress = async (userId: string) => {
   const { data, error } = await supabase
     .from("user_challenge_progress")
-    .select("challenge_id, stars");
+    .select("challenge_id, stars, code_submitted, execution_time_ms"); // [NEW] Fetch time
 
   if (error || !data) return [];
-  // Return array of { challenge_id, stars }
+  // Return array of { challenge_id, stars, code_submitted, execution_time_ms }
   return data;
 };

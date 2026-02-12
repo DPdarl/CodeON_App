@@ -7,41 +7,84 @@ import {
   defineTheme,
   defineLightTheme,
 } from "~/utils/monaco-csharp";
-import { Play } from "lucide-react";
+import { Play, Lock, PenLine, Undo2, Redo2, Eraser } from "lucide-react";
 import { lintCode } from "~/utils/linter";
 import { toast } from "sonner";
 import { useThemeDetector } from "~/hooks/useThemeDetector";
+import { useAuth } from "~/contexts/AuthContext";
 
 interface CodeEditorProps {
   className?: string;
   disableCopyPaste?: boolean;
+  onEditorReady?: (editor: any) => void;
 }
 
 const CodeEditor = ({
   className,
   disableCopyPaste = false,
+  onEditorReady,
 }: CodeEditorProps) => {
-  const { code, setCode, currentChallenge, handleRun, diagnostics } =
-    useChallengeContext();
+  const {
+    code,
+    setCode,
+    currentChallenge,
+    handleRun,
+    diagnostics,
+    isMobileEditMode, // [NEW]
+    setIsMobileEditMode, // [NEW]
+    isReviewMode, // [NEW]
+  } = useChallengeContext();
+
+  // ... (Anti-Cheat & State logic remains same)
   const isDark = useThemeDetector();
+  const { user } = useAuth(); // [NEW]
 
   // Use state instead of refs to trigger effects when editor is ready
   const [editorInstance, setEditorInstance] = React.useState<any>(null);
   const [monacoInstance, setMonacoInstance] = React.useState<any>(null);
+
+  // Mobile Edit Mode State: Consumed from Context
+  const [isMobile, setIsMobile] = React.useState(false);
+
+  React.useEffect(() => {
+    const checkMobile = () => {
+      setIsMobile(window.matchMedia("(max-width: 768px)").matches);
+    };
+    checkMobile();
+    window.addEventListener("resize", checkMobile);
+    return () => window.removeEventListener("resize", checkMobile);
+  }, []);
 
   const handleEditorDidMount: OnMount = (editor, monaco) => {
     setEditorInstance(editor);
     setMonacoInstance(monaco);
     setupCSharp(editor, monaco);
 
+    // Pass instance up
+    if (onEditorReady) {
+      onEditorReady(editor);
+    }
+
     editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.Enter, () => {
       handleRun();
     });
   };
 
-  // Anti-Cheat: Disable Copy/Paste/Context Menu
+  // ... (Anti-Cheat Effect)
   React.useEffect(() => {
-    if (!disableCopyPaste || !editorInstance || !monacoInstance) return;
+    // [NEW] Allow Copy/Paste for Admins, Instructors, Superadmins
+    const canBypass =
+      user?.role === "admin" ||
+      user?.role === "superadmin" ||
+      user?.role === "instructor";
+
+    if (
+      !disableCopyPaste ||
+      !editorInstance ||
+      !monacoInstance ||
+      canBypass // [NEW] Skip if admin
+    )
+      return;
 
     const editor = editorInstance;
     const monaco = monacoInstance;
@@ -77,17 +120,15 @@ const CodeEditor = ({
       domNode.addEventListener("paste", preventer, true);
       domNode.addEventListener("copy", preventer, true);
       domNode.addEventListener("cut", preventer, true);
-      // domNode.addEventListener("contextmenu", preventer, true); // Allowed for mobile selection
 
-      // Cleanup not strictly necessary for "always on" but good practice
       return () => {
         domNode.removeEventListener("paste", preventer, true);
         domNode.removeEventListener("copy", preventer, true);
         domNode.removeEventListener("cut", preventer, true);
-        // domNode.removeEventListener("contextmenu", preventer, true);
       };
     }
-  }, [disableCopyPaste, editorInstance, monacoInstance]);
+  }, [disableCopyPaste, editorInstance, monacoInstance, user?.role]);
+  // Added user?.role to dependency array to fix potential stale closure if user loads late, though usually user is loaded.
 
   const handleBeforeMount: BeforeMount = (monaco) => {
     defineTheme(monaco);
@@ -143,7 +184,7 @@ const CodeEditor = ({
 
   return (
     <div
-      className={`flex flex-col h-full bg-white dark:bg-[#1E1E1E] rounded-none overflow-hidden border-b border-gray-200 dark:border-gray-800 ${className}`}
+      className={`flex flex-col h-full min-h-0 bg-white dark:bg-[#1E1E1E] rounded-none overflow-hidden border-b border-gray-200 dark:border-gray-800 ${className}`}
     >
       {/* Editor Header */}
       <div className="flex items-center justify-between px-4 py-2 bg-gray-100 dark:bg-[#252526] border-b border-gray-200 dark:border-gray-800">
@@ -160,11 +201,19 @@ const CodeEditor = ({
           </span>
         </div>
 
+        {/* Review Mode Banner */}
+        {isReviewMode && (
+          <div className="flex items-center gap-2 px-2 py-0.5 bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-400 rounded text-[10px] font-bold uppercase tracking-wider">
+            <span>Review Mode</span>
+            <Lock size={10} />
+          </div>
+        )}
+
         <div className="flex items-center gap-3">
           <span className="text-xs text-gray-500">
             C# {currentChallenge?.requiredVersion || "8.0"}
           </span>
-          {/* Internal Run Button Moved to Footer */}
+          {/* Actions removed from here */}
         </div>
       </div>
 
@@ -179,6 +228,9 @@ const CodeEditor = ({
           onMount={handleEditorDidMount}
           beforeMount={handleBeforeMount}
           options={{
+            readOnly: isReviewMode || (isMobile && !isMobileEditMode), // Auto-lock if Review Mode OR (Mobile & Read Mode)
+            domReadOnly: isReviewMode || (isMobile && !isMobileEditMode), // Prevents keyboard from popping up
+            fixedOverflowWidgets: true,
             automaticLayout: true,
             fontFamily: "'Fira Code', 'Cascadia Code', Consolas, monospace",
             fontSize: 14,

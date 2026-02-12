@@ -13,7 +13,7 @@ VALUES
 (
   '1.1', 
   'Volume of Sphere', 
-  'Create a C# program that calculates the volume of a sphere. Use the formula V = (4/3) * π * r³, where r is the radius.', 
+  'Create a C# program that calculates the volume of a sphere. Use the formula V = (4.0/3.0) * Math.PI * r³, where r is the radius.', 
   3,
   'using System;\r\n\r\nclass Program\r\n{\r\n    static void Main(string[] args)\r\n    {\r\n        // Your code here to calculate the volume of a sphere\r\n        // Ask the user to enter the radius\r\n        // Calculate the volume\r\n        // Display the result\r\n    }\r\n}',
   'Remember to convert user input from string to double using Convert.ToDouble() or double.Parse(), and use Math.PI and Math.Pow() for calculations.',
