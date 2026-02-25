@@ -9,7 +9,191 @@ import {
   Database,
   AlertTriangle,
   Zap,
+  BookOpen,
 } from "lucide-react";
+
+// --- CHAPTER 0: TUTORIAL (Frontend-only, no DB) ---
+export const CHAPTER_0_VISUAL = {
+  id: 0,
+  icon: BookOpen,
+  color: "bg-amber-500",
+  activityLabel: "Tutorial",
+};
+
+export const CHAPTER_0_LESSON = {
+  id: 0,
+  isTutorial: true, // Special flag — skips DB writes, no XP, no quest tracking
+  title: "How Adventures Work",
+  description: "Learn the game mechanics before your journey begins.",
+  content_markdown: `
+🗺️ Welcome, Coder! ION here — your guide through the C# Grid.
+Before you face real challenges, let me walk you through everything you need to know.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+📖  STEP 1 — Read the Article
+Every chapter opens with a short article like this one. It explains the concept you're about to be tested on. Read it carefully — it's your only preparation!
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+▶️  STEP 2 — Start the Challenge
+When you're ready, click the green "Start Challenge" button below to enter the activity zone.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+🧩  STEP 3 — THREE Activity Types
+
+You'll encounter three kinds of puzzles — each one tests your knowledge differently:
+
+  ① MULTIPLE CHOICE QUIZ
+     • A question appears with 4 options.
+     • Tap the one you think is correct.
+     • Only ONE option is right!
+
+  ② CODE BUILDER BLOCKS
+     • A set of code pieces appear as draggable tiles.
+     • Arrange them in the correct order to form valid code.
+     • Tap a block to select it, then tap where it goes.
+
+  ③ MATCHING TYPE
+     • Two columns appear — Left terms and Right meanings.
+     • Tap a left item, then tap its match on the right.
+     • Match all pairs to complete the activity!
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+✅ CORRECT ANSWER
+A green banner appears at the bottom with a checkmark.
+You'll see "Nice job!" and a CONTINUE button. Tap it to move on!
+
+❌ WRONG ANSWER
+A red banner appears. You'll see "Incorrect" and lose one ❤️ Heart.
+The question re-queues — you must answer it correctly eventually.
+Run out of hearts and it's GAME OVER!
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+🎮  GAME MECHANICS
+
+  ❤️  Hearts — You start with 5. Each wrong answer costs 1.
+       Hearts regenerate over time, or refill with Coins.
+
+  📊  Progress Bar — Shows how many questions remain.
+       Fill it completely to finish the chapter!
+
+  ⏱️  Timer — Your total time is recorded.
+       Finish faster for better leaderboard rank!
+
+  💡  Hints — Use from your backpack when stuck.
+       Removes a wrong option (Quiz) or highlights next block.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+🏆  STEP 4 — Claim Your Rewards
+Clear all questions → Results screen shows accuracy + time.
+Hit "Continue" to collect XP and Coins!
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+ION: "Don't worry — in THIS tutorial, wrong answers won't cost you hearts. Practice freely!"
+  `,
+  codeSnippet: null,
+  keyTakeaway: "Read → Challenge → Solve → Reward. Master the loop.",
+  xp_reward: 0,
+  activities: [
+    // ── LESSON 1: Quiz explanation card ──────────────────────────────────────
+    {
+      type: "TUTORIAL_INFO",
+      prompt: "Activity Type ①: Multiple Choice Quiz",
+      data: {
+        icon: "quiz",
+        title: "Multiple Choice Quiz",
+        color: "blue",
+        howToPlay: [
+          "Read the question at the top carefully.",
+          "Four options appear as buttons below.",
+          "Tap the ONE correct answer.",
+          "Hit CHECK to submit your answer.",
+        ],
+        correctMsg: "✅ Correct → Green banner appears. Tap CONTINUE.",
+        wrongMsg:
+          "❌ Wrong → Red banner appears. You lose 1 ❤️ Heart and the question comes back later.",
+        tip: "💡 Tip: Only ONE answer is correct. Eliminate options you know are wrong first!",
+      },
+    },
+    // ── REAL Quiz activity ────────────────────────────────────────────────────
+    {
+      type: "QUIZ",
+      prompt: "🧪 Now Try It — Multiple Choice",
+      data: {
+        question: "What happens when you answer a question CORRECTLY?",
+        options: [
+          "A red banner appears and you lose a heart",
+          "A green banner appears — tap CONTINUE to move on",
+          "The game ends immediately",
+          "Nothing happens",
+        ],
+        answer: "A green banner appears — tap CONTINUE to move on",
+      },
+    },
+    // ── LESSON 2: Building Blocks explanation card ────────────────────────────
+    {
+      type: "TUTORIAL_INFO",
+      prompt: "Activity Type ②: Code Builder Blocks",
+      data: {
+        icon: "blocks",
+        title: "Code Builder Blocks",
+        color: "purple",
+        howToPlay: [
+          "A row of colored code blocks appear in a scrambled order.",
+          "Tap a block from the source area to select it.",
+          "The blocks snap into the answer row in the order you pick them.",
+          "Arrange ALL blocks in the correct order, then hit CHECK.",
+        ],
+        correctMsg:
+          "✅ Correct → Green banner. The code you assembled was valid!",
+        wrongMsg:
+          "❌ Wrong → Red banner + 1 ❤️ lost. The blocks reset — try again!",
+        tip: "💡 Tip: Think of it like writing a line of code one piece at a time. Read left to right!",
+      },
+    },
+    // ── REAL Building Blocks activity ─────────────────────────────────────────
+    {
+      type: "BUILDING_BLOCKS",
+      prompt: "🧱 Now Try It — Code Builder",
+      data: {
+        template: "[0] [1] [2]\n  [3] [4] [5]",
+        segments: ["Read", "the", "Article", "→", "Start", "Challenge"],
+        correctOrder: [0, 1, 2, 3, 4, 5],
+      },
+    },
+    // ── LESSON 3: Matching Type explanation card ──────────────────────────────
+    {
+      type: "TUTORIAL_INFO",
+      prompt: "Activity Type ③: Matching Type",
+      data: {
+        icon: "matching",
+        title: "Matching Type",
+        color: "green",
+        howToPlay: [
+          "Two columns appear: LEFT (terms) and RIGHT (meanings).",
+          "Tap any LEFT item to highlight it.",
+          "Then tap its matching RIGHT item.",
+          "A line connects the matched pair. Match ALL pairs to finish!",
+        ],
+        correctMsg: "✅ Correct → All pairs matched. Green banner appears!",
+        wrongMsg: "❌ Wrong → Red banner + 1 ❤️ lost. Pairs reset — try again!",
+        tip: "💡 Tip: Start with the pairs you're most confident about. Process of elimination helps!",
+      },
+    },
+    // ── REAL Matching activity ────────────────────────────────────────────────
+    {
+      type: "MATCHING",
+      prompt: "🔗 Now Try It — Matching",
+      data: {
+        pairs: [
+          { left: "✅ Green Banner", right: "Correct Answer" },
+          { left: "❌ Red Banner", right: "Wrong Answer" },
+          { left: "❤️ Heart", right: "Lost on mistake" },
+          { left: "💡 Hint", right: "Removes wrong option" },
+        ],
+      },
+    },
+  ],
+};
 
 // --- VISUAL TEMPLATE (Icons & Colors) ---
 export const CHAPTER_VISUALS = [
@@ -127,6 +311,7 @@ C# is the language you speak. .NET is the brain that understands and executes it
         type: "BUILDING_BLOCKS",
         prompt: "Build your first command",
         data: {
+          template: "[0][1][2][3][4][5]",
           segments: ["Console", ".", "WriteLine", "(", '"Hello!"', ");"],
           correctOrder: [0, 1, 2, 3, 4, 5],
         },
@@ -198,6 +383,7 @@ class Program
         type: "BUILDING_BLOCKS",
         prompt: "Assemble the Entry Point",
         data: {
+          template: "[0] [1] [2][3][4]\n[5]\n    // code goes here\n[6]",
           segments: ["static", "void", "Main", "(", ")", "{", "}"],
           correctOrder: [0, 1, 2, 3, 4, 5, 6],
         },
@@ -215,6 +401,7 @@ class Program
         type: "BUILDING_BLOCKS",
         prompt: "Import the System",
         data: {
+          template: "[0] [1]\n[2]",
           segments: ["using", "System", ";"],
           correctOrder: [0, 1, 2],
         },
@@ -288,9 +475,10 @@ bool isStudent = true;`,
       },
       {
         type: "BUILDING_BLOCKS",
-        prompt: "Define a Whole Number",
+        prompt: "Declare a whole number",
         data: {
-          segments: ["int", "score", "=", "100", ";"],
+          template: "[0] [1] [2] [3]\n[4]",
+          segments: ["int", "health", "=", "100", ";"],
           correctOrder: [0, 1, 2, 3, 4],
         },
       },
@@ -364,9 +552,10 @@ bool isPassed = total >= 8;`,
       },
       {
         type: "BUILDING_BLOCKS",
-        prompt: "Calculate Sum",
+        prompt: "Store a name",
         data: {
-          segments: ["int", "sum", "=", "a", "+", "b", ";"],
+          template: "[0] [1] [2] [3][4][5]\n[6]",
+          segments: ["string", "playerName", "=", '"', "ION", '"', ";"],
           correctOrder: [0, 1, 2, 3, 4, 5, 6],
         },
       },
@@ -574,10 +763,21 @@ myCar.Color = "Red";`,
       },
       {
         type: "BUILDING_BLOCKS",
-        prompt: "Create a New Object",
+        prompt: "Logical Check",
         data: {
-          segments: ["Car", "myRide", "=", "new", "Car", "(", ")", ";"],
-          correctOrder: [0, 1, 2, 3, 4, 5, 6, 7],
+          template: "[0] [1] [2] [3] [4] [5] [6] [7]\n[8]",
+          segments: [
+            "bool",
+            "canPlay",
+            "=",
+            "hasCoin",
+            "&&",
+            "isOnline",
+            "==",
+            "true",
+            ";",
+          ],
+          correctOrder: [0, 1, 2, 3, 4, 5, 6, 7, 8],
         },
       },
       {

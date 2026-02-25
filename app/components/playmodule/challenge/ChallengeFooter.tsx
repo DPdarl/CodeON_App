@@ -70,6 +70,7 @@ const ChallengeFooter = ({ onRun, onSubmit }: ChallengeFooterProps) => {
         ) : (
           <>
             <Button
+              id="tour-run-btn"
               onClick={() => {
                 handleRun();
                 onRun?.();
@@ -87,6 +88,7 @@ const ChallengeFooter = ({ onRun, onSubmit }: ChallengeFooterProps) => {
             </Button>
 
             <Button
+              id="tour-submit-btn"
               onClick={() => {
                 handleComplete();
                 onSubmit?.();

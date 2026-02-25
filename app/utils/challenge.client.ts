@@ -66,6 +66,7 @@ export const saveChallengeProgress = async (
         mode: `Challenge: Machine Problem ${challenge.id} : ${challenge.title}`,
         winner_name: "You",
         participants_count: 1,
+        duration_seconds: Math.floor(results.executionTime / 1000),
         results: {
           challengeId: challenge.id,
           stars: results.stars,

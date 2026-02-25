@@ -21,7 +21,10 @@ export function useGameProgress() {
     rewards: [] as Reward[], // ✅ FIX: Correctly typed as Reward objects
   });
 
-  const grantXP = async (amount: number) => {
+  const grantXP = async (
+    amount: number,
+    options?: { isTutorial?: boolean },
+  ) => {
     if (!user || isProcessing) return;
 
     setIsProcessing(true);
@@ -40,14 +43,17 @@ export function useGameProgress() {
     const updates: any = {
       xp: newXP,
       level: calculatedLevel,
-      // Update active dates to keep track of daily activity
-      activeDates: Array.from(
+    };
+
+    // Only update active dates (streak) if this is NOT a tutorial reward
+    if (!options?.isTutorial) {
+      updates.activeDates = Array.from(
         new Set([
           ...(user.activeDates || []),
           new Date().toISOString().split("T")[0],
-        ])
-      ),
-    };
+        ]),
+      );
+    }
 
     // Only update league if it changed (e.g., Novice -> Bronze)
     if (newLeague !== currentLeague) {

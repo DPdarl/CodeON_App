@@ -4,6 +4,8 @@ import { Button } from "~/components/ui/button";
 import { motion } from "framer-motion";
 import { Trophy, Coins, Award, Check, Sparkles } from "lucide-react";
 import { useEffect, useState } from "react";
+import { useGameSound } from "~/hooks/useGameSound";
+import confetti from "canvas-confetti";
 
 interface LevelUpModalProps {
   isOpen: boolean;
@@ -20,14 +22,42 @@ export function LevelUpModal({
 }: LevelUpModalProps) {
   // Simple internal confetti effect logic (optional)
   const [showConfetti, setShowConfetti] = useState(false);
+  const { playSound } = useGameSound();
 
   useEffect(() => {
     if (isOpen) {
+      playSound("complete");
       setShowConfetti(true);
+
+      const duration = 3000;
+      const end = Date.now() + duration;
+
+      const frame = () => {
+        confetti({
+          particleCount: 5,
+          angle: 60,
+          spread: 55,
+          origin: { x: 0 },
+          colors: ["#22c55e", "#eab308", "#a855f7"],
+          zIndex: 9999,
+        });
+        confetti({
+          particleCount: 5,
+          angle: 120,
+          spread: 55,
+          origin: { x: 1 },
+          colors: ["#22c55e", "#eab308", "#a855f7"],
+          zIndex: 9999,
+        });
+
+        if (Date.now() < end) requestAnimationFrame(frame);
+      };
+      frame();
+
       const timer = setTimeout(() => setShowConfetti(false), 3000);
       return () => clearTimeout(timer);
     }
-  }, [isOpen]);
+  }, [isOpen, playSound]);
 
   return (
     <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>

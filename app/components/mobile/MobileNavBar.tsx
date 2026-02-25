@@ -6,6 +6,7 @@ import {
   Info,
   UserCog,
   Bug, // [NEW]
+  HelpCircle,
   // Menu, // Unused import removed
 } from "lucide-react";
 import { useState, useRef, useEffect } from "react";
@@ -18,6 +19,7 @@ import {
   DialogTitle,
 } from "~/components/ui/dialog";
 import { Button } from "~/components/ui/button";
+import { useNavigate } from "@remix-run/react"; // [FIX] Import
 import { UserData } from "~/contexts/AuthContext";
 import { useQuestNotifications } from "~/hooks/useQuestNotifications";
 import { useStreakNotifications } from "~/hooks/useStreakNotifications";
@@ -48,6 +50,7 @@ export function MobileNavBar({
   onLogout,
   user,
 }: MobileNavBarProps) {
+  const navigate = useNavigate(); // [FIX] Initialize hook
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [showLogoutDialog, setShowLogoutDialog] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
@@ -121,6 +124,7 @@ export function MobileNavBar({
   const menuItems = navigationItems.filter((i) => !primaryIds.includes(i.id));
 
   const moreOptions = [
+    { id: "howto", label: "How to?", icon: HelpCircle }, // [UPDATED]
     { id: "settings", label: "Settings", icon: Settings },
     { id: "about", label: "About", icon: Info },
     { id: "logout-trigger", label: "Logout", icon: LogOut },
@@ -140,6 +144,8 @@ export function MobileNavBar({
   const handleMenuOptionClick = (id: string) => {
     if (id === "logout-trigger") {
       setShowLogoutDialog(true);
+    } else if (id === "howto") {
+      navigate("/how-to");
     } else {
       onTabChange(id);
     }
@@ -153,7 +159,10 @@ export function MobileNavBar({
 
   return (
     <>
-      <div className="md:hidden fixed bottom-0 left-0 right-0 h-16 bg-white dark:bg-gray-900 border-t border-gray-200 dark:border-gray-800 z-50 px-0 pb-2 shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.1)]">
+      <div
+        id="mobile-nav" // [NEW] ID (Aliased to match Tour Step)
+        className="md:hidden fixed bottom-0 left-0 right-0 h-16 bg-white dark:bg-gray-900 border-t border-gray-200 dark:border-gray-800 z-50 px-0 pb-2 shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.1)]"
+      >
         <div className="grid grid-cols-5 h-full relative items-center">
           {/* --- 1. PRIMARY ITEMS (Home, Play, etc.) --- */}
           {primaryItems.map((item) => {
@@ -197,6 +206,7 @@ export function MobileNavBar({
             ref={menuRef}
           >
             <button
+              id="mobile-nav-more" // [NEW] ID (Aliased to match Tour Step)
               onClick={() => setIsMenuOpen(!isMenuOpen)}
               className="flex flex-col items-center justify-center gap-1 h-full py-1 active:scale-95 transition-transform w-full"
             >

@@ -46,6 +46,7 @@ export interface UserData {
   frozenDates?: string[]; // Added frozenDates
   stars?: number;
   completedMachineProblems?: string[];
+  equippedBadge?: string; // [FIX] Added missing property
 }
 
 interface AuthContextType {
@@ -86,7 +87,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       displayName: db.display_name ?? "Coder",
       photoURL: db.photo_url,
       avatarConfig: db.avatar_config,
-      isOnboarded: db.is_onboarded,
+      isOnboarded: db.is_onboarded ?? false,
       settings: db.settings,
       xp: db.xp,
       level: db.level,
@@ -111,6 +112,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       frozenDates: db.frozen_dates ?? [],
       stars: db.stars ?? 0,
       completedMachineProblems: db.completed_machineproblems ?? [],
+      equippedBadge: db.equipped_badge, // [FIX] Map from DB
     }),
     [],
   );
@@ -146,6 +148,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       db.active_dates = db.activeDates;
       delete db.activeDates;
     }
+    if ("equippedBadge" in db) {
+      // [FIX] Map to DB
+      db.equipped_badge = db.equippedBadge;
+      delete db.equippedBadge;
+    }
     if ("googleBound" in db) {
       db.google_bound = db.googleBound;
       delete db.googleBound;
@@ -169,6 +176,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if ("completedMachineProblems" in db) {
       db.completed_machineproblems = db.completedMachineProblems;
       delete db.completedMachineProblems;
+    }
+
+    if ("settings" in db) {
+      db.settings = db.settings;
+      // No delete needed as key is same, but good for consistency if keys differed
     }
 
     delete db.uid;
@@ -304,11 +316,38 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const updateProfile = useCallback(
     async (data: Partial<UserData>) => {
-      if (!user?.uid) return;
-      syncUser({ ...user, ...data });
-      await supabase.from("users").update(mapUserToDB(data)).eq("id", user.uid);
+      const uid = user?.uid;
+      if (!uid) return;
+
+      // Functional update to prevent closure race conditions overwriting state!
+      setUser((prev) => {
+        if (!prev) return prev;
+        const updated = { ...prev, ...data };
+        localStorage.setItem(USER_CACHE_KEY, JSON.stringify(updated));
+        return updated;
+      });
+
+      const mapped = mapUserToDB(data);
+      console.log("SENDING TO SUPABASE:", mapped);
+      const { data: updatedRows, error } = await supabase
+        .from("users")
+        .update(mapped)
+        .eq("id", uid)
+        .select();
+      if (error) {
+        console.error("Profile update failed:", error);
+        throw error;
+      }
+      if (!updatedRows || updatedRows.length === 0) {
+        console.error(
+          "Profile update failed: No rows were updated (Possible Row Level Security block)",
+        );
+        throw new Error(
+          "Database update blocked by permissions (RLS). Please contact the admin.",
+        );
+      }
     },
-    [user, mapUserToDB, syncUser],
+    [user?.uid, mapUserToDB],
   );
 
   const loginWithStudentId = async (identifier: string, p: string) => {

@@ -11,6 +11,8 @@ const SOUND_FILES = {
   complete: "/sounds/duolingo-completed-chapter.mp3",
   gameover: "/sounds/fah.mp3",
   claim: "/sounds/happy-happy-happy-cat.mp3",
+  tour_voice:
+    "/sounds/animal-crossing-isabelle-voice-clips-no-background-music-youtubemp3free.mp3",
 };
 
 export function useGameSound() {
@@ -44,5 +46,13 @@ export function useGameSound() {
     }
   }, []);
 
-  return { playSound };
+  const stopSound = useCallback((type: keyof typeof SOUND_FILES) => {
+    const audio = audioCache[type];
+    if (audio) {
+      audio.pause();
+      audio.currentTime = 0;
+    }
+  }, []);
+
+  return { playSound, stopSound };
 }

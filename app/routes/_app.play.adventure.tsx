@@ -4,6 +4,10 @@ import { motion, AnimatePresence } from "framer-motion";
 import {
   ArrowLeft,
   Check,
+  CheckCircle2,
+  XCircle,
+  ListChecks,
+  Link2,
   Lock,
   BookOpen,
   Map as MapIcon,
@@ -65,11 +69,19 @@ import {
 import { AdventureResults } from "~/components/dashboardmodule/AdventureResults";
 import { AdventureCompletedCelebration } from "~/components/dashboardmodule/AdventureCompletedCelebration"; // ✅ NEW COMPONENT
 import { AdventureSkeleton } from "~/components/dashboardmodule/AdventureSkeleton"; // ✅ NEW COMPONENT
-import { CHAPTER_VISUALS, CSHARP_LESSONS } from "~/data/adventureContent";
+import {
+  CHAPTER_VISUALS,
+  CSHARP_LESSONS,
+  CHAPTER_0_VISUAL,
+  CHAPTER_0_LESSON,
+} from "~/data/adventureContent";
 import { trackQuestEvent } from "~/lib/quest-tracker";
 import { useGameSound } from "~/hooks/useGameSound";
 import { BugReportModal } from "~/components/playmodule/challenge/BugReportModal";
 import { calculateStreakUpdate } from "~/lib/streak-logic";
+import { OnboardingTour, TourStep } from "~/components/ui/OnboardingTour";
+import { useSearchParams } from "@remix-run/react";
+import { CoinIcon } from "~/components/ui/Icons";
 
 const NODE_HEIGHT = 160;
 const NODE_GAP = 32;
@@ -159,11 +171,13 @@ function HeartDropdown({ hearts, timeRemaining, buyHearts }: any) {
           variant="ghost"
           className="flex items-center gap-1 hover:bg-transparent px-2"
         >
-          <Heart className="w-6 h-6 text-red-500 fill-red-500" />
-          <span className="font-bold text-red-500 text-lg">{hearts}</span>
+          <Heart className="w-5 h-5 sm:w-6 sm:h-6 text-red-500 fill-red-500" />
+          <span className="font-bold text-red-500 text-base sm:text-lg">
+            {hearts}
+          </span>
         </Button>
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="end" className="w-72 p-2">
+      <DropdownMenuContent align="end" className="w-56 sm:w-72 p-2">
         <DropdownMenuLabel className="flex items-center justify-between">
           <span>Lives</span>
           <Badge
@@ -220,6 +234,7 @@ function RoadmapNode({
   alignment,
   onClick,
   id,
+  cardId,
   isAdventureComplete,
 }: any) {
   const Icon = chapter.icon;
@@ -227,7 +242,12 @@ function RoadmapNode({
   const isLocked = status === "locked";
   const isCurrent = status === "current";
 
-  const isClickable = isCurrent || (isCompleted && isAdventureComplete);
+  const isTutorial = chapter.isTutorial === true;
+
+  // Tutorial is always clickable (replay anytime); real chapters follow the normal rule
+  const isClickable = isTutorial
+    ? isCurrent || isCompleted
+    : isCurrent || (isCompleted && isAdventureComplete);
 
   const cardVariants = {
     hidden: { opacity: 0, y: 20 },
@@ -237,7 +257,6 @@ function RoadmapNode({
   return (
     <TooltipProvider delayDuration={100}>
       <motion.div
-        id={id}
         className="relative w-full h-40 flex items-center"
         initial="hidden"
         whileInView="visible"
@@ -248,6 +267,7 @@ function RoadmapNode({
           <Tooltip>
             <TooltipTrigger asChild>
               <motion.button
+                id={id}
                 whileHover={isClickable ? { scale: 1.15 } : {}}
                 whileTap={isClickable ? { scale: 0.95 } : {}}
                 disabled={!isClickable}
@@ -258,9 +278,13 @@ function RoadmapNode({
                     ? "bg-muted text-muted-foreground"
                     : cn(
                         chapter.color,
-                        "text-white shadow-xl ring-4 ring-offset-4 ring-offset-background ring-indigo-500/20",
+                        "text-white shadow-xl ring-4 ring-offset-4 ring-offset-background",
+                        isTutorial ? "ring-amber-400/50" : "ring-indigo-500/20",
                       ),
-                  isCompleted && "ring-green-400/50 border-green-100",
+                  isCompleted &&
+                    (isTutorial
+                      ? "ring-amber-400/60 border-amber-100"
+                      : "ring-green-400/50 border-green-100"),
                 )}
               >
                 {isCompleted ? (
@@ -277,7 +301,11 @@ function RoadmapNode({
             </TooltipTrigger>
             <TooltipContent side="top">
               <p>
-                {isCompleted && !isAdventureComplete
+                {isTutorial
+                  ? isCompleted
+                    ? "Replay Tutorial"
+                    : "Start Tutorial"
+                  : isCompleted && !isAdventureComplete
                   ? "Complete Adventure to Replay"
                   : isCompleted
                   ? "Replay Lesson"
@@ -289,6 +317,7 @@ function RoadmapNode({
 
         {/* --- CONTENT CARD --- */}
         <motion.div
+          id={cardId}
           variants={cardVariants}
           className={cn(
             "absolute w-[calc(100%-6rem)] md:w-64",
@@ -303,9 +332,13 @@ function RoadmapNode({
               "shadow-lg rounded-2xl transition-all border-2",
               isClickable ? "hover:scale-105 cursor-pointer" : "cursor-default",
               isCompleted
-                ? "bg-green-50 border-green-500/30 dark:bg-green-900/20 dark:border-green-500/30"
+                ? isTutorial
+                  ? "bg-amber-50 border-amber-400/40 dark:bg-amber-900/20 dark:border-amber-500/30"
+                  : "bg-green-50 border-green-500/30 dark:bg-green-900/20 dark:border-green-500/30"
                 : isLocked
                 ? "opacity-60 grayscale border-dashed"
+                : isTutorial
+                ? "border-amber-400/60 hover:border-amber-500"
                 : "hover:border-indigo-400",
             )}
             onClick={isClickable ? onClick : undefined}
@@ -316,12 +349,31 @@ function RoadmapNode({
                   variant={isCompleted ? "default" : "outline"}
                   className={cn(
                     "mb-1 md:mb-2 text-[10px]",
-                    isCompleted ? "bg-green-600 hover:bg-green-700" : "",
+                    isCompleted
+                      ? isTutorial
+                        ? "bg-amber-500 hover:bg-amber-600"
+                        : "bg-green-600 hover:bg-green-700"
+                      : isTutorial
+                      ? "border-amber-500 text-amber-600 dark:text-amber-400"
+                      : "",
                   )}
                 >
-                  {isCompleted ? "Completed" : `Chapter ${chapter.order_index}`}
+                  {isCompleted
+                    ? isTutorial
+                      ? "Done ✓"
+                      : "Completed"
+                    : isTutorial
+                    ? "Tutorial"
+                    : `Chapter ${chapter.order_index}`}
                 </Badge>
-                {!isLocked && <BookOpen className="w-3 h-3 text-indigo-500" />}
+                {!isLocked && (
+                  <BookOpen
+                    className={cn(
+                      "w-3 h-3",
+                      isTutorial ? "text-amber-500" : "text-indigo-500",
+                    )}
+                  />
+                )}
               </div>
               <CardTitle className="text-sm md:text-base leading-tight">
                 {chapter.title}
@@ -333,6 +385,19 @@ function RoadmapNode({
               </p>
             </CardContent>
           </Card>
+          {/* ── Reward Footer ── */}
+          {!isLocked && !isTutorial && (
+            <div className="flex items-center justify-start gap-3 px-3 pt-1 pb-2">
+              <span className="flex items-center gap-1 text-[11px] font-bold text-blue-600 dark:text-blue-400">
+                <Zap className="w-3 h-3 fill-blue-500" />+
+                {chapter.xp_reward ?? 50} XP
+              </span>
+              <span className="flex items-center gap-1.5 px-3 py-1 bg-yellow-500/10 text-yellow-500 rounded-full text-xs font-bold border border-yellow-500/20">
+                <span className="text-base leading-none">🪙</span>
+                {Math.floor((chapter.xp_reward ?? 50) / 2)} Coins
+              </span>
+            </div>
+          )}
         </motion.div>
       </motion.div>
     </TooltipProvider>
@@ -343,10 +408,10 @@ function RoadmapNode({
 function RegressModal({ open, onClose, onConfirm }: any) {
   return (
     <Dialog open={open} onOpenChange={onClose}>
-      <DialogContent>
+      <DialogContent className="w-[calc(100%-2rem)] sm:max-w-md rounded-2xl">
         <DialogHeader>
-          <DialogTitle className="flex items-center gap-2 text-red-600">
-            <RotateCcw className="w-5 h-5" /> Regress Adventure?
+          <DialogTitle className="flex items-center gap-2 text-red-600 text-base sm:text-lg">
+            <RotateCcw className="w-4 h-4 sm:w-5 sm:h-5" /> Regress Adventure?
           </DialogTitle>
           <DialogDescription className="space-y-3 pt-2">
             <p>
@@ -369,11 +434,19 @@ function RegressModal({ open, onClose, onConfirm }: any) {
             </p>
           </DialogDescription>
         </DialogHeader>
-        <DialogFooter>
-          <Button variant="ghost" onClick={onClose}>
+        <DialogFooter className="flex-col-reverse gap-2 sm:flex-row sm:gap-0">
+          <Button
+            variant="ghost"
+            onClick={onClose}
+            className="w-full sm:w-auto"
+          >
             Cancel
           </Button>
-          <Button variant="destructive" onClick={onConfirm}>
+          <Button
+            variant="destructive"
+            onClick={onConfirm}
+            className="w-full sm:w-auto"
+          >
             Confirm Reset
           </Button>
         </DialogFooter>
@@ -386,21 +459,29 @@ function RegressModal({ open, onClose, onConfirm }: any) {
 function ExitConfirmModal({ open, onClose, onConfirm }: any) {
   return (
     <Dialog open={open} onOpenChange={onClose}>
-      <DialogContent>
+      <DialogContent className="w-[calc(100%-2rem)] sm:max-w-sm rounded-2xl">
         <DialogHeader>
-          <DialogTitle className="flex items-center gap-2 text-red-600">
-            <X className="w-5 h-5" /> Exit Activity?
+          <DialogTitle className="flex items-center gap-2 text-red-600 text-base sm:text-lg">
+            <X className="w-4 h-4 sm:w-5 sm:h-5" /> Exit Activity?
           </DialogTitle>
-          <DialogDescription className="pt-2">
+          <DialogDescription className="pt-2 text-sm sm:text-base">
             If you leave now, your progress in this lesson will be lost and
             cannot be saved.
           </DialogDescription>
         </DialogHeader>
-        <DialogFooter>
-          <Button variant="ghost" onClick={onClose}>
+        <DialogFooter className="flex-col-reverse gap-2 sm:flex-row sm:gap-0">
+          <Button
+            variant="ghost"
+            onClick={onClose}
+            className="w-full sm:w-auto"
+          >
             Stay
           </Button>
-          <Button variant="destructive" onClick={onConfirm}>
+          <Button
+            variant="destructive"
+            onClick={onConfirm}
+            className="w-full sm:w-auto"
+          >
             Exit Lesson
           </Button>
         </DialogFooter>
@@ -426,22 +507,24 @@ const GameOverOverlay = ({
     exit={{ opacity: 0 }}
     className="absolute inset-0 z-[60] bg-background/95 backdrop-blur flex items-center justify-center p-4"
   >
-    <div className="text-center space-y-6 max-w-md w-full bg-card border shadow-2xl p-8 rounded-3xl">
-      <div className="mx-auto w-24 h-24 bg-red-100 rounded-full flex items-center justify-center animate-pulse">
-        <Heart className="w-12 h-12 text-red-500 fill-red-500" />
+    <div className="text-center space-y-5 sm:space-y-6 w-full max-w-xs sm:max-w-md bg-card border shadow-2xl p-6 sm:p-8 rounded-2xl sm:rounded-3xl">
+      <div className="mx-auto w-16 h-16 sm:w-24 sm:h-24 bg-red-100 rounded-full flex items-center justify-center animate-pulse">
+        <Heart className="w-8 h-8 sm:w-12 sm:h-12 text-red-500 fill-red-500" />
       </div>
       <div>
-        <h2 className="text-3xl font-black text-foreground">Out of Hearts!</h2>
-        <p className="text-muted-foreground mt-2">
+        <h2 className="text-2xl sm:text-3xl font-black text-foreground">
+          Out of Hearts!
+        </h2>
+        <p className="text-muted-foreground mt-2 text-sm sm:text-base">
           Wait for regeneration or refill instantly.
         </p>
-        <div className="mt-4 flex items-center justify-center gap-2 text-sm font-mono text-muted-foreground">
+        <div className="mt-3 sm:mt-4 flex items-center justify-center gap-2 text-sm font-mono text-muted-foreground">
           <Clock className="w-4 h-4" />
           Next heart in: {timeRemaining || "20:00"}
         </div>
       </div>
 
-      <div className="flex flex-col gap-3 pt-4">
+      <div className="flex flex-col gap-3 pt-2 sm:pt-4">
         <Button
           onClick={onRefill}
           size="lg"
@@ -451,14 +534,163 @@ const GameOverOverlay = ({
           Refill for {HEART_COST} Coins
         </Button>
         <Button variant="ghost" onClick={onClose} className="w-full">
-          Give Up & Return
+          Give Up &amp; Return
         </Button>
       </div>
     </div>
   </motion.div>
 );
 
-// --- COMPONENT: FULL SCREEN LESSON VIEW (Old "Page" Style) ---
+// --- COMPONENT: TUTORIAL INFO CARD ---
+const TUTORIAL_COLORS: Record<
+  string,
+  {
+    bg: string;
+    border: string;
+    header: string;
+    badge: string;
+    icon: React.ReactNode;
+    stepText: string;
+  }
+> = {
+  quiz: {
+    bg: "bg-blue-50 dark:bg-blue-950/30",
+    border: "border-blue-300 dark:border-blue-700",
+    header: "bg-blue-600 dark:bg-blue-700",
+    badge: "bg-blue-600 dark:bg-blue-700",
+    stepText: "text-blue-900 dark:text-blue-100",
+    icon: <ListChecks className="w-6 h-6 text-white" />,
+  },
+  blocks: {
+    bg: "bg-purple-50 dark:bg-purple-950/30",
+    border: "border-purple-300 dark:border-purple-700",
+    header: "bg-purple-600 dark:bg-purple-700",
+    badge: "bg-purple-600 dark:bg-purple-700",
+    stepText: "text-purple-900 dark:text-purple-100",
+    icon: <Zap className="w-6 h-6 text-white" />,
+  },
+  matching: {
+    bg: "bg-emerald-50 dark:bg-emerald-950/30",
+    border: "border-emerald-300 dark:border-emerald-700",
+    header: "bg-emerald-600 dark:bg-emerald-700",
+    badge: "bg-emerald-600 dark:bg-emerald-700",
+    stepText: "text-emerald-900 dark:text-emerald-100",
+    icon: <Link2 className="w-6 h-6 text-white" />,
+  },
+};
+
+function TutorialInfoCard({
+  activity,
+  onGotIt,
+}: {
+  activity: any;
+  onGotIt: () => void;
+}) {
+  const {
+    icon: iconType,
+    title,
+    howToPlay,
+    correctMsg,
+    wrongMsg,
+    tip,
+  } = activity.data;
+  const theme = TUTORIAL_COLORS[iconType] || TUTORIAL_COLORS.quiz;
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 24 }}
+      animate={{ opacity: 1, y: 0 }}
+      className={cn(
+        "w-full max-w-2xl mx-auto rounded-2xl border-2 overflow-hidden shadow-lg",
+        theme.bg,
+        theme.border,
+      )}
+    >
+      {/* Header — solid colored background, always white text */}
+      <div className={cn("flex items-center gap-3 px-6 py-4", theme.header)}>
+        <div className="w-10 h-10 rounded-xl bg-white/20 flex items-center justify-center ring-2 ring-white/30">
+          {theme.icon}
+        </div>
+        <div>
+          <p className="text-[10px] font-bold text-white/75 uppercase tracking-widest">
+            Activity Type
+          </p>
+          <h2 className="text-lg font-black text-white leading-tight">
+            {title}
+          </h2>
+        </div>
+      </div>
+
+      <div className="p-5 space-y-4">
+        {/* How to Play */}
+        <div>
+          <p className="text-[11px] font-extrabold uppercase tracking-widest text-foreground/60 mb-2">
+            📋 How to Play
+          </p>
+          <ol className="space-y-2">
+            {howToPlay.map((step: string, i: number) => (
+              <li key={i} className="flex items-start gap-2.5 text-sm">
+                <span
+                  className={cn(
+                    "w-5 h-5 rounded-full flex items-center justify-center text-[11px] font-black text-white flex-shrink-0 mt-0.5",
+                    theme.badge,
+                  )}
+                >
+                  {i + 1}
+                </span>
+                {/* Explicit dark text for step content — readable in light AND dark */}
+                <span className="text-foreground font-medium leading-snug">
+                  {step}
+                </span>
+              </li>
+            ))}
+          </ol>
+        </div>
+
+        {/* Correct / Wrong Feedback Preview */}
+        <div>
+          <p className="text-[11px] font-extrabold uppercase tracking-widest text-foreground/60 mb-2">
+            🎮 Feedback Preview
+          </p>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div className="rounded-xl border-2 border-green-400 bg-green-50 dark:bg-green-900/20 dark:border-green-700 p-3 flex items-start gap-2">
+              <CheckCircle2 className="w-5 h-5 text-green-600 dark:text-green-400 flex-shrink-0 mt-0.5" />
+              <p className="text-xs text-green-900 dark:text-green-300 font-semibold leading-relaxed">
+                {correctMsg}
+              </p>
+            </div>
+            <div className="rounded-xl border-2 border-red-400 bg-red-50 dark:bg-red-900/20 dark:border-red-700 p-3 flex items-start gap-2">
+              <XCircle className="w-5 h-5 text-red-600 dark:text-red-400 flex-shrink-0 mt-0.5" />
+              <p className="text-xs text-red-900 dark:text-red-300 font-semibold leading-relaxed">
+                {wrongMsg}
+              </p>
+            </div>
+          </div>
+        </div>
+
+        {/* Tip — amber box with always-dark text in light mode */}
+        <div className="rounded-xl bg-amber-50 dark:bg-amber-900/20 border-2 border-amber-300 dark:border-amber-700/50 px-4 py-3">
+          <p className="text-xs text-amber-900 dark:text-amber-300 font-semibold leading-relaxed">
+            {tip}
+          </p>
+        </div>
+
+        {/* Got It button */}
+        <Button
+          className={cn(
+            "w-full h-12 text-base font-bold rounded-xl gap-2 text-white shadow-md",
+            theme.badge,
+            "hover:opacity-90 transition-opacity",
+          )}
+          onClick={onGotIt}
+        >
+          Got It — Let Me Try! <ArrowRight className="w-4 h-4" />
+        </Button>
+      </div>
+    </motion.div>
+  );
+}
+
 function FullScreenLesson({
   chapter,
   onClose,
@@ -468,10 +700,64 @@ function FullScreenLesson({
   mistakesSet,
   setMistakesSet,
 }: any) {
-  const { user } = useAuth();
+  const { user, updateProfile } = useAuth();
   const [step, setStep] = useState<"lesson" | "game">("lesson");
   const [isFinished, setIsFinished] = useState(false);
   const { playSound } = useGameSound();
+
+  // --- TOUR STATE ---
+  const [showLessonTour, setShowLessonTour] = useState(false);
+  const [showGameTour, setShowGameTour] = useState(false);
+
+  useEffect(() => {
+    // Tours only appear in the Chapter 0 tutorial, never in real chapters
+    if (!user || !chapter.isTutorial) return;
+
+    if (step === "lesson") {
+      const timer = setTimeout(() => setShowLessonTour(true), 800);
+      return () => clearTimeout(timer);
+    } else if (step === "game") {
+      const timer = setTimeout(() => setShowGameTour(true), 1200);
+      return () => clearTimeout(timer);
+    }
+  }, [user, step, chapter]);
+
+  const isMobile =
+    typeof window !== "undefined" ? window.innerWidth < 640 : false;
+
+  const GAME_TOUR_STEPS: TourStep[] = [
+    {
+      target: "tour-game-progress",
+      title: "📊 Progress Bar",
+      content:
+        "Each question you answer fills this bar. Complete them all to clear the chapter!",
+    },
+    {
+      target: "tour-game-hearts",
+      title: "❤️ Hearts & Health",
+      content:
+        "Every wrong answer costs a heart. Lose them all and it's Game Over. Don't worry — you can refill with coins!",
+    },
+    {
+      target: isMobile ? "tour-game-timer-mobile" : "tour-game-timer",
+      title: "⏱️ Speed Timer",
+      content:
+        "Your time is being tracked! Faster finishes earn better ranks on the leaderboard. Speed matters!",
+    },
+    {
+      target: isMobile ? "tour-game-hints-mobile" : "tour-game-hints",
+      title: "💡 Hint Button",
+      content:
+        "Stuck? Use a Hint! For quizzes it removes wrong options. For blocks it highlights the next piece. Buy hints in the Store.",
+    },
+    {
+      target: "tour-activity-area",
+      title: "🧩 Activity Zone",
+      content: chapter.isTutorial
+        ? "Three activity types await you: ① Multiple Choice — pick the answer. ② Code Builder — drag blocks in order. ③ Matching — connect concepts. Try each one!"
+        : "Read the prompt carefully, then solve the puzzle! Drag blocks, select choices, or match phrases. Good luck!",
+    },
+  ];
 
   // --- DYNAMIC QUEUE FOR RETRIES ---
   const [lessonQueue, setLessonQueue] = useState<any[]>([]);
@@ -481,11 +767,15 @@ function FullScreenLesson({
   useEffect(() => {
     if (chapter?.activities) {
       const rawActivities = [...chapter.activities];
-      const shuffled = rawActivities.sort(() => Math.random() - 0.5);
-      const queue = shuffled.map((act: any, idx: number) => ({
-        ...act,
-        _originalId: idx,
-      }));
+      // Tutorial: keep in order (quiz → blocks → matching) so each type is shown in sequence
+      const queue = chapter.isTutorial
+        ? rawActivities.map((act: any, idx: number) => ({
+            ...act,
+            _originalId: idx,
+          }))
+        : rawActivities
+            .sort(() => Math.random() - 0.5)
+            .map((act: any, idx: number) => ({ ...act, _originalId: idx }));
 
       setLessonQueue(queue);
       setOriginalQuestionCount(queue.length);
@@ -529,6 +819,19 @@ function FullScreenLesson({
       setFeedbackStatus("correct");
     } else {
       setFeedbackStatus("wrong");
+
+      // Tutorial mode: show red feedback but NEVER lose hearts (safe practice)
+      if (chapter.isTutorial) {
+        // Re-queue so the player must answer it correctly eventually,
+        // but don't deduct a heart. Track the mistake for accuracy display.
+        if (currentActivity && currentActivity._originalId !== undefined) {
+          setMistakesSet((prev: any) =>
+            new Set(prev).add(currentActivity._originalId),
+          );
+        }
+        setLessonQueue((prev) => [...prev, prev[currentActivityIndex]]);
+        return;
+      }
 
       if (hearts <= 1) {
         playSound("gameover");
@@ -596,6 +899,56 @@ function FullScreenLesson({
       exit={{ opacity: 0, y: 50 }}
       className="fixed inset-0 z-50 bg-background flex flex-col"
     >
+      <OnboardingTour
+        steps={
+          chapter.isTutorial
+            ? [
+                {
+                  target: "tour-lesson-content",
+                  title: "📖 Step 1: Read the Article",
+                  content:
+                    "Every chapter begins with a short reading. This one explains how adventures work — study it carefully so you're ready for the challenge!",
+                },
+                {
+                  target: "tour-start-challenge",
+                  title: "▶️ Step 2: Start the Challenge",
+                  content:
+                    "When you're ready, click this button to enter the activity zone. You'll practice three different puzzle types: quiz, code builder, and matching!",
+                },
+              ]
+            : [
+                {
+                  target: "tour-lesson-content",
+                  title: "Study Material",
+                  content:
+                    "Welcome to class! Here you'll find the core concepts for this chapter. Read through the explanations and code examples carefully before proceeding.",
+                },
+                {
+                  target: "tour-start-challenge",
+                  title: "Ready for the Test?",
+                  content:
+                    "Once you feel confident in what you've learned, click here to jump into the interactive challenges and put your knowledge to the test!",
+                },
+              ]
+        }
+        isOpen={showLessonTour}
+        onComplete={() => setShowLessonTour(false)}
+        onSkip={() => setShowLessonTour(false)}
+        avatarConfig={user?.avatarConfig}
+        tutorialId={chapter.isTutorial ? undefined : "adventureLesson"}
+      />
+
+      {step === "game" && (
+        <OnboardingTour
+          steps={GAME_TOUR_STEPS}
+          isOpen={showGameTour}
+          onComplete={() => setShowGameTour(false)}
+          onSkip={() => setShowGameTour(false)}
+          avatarConfig={user?.avatarConfig}
+          tutorialId={chapter.isTutorial ? undefined : "adventureGame"}
+        />
+      )}
+
       <ExitConfirmModal
         open={showExitConfirm}
         onClose={() => setShowExitConfirm(false)}
@@ -631,7 +984,10 @@ function FullScreenLesson({
           </Button>
 
           {step === "game" && !isFinished ? (
-            <div className="flex-1 h-4 bg-secondary rounded-full overflow-hidden relative">
+            <div
+              id="tour-game-progress"
+              className="flex-1 h-4 bg-secondary rounded-full overflow-hidden relative"
+            >
               <div className="absolute top-1 left-2 right-2 h-1 bg-white/10 rounded-full z-10" />
               <motion.div
                 className="h-full bg-green-500 rounded-full relative"
@@ -654,6 +1010,7 @@ function FullScreenLesson({
             {step === "game" && !isFinished && (
               <div className="hidden sm:flex items-center gap-3">
                 <Button
+                  id="tour-game-hints"
                   variant="ghost"
                   size="icon"
                   className={cn(
@@ -665,26 +1022,35 @@ function FullScreenLesson({
                 >
                   <Lightbulb className="w-6 h-6 stroke-[2.5]" />
                 </Button>
-                <div className="font-bold text-muted-foreground font-mono">
+                <div
+                  id="tour-game-timer"
+                  className="font-bold text-muted-foreground font-mono"
+                >
                   {formatRuntime(elapsedTime)}
                 </div>
               </div>
             )}
-            <HeartDropdown
-              hearts={hearts}
-              timeRemaining={timeRemaining}
-              buyHearts={buyHearts}
-            />
+            <div id="tour-game-hearts">
+              <HeartDropdown
+                hearts={hearts}
+                timeRemaining={timeRemaining}
+                buyHearts={buyHearts}
+              />
+            </div>
           </div>
         </div>
 
         {step === "game" && !isFinished && (
           <div className="flex sm:hidden items-center justify-center gap-6 pb-2 text-sm font-bold text-muted-foreground">
-            <div className="flex items-center gap-2">
+            <div
+              className="flex items-center gap-2"
+              id="tour-game-timer-mobile"
+            >
               <Clock className="w-4 h-4" />
               {formatRuntime(elapsedTime)}
             </div>
             <button
+              id="tour-game-hints-mobile"
               onClick={() => activityRef.current?.triggerHint()}
               disabled={hintCount <= 0 || feedbackStatus !== "idle"}
               className={cn(
@@ -709,11 +1075,11 @@ function FullScreenLesson({
               exit={{ opacity: 0, x: -20 }}
               className="absolute inset-0 overflow-y-auto"
             >
-              <div className="max-w-4xl mx-auto px-6 py-12 min-h-full flex flex-col justify-center">
-                <div className="space-y-8">
-                  <div className="space-y-4">
-                    <div className="flex items-center gap-3">
-                      <h1 className="text-4xl md:text-5xl font-extrabold text-primary tracking-tight">
+              <div className="max-w-4xl mx-auto px-4 sm:px-6 py-6 sm:py-12 min-h-full flex flex-col justify-center">
+                <div className="space-y-6 sm:space-y-8">
+                  <div className="space-y-3 sm:space-y-4">
+                    <div className="flex items-center gap-3 flex-wrap">
+                      <h1 className="text-3xl sm:text-4xl md:text-5xl font-extrabold text-primary tracking-tight">
                         {chapter.title}
                       </h1>
                       {chapter.isCompleted && (
@@ -722,14 +1088,14 @@ function FullScreenLesson({
                         </Badge>
                       )}
                     </div>
-                    <p className="text-xl text-muted-foreground">
+                    <p className="text-base sm:text-xl text-muted-foreground">
                       {chapter.description}
                     </p>
                   </div>
 
-                  <Card className="border-2 shadow-sm">
-                    <CardContent className="p-8 prose dark:prose-invert max-w-none">
-                      <div className="whitespace-pre-wrap font-sans text-lg leading-relaxed">
+                  <Card className="border-2 shadow-sm" id="tour-lesson-content">
+                    <CardContent className="p-5 sm:p-8 prose dark:prose-invert max-w-none">
+                      <div className="whitespace-pre-wrap font-sans text-base sm:text-lg leading-relaxed">
                         {chapter.content_markdown}
                       </div>
                     </CardContent>
@@ -746,7 +1112,10 @@ function FullScreenLesson({
                     </div>
                   )}
 
-                  <div className="pt-8 flex justify-end">
+                  <div
+                    className="pt-8 flex justify-end"
+                    id="tour-start-challenge"
+                  >
                     <Button
                       size="lg"
                       onClick={() => setStep("game")}
@@ -781,52 +1150,66 @@ function FullScreenLesson({
                 )}
               </AnimatePresence>
 
-              <div className="w-full max-w-2xl mx-auto p-6 pb-40 overflow-y-auto h-full flex flex-col justify-center custom-scrollbar">
+              <div className="w-full max-w-2xl mx-auto p-4 sm:p-6 pb-32 sm:pb-40 overflow-y-auto h-full flex flex-col justify-center custom-scrollbar">
                 {!isFinished ? (
                   <>
                     {currentActivity ? (
-                      <div className="space-y-8" key={currentActivityIndex}>
-                        <div className="text-center space-y-2">
-                          <h2 className="text-2xl md:text-3xl font-black text-foreground">
-                            {currentActivity.prompt}
-                          </h2>
-                          <p className="text-muted-foreground font-medium">
-                            Question {currentActivityIndex + 1} of{" "}
-                            {lessonQueue.length}
-                          </p>
-                        </div>
+                      <div
+                        className="space-y-8"
+                        key={currentActivityIndex}
+                        id="tour-activity-area"
+                      >
+                        {/* TUTORIAL_INFO: Show explanation card — no header/question counter */}
+                        {currentActivity.type === "TUTORIAL_INFO" ? (
+                          <TutorialInfoCard
+                            activity={currentActivity}
+                            onGotIt={() => handleActivitySubmit(true)}
+                          />
+                        ) : (
+                          <>
+                            <div className="text-center space-y-2">
+                              <h2 className="text-2xl md:text-3xl font-black text-foreground">
+                                {currentActivity.prompt}
+                              </h2>
+                              <p className="text-muted-foreground font-medium">
+                                Step {currentActivityIndex + 1} of{" "}
+                                {lessonQueue.length}
+                              </p>
+                            </div>
 
-                        <Card className="border-none shadow-none bg-transparent">
-                          <CardContent className="p-0">
-                            {currentActivity.type === "QUIZ" && (
-                              <QuizActivity
-                                ref={activityRef}
-                                data={currentActivity.data}
-                                onComplete={handleActivitySubmit}
-                                onConsumeHint={onUseHint}
-                                disabled={feedbackStatus !== "idle"}
-                              />
-                            )}
-                            {currentActivity.type === "BUILDING_BLOCKS" && (
-                              <BuildingBlocksActivity
-                                ref={activityRef}
-                                data={currentActivity.data}
-                                onComplete={handleActivitySubmit}
-                                onConsumeHint={onUseHint}
-                                disabled={feedbackStatus !== "idle"}
-                              />
-                            )}
-                            {currentActivity.type === "MATCHING" && (
-                              <MatchingActivity
-                                ref={activityRef}
-                                data={currentActivity.data}
-                                onComplete={handleActivitySubmit}
-                                onConsumeHint={onUseHint}
-                                disabled={feedbackStatus !== "idle"}
-                              />
-                            )}
-                          </CardContent>
-                        </Card>
+                            <Card className="border-none shadow-none bg-transparent">
+                              <CardContent className="p-0">
+                                {currentActivity.type === "QUIZ" && (
+                                  <QuizActivity
+                                    ref={activityRef}
+                                    data={currentActivity.data}
+                                    onComplete={handleActivitySubmit}
+                                    onConsumeHint={onUseHint}
+                                    disabled={feedbackStatus !== "idle"}
+                                  />
+                                )}
+                                {currentActivity.type === "BUILDING_BLOCKS" && (
+                                  <BuildingBlocksActivity
+                                    ref={activityRef}
+                                    data={currentActivity.data}
+                                    onComplete={handleActivitySubmit}
+                                    onConsumeHint={onUseHint}
+                                    disabled={feedbackStatus !== "idle"}
+                                  />
+                                )}
+                                {currentActivity.type === "MATCHING" && (
+                                  <MatchingActivity
+                                    ref={activityRef}
+                                    data={currentActivity.data}
+                                    onComplete={handleActivitySubmit}
+                                    onConsumeHint={onUseHint}
+                                    disabled={feedbackStatus !== "idle"}
+                                  />
+                                )}
+                              </CardContent>
+                            </Card>
+                          </>
+                        )}
                       </div>
                     ) : (
                       <div className="text-center space-y-6 py-12">
@@ -853,7 +1236,7 @@ function FullScreenLesson({
                     }}
                     rewards={{
                       xp: chapter.xp_reward || 50,
-                      coins: Math.floor((chapter.xp_reward || 50) / 10),
+                      coins: Math.floor((chapter.xp_reward || 50) / 2),
                     }}
                     onContinue={() => onComplete(finalTime)}
                   />
@@ -900,12 +1283,24 @@ function FullScreenLesson({
                           )}
                         >
                           {feedbackStatus === "correct"
-                            ? "Nice job!"
+                            ? chapter.isTutorial
+                              ? "✅ This is what CORRECT looks like!"
+                              : "Nice job!"
+                            : chapter.isTutorial
+                            ? "❌ This is what WRONG looks like!"
                             : "Incorrect"}
                         </h3>
                         {feedbackStatus === "wrong" && (
                           <p className="text-red-600 dark:text-red-300 text-sm font-medium">
-                            Don't worry, keep going!
+                            {chapter.isTutorial
+                              ? "No hearts lost in tutorial — try again!"
+                              : "Don't worry, keep going!"}
+                          </p>
+                        )}
+                        {feedbackStatus === "correct" && chapter.isTutorial && (
+                          <p className="text-green-600 dark:text-green-300 text-sm font-medium">
+                            Tap CONTINUE to move on. In real chapters you earn
+                            XP!
                           </p>
                         )}
                       </div>
@@ -937,7 +1332,7 @@ function FullScreenLesson({
 // --- MAIN PAGE ---
 export default function AdventurePage() {
   const navigate = useNavigate();
-  const { user, syncUser, refreshUser } = useAuth();
+  const { user, syncUser, refreshUser, updateProfile } = useAuth();
   const { grantXP } = useGameProgress();
   const bottomRef = useRef<HTMLDivElement>(null);
 
@@ -975,8 +1370,41 @@ export default function AdventurePage() {
   // const [rewardData, setRewardData] = useState<any>(null); // Removed RewardData state as RewardModal is processed
   const [showRegressConfirm, setShowRegressConfirm] = useState(false);
 
-  // ✅ Check hearts BEFORE entering lesson
+  const [isBugReportOpen, setIsBugReportOpen] = useState(false);
+
+  // --- TOUR STATE ---
+  const [searchParams, setSearchParams] = useSearchParams();
+  const [showMainTour, setShowMainTour] = useState(false);
+
+  useEffect(() => {
+    if (user && !loading && lessons.length > 0) {
+      const isManualTrigger = searchParams.get("tour") === "true";
+      const hasSeenTour = user.settings?.tutorials?.adventureTab;
+
+      if (isManualTrigger) {
+        setShowMainTour(true);
+        setSearchParams((prev) => {
+          const newParams = new URLSearchParams(prev);
+          newParams.delete("tour");
+          return newParams;
+        });
+      } else if (!hasSeenTour) {
+        // Delay to allow scroll to active node
+        const timer = setTimeout(() => setShowMainTour(true), 1500);
+        return () => clearTimeout(timer);
+      }
+    }
+  }, [user, loading, lessons.length, searchParams, setSearchParams]);
+
+  // ✅ Check hearts BEFORE entering lesson (tutorial chapters bypass this)
   const handleNodeClick = (chapter: any) => {
+    if (chapter.isTutorial) {
+      // Tutorial: always accessible, no hearts needed
+      setMistakesSet(new Set());
+      setHintsUsedCount(0);
+      setSelectedChapter(chapter);
+      return;
+    }
     if (hearts > 0) {
       // Reset mistakes when starting a new lesson
       setMistakesSet(new Set());
@@ -1147,7 +1575,19 @@ export default function AdventurePage() {
         };
       });
 
-      setLessons(mergedLessons);
+      // --- BUILD CHAPTER 0 TUTORIAL NODE ---
+      const isChapter0Done =
+        user.settings?.tutorials?.adventureChapter0 === true;
+      const chapter0 = {
+        ...CHAPTER_0_VISUAL,
+        ...CHAPTER_0_LESSON,
+        order_index: 0,
+        activityType: CHAPTER_0_VISUAL.activityLabel,
+        isCompleted: isChapter0Done,
+      };
+
+      // Prepend Chapter 0 so it always renders first
+      setLessons([chapter0, ...mergedLessons]);
     } catch (err) {
       console.error("Failed to load adventure progress:", err);
     } finally {
@@ -1367,10 +1807,25 @@ export default function AdventurePage() {
     Math.max(0, lessons.length - 1) * (NODE_HEIGHT + NODE_GAP) +
     NODE_HEIGHT / 2;
 
+  // Chapter 0 (tutorial) is at visual slot 0 — it doesn't count toward real chapter progress.
+  // Real chapters start at visual slot 1. We light the line from Ch0 → completed real chapters.
+  // After Ch0 is done, the line lights up from the top (Ch0 node center) down through
+  // each completed real chapter.
+  const isChapter0Complete = lessons[0]?.isCompleted === true;
+  const completedRealChapterCount = lessons.filter(
+    (l, i) => i > 0 && l.isCompleted,
+  ).length;
+
+  // Visual slot 0 = Ch0 (tutorial), slot 1 = Ch1, ... slot N = ChN.
+  // The line reaches the center of the CURRENT chapter node
+  // (i.e. the first non-completed chapter the player is working on).
+  // currentSlot = 0 → tutorial is their current; +1 for each completed real chapter.
+  const currentSlot = !isChapter0Complete
+    ? 0 // Tutorial not done yet — current is Ch0
+    : completedRealChapterCount + 1; // Tutorial done → current is Ch(completedReal+1)
+
   const calculatedProgress =
-    currentChapterIndex > 1
-      ? (currentChapterIndex - 1) * (NODE_HEIGHT + NODE_GAP) + NODE_HEIGHT / 2
-      : 0;
+    currentSlot * (NODE_HEIGHT + NODE_GAP) + NODE_HEIGHT / 2;
 
   const progressHeight = Math.min(calculatedProgress, maxLineHeight);
 
@@ -1393,13 +1848,35 @@ export default function AdventurePage() {
     try {
       if (!selectedChapter || !user) return;
 
+      // --- TUTORIAL CHAPTER: Skip all DB writes ---
+      if (selectedChapter.isTutorial) {
+        const chapter = selectedChapter;
+        setSelectedChapter(null); // Close UI immediately
+
+        const currentSettings = user.settings || {};
+        await updateProfile({
+          settings: {
+            ...currentSettings,
+            tutorials: {
+              ...currentSettings.tutorials,
+              adventureChapter0: true,
+            },
+          },
+        });
+
+        // Refresh so Chapter 0 shows as completed and Chapter 1 unlocks
+        await loadAdventureProgress();
+        refreshUser();
+        return;
+      }
+
       // 1. Capture Data & CLOSE MODAL IMMEDIATELY
       // We close the modal first to prevent "Article View" glitch and make it snappy.
       const chapter = selectedChapter;
       setSelectedChapter(null); // <--- Close UI
 
       const xpEarned = chapter.xp_reward || 50;
-      const coinsEarned = Math.floor(xpEarned / 10);
+      const coinsEarned = Math.floor(xpEarned / 2);
 
       grantXP(xpEarned);
 
@@ -1510,10 +1987,70 @@ export default function AdventurePage() {
 
   if (loading) return <AdventureSkeleton />;
 
-  const [isBugReportOpen, setIsBugReportOpen] = useState(false);
+  const MAIN_TOUR_STEPS: TourStep[] = [
+    {
+      target: "chapter-0-node",
+      title: "🗺️ Welcome to C# Adventure!",
+      content:
+        "This is your learning roadmap — a path of chapters that guide you from complete beginner to C# Architect. Each glowing node is a chapter. Start with Chapter 0!",
+    },
+    {
+      target: "chapter-0-node",
+      title: "📖 Chapter 0 — Your Tutorial",
+      content:
+        "This amber node is Chapter 0 — a FREE tutorial that teaches you exactly how adventures work. It explains the heart system, activity types, and feedback. Click it to begin!",
+    },
+    {
+      target: "active-chapter-node",
+      title: "⚡ Your Next Chapter",
+      content:
+        "After finishing the tutorial, this pulsing node unlocks as your next real challenge. Each chapter has a reading article + 3 types of activities. Complete it to advance!",
+      position: "top",
+    },
+    {
+      target: "tour-chapter-card",
+      title: "📚 Chapter Info & Rewards",
+      content:
+        "Each chapter card shows the chapter title, a short lore description, and the XP + Coins you’ll earn for completing it. The more advanced the chapter, the bigger the reward!",
+      position: "top",
+    },
+    {
+      target: "tour-runtime, tour-runtime-mobile",
+      title: "⏱️ Your Adventure Timer",
+      content:
+        "This tracks your total playtime across all chapters. The leaderboard ranks players by how many chapters they've completed — and the fastest times win! Try to improve your speed each run.",
+    },
+    {
+      target: "tour-rank",
+      title: "🏅 Your Rank",
+      content:
+        "This is your current leaderboard rank among all players. Rank is determined by completed chapters first, then by total time. The fewer minutes you take, the higher you climb!",
+    },
+    {
+      target: "tour-hearts-stats",
+      title: "❤️ Hearts — Your Lives",
+      content:
+        "You lose a heart every time you answer wrong. If you run out, you'll need to wait for regeneration or spend coins to refill. Keep an eye on them during challenges!",
+    },
+    {
+      target: "tour-backpack",
+      title: "🎒 Backpack — Your Items",
+      content:
+        "Tap this to see your items. Hints let you remove wrong options during a quiz. Streak Freezes protect your daily streak. Earn them by completing challenges!",
+    },
+  ];
 
   return (
     <div className="min-h-screen bg-background p-6">
+      <OnboardingTour
+        steps={MAIN_TOUR_STEPS}
+        isOpen={showMainTour}
+        onComplete={() => setShowMainTour(false)}
+        onSkip={() => setShowMainTour(false)}
+        avatarConfig={user?.avatarConfig}
+        tutorialId="adventureTab"
+      />
+
       {/* 2. Regress Confirm */}
       <RegressModal
         open={showRegressConfirm}
@@ -1599,86 +2136,135 @@ export default function AdventurePage() {
                   </div>
                 </div>
 
-                <div className="flex gap-2 w-full md:w-auto justify-end">
-                  <Button
-                    variant="outline"
-                    size="icon"
-                    className="rounded-full w-10 h-10 border-indigo-200 bg-indigo-50 dark:bg-indigo-900/20 dark:border-indigo-800"
-                    onClick={() => setIsBugReportOpen(true)}
-                    title="Report a bug"
-                  >
-                    <Bug className="w-5 h-5 text-indigo-600 dark:text-indigo-400" />
-                  </Button>
+                <div className="flex flex-wrap items-center justify-start md:justify-end gap-3 sm:gap-4 w-full md:w-auto mt-6 md:mt-0">
+                  {/* Action Icons Group */}
+                  <div className="flex items-center gap-2">
+                    <TooltipProvider>
+                      <Tooltip delayDuration={0}>
+                        <TooltipTrigger asChild>
+                          <Button
+                            variant="outline"
+                            size="icon"
+                            className="rounded-full w-10 h-10 border-indigo-200 bg-indigo-50 dark:bg-indigo-900/20 dark:border-indigo-800 shrink-0"
+                            onClick={() => setShowMainTour(true)}
+                          >
+                            <MapIcon className="w-5 h-5 text-indigo-600 dark:text-indigo-400" />
+                          </Button>
+                        </TooltipTrigger>
+                        <TooltipContent>Replay adventure tour</TooltipContent>
+                      </Tooltip>
+                    </TooltipProvider>
 
-                  <TooltipProvider>
-                    <DropdownMenu>
-                      <DropdownMenuTrigger asChild>
-                        <Button
-                          variant="outline"
-                          size="icon"
-                          className="rounded-full w-10 h-10 border-indigo-200 bg-indigo-50 dark:bg-indigo-900/20 dark:border-indigo-800"
-                        >
-                          <Backpack className="w-5 h-5 text-indigo-600 dark:text-indigo-400" />
-                        </Button>
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent align="end" className="w-64">
-                        <DropdownMenuLabel>Backpack</DropdownMenuLabel>
-                        <DropdownMenuSeparator />
-                        {inventory.length > 0 ? (
-                          inventory.map((item, idx) => (
-                            <DropdownMenuItem
-                              key={idx}
-                              className="flex justify-between cursor-pointer py-3"
+                    <TooltipProvider>
+                      <Tooltip delayDuration={0}>
+                        <TooltipTrigger asChild>
+                          <Button
+                            variant="outline"
+                            size="icon"
+                            className="rounded-full w-10 h-10 border-indigo-200 bg-indigo-50 dark:bg-indigo-900/20 dark:border-indigo-800 shrink-0"
+                            onClick={() => setIsBugReportOpen(true)}
+                          >
+                            <Bug className="w-5 h-5 text-indigo-600 dark:text-indigo-400" />
+                          </Button>
+                        </TooltipTrigger>
+                        <TooltipContent>Report a bug</TooltipContent>
+                      </Tooltip>
+                    </TooltipProvider>
+
+                    <div id="tour-backpack" className="shrink-0">
+                      <TooltipProvider>
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <Button
+                              variant="outline"
+                              size="icon"
+                              className="rounded-full w-10 h-10 border-indigo-200 bg-indigo-50 dark:bg-indigo-900/20 dark:border-indigo-800"
                             >
-                              <div className="flex items-center gap-3">
-                                <div
-                                  className={cn(
-                                    "p-1 rounded-md bg-secondary",
-                                    item.color,
-                                  )}
+                              <Backpack className="w-5 h-5 text-indigo-600 dark:text-indigo-400" />
+                            </Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end" className="w-64">
+                            <DropdownMenuLabel>Backpack</DropdownMenuLabel>
+                            <DropdownMenuSeparator />
+                            {inventory.length > 0 ? (
+                              inventory.map((item, idx) => (
+                                <DropdownMenuItem
+                                  key={idx}
+                                  className="flex justify-between cursor-pointer py-3"
                                 >
-                                  <item.icon className="w-4 h-4" />
-                                </div>
-                                <span className="font-medium">{item.name}</span>
+                                  <div className="flex items-center gap-3">
+                                    <div
+                                      className={cn(
+                                        "p-1 rounded-md bg-secondary",
+                                        item.color,
+                                      )}
+                                    >
+                                      <item.icon className="w-4 h-4" />
+                                    </div>
+                                    <span className="font-medium">
+                                      {item.name}
+                                    </span>
+                                  </div>
+                                  <Badge
+                                    variant="secondary"
+                                    className="h-5 px-1.5 font-bold"
+                                  >
+                                    {item.quantity}x
+                                  </Badge>
+                                </DropdownMenuItem>
+                              ))
+                            ) : (
+                              <div className="p-4 text-sm text-muted-foreground text-center">
+                                Your backpack is empty.
                               </div>
-                              <Badge
-                                variant="secondary"
-                                className="h-5 px-1.5 font-bold"
-                              >
-                                {item.quantity}x
-                              </Badge>
-                            </DropdownMenuItem>
-                          ))
-                        ) : (
-                          <div className="p-4 text-sm text-muted-foreground text-center">
-                            Your backpack is empty.
+                            )}
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                      </TooltipProvider>
+                    </div>
+                  </div>
+
+                  {/* Stats Group: Rank, Time, Hearts */}
+                  <div className="flex flex-wrap items-center gap-2 sm:gap-3">
+                    <div id="tour-rank" className="shrink-0">
+                      <RankBadge rank={stats.rank as number | string} />
+                    </div>
+
+                    <TooltipProvider>
+                      <Tooltip delayDuration={0}>
+                        <TooltipTrigger asChild>
+                          {/* Desktop runtime badge */}
+                          <div
+                            id="tour-runtime"
+                            className="hidden md:flex items-center gap-2 px-4 py-2 bg-blue-500/10 text-blue-600 rounded-full font-bold border border-blue-500/20 cursor-default shrink-0"
+                          >
+                            <Clock className="w-4 h-4 text-blue-600" />
+                            {formatRuntime(stats.total_runtime)}
                           </div>
-                        )}
-                      </DropdownMenuContent>
-                    </DropdownMenu>
-                  </TooltipProvider>
+                        </TooltipTrigger>
+                        <TooltipContent>
+                          <p>Total Adventure Time</p>
+                        </TooltipContent>
+                      </Tooltip>
+                    </TooltipProvider>
 
-                  <RankBadge rank={stats.rank as number | string} />
+                    {/* Mobile runtime badge — mirrors desktop, visible only on mobile */}
+                    <div
+                      id="tour-runtime-mobile"
+                      className="flex md:hidden items-center gap-2 px-3 py-1.5 bg-blue-500/10 text-blue-600 rounded-full font-bold border border-blue-500/20 cursor-default shrink-0 text-xs"
+                    >
+                      <Clock className="w-3 h-3 text-blue-600" />
+                      {formatRuntime(stats.total_runtime)}
+                    </div>
 
-                  <TooltipProvider>
-                    <Tooltip delayDuration={0}>
-                      <TooltipTrigger asChild>
-                        <div className="hidden md:flex items-center gap-2 px-4 py-2 bg-blue-500/10 text-blue-600 rounded-full font-bold border border-blue-500/20 cursor-default">
-                          <Clock className="w-4 h-4 text-blue-600" />
-                          {formatRuntime(stats.total_runtime)}
-                        </div>
-                      </TooltipTrigger>
-                      <TooltipContent>
-                        <p>Total Adventure Time</p>
-                      </TooltipContent>
-                    </Tooltip>
-                  </TooltipProvider>
-
-                  <HeartDropdown
-                    hearts={hearts}
-                    timeRemaining={timeRemaining}
-                    buyHearts={buyHearts}
-                  />
+                    <div className="flex shrink-0" id="tour-hearts-stats">
+                      <HeartDropdown
+                        hearts={hearts}
+                        timeRemaining={timeRemaining}
+                        buyHearts={buyHearts}
+                      />
+                    </div>
+                  </div>
                 </div>
               </div>
             </div>
@@ -1696,17 +2282,47 @@ export default function AdventurePage() {
               />
               <div className="relative z-10 flex flex-col gap-8">
                 {lessons.map((chapter, index) => {
-                  const level = index + 1;
                   let status: "locked" | "current" | "completed" = "locked";
-                  if (chapter.isCompleted) status = "completed";
-                  else if (level === maxCompletedOrder + 1) status = "current";
+                  const isChapter0 = chapter.isTutorial === true;
+                  const isChapter0Done = lessons[0]?.isCompleted === true;
+
+                  if (isChapter0) {
+                    // Chapter 0: completed or current (never locked)
+                    status = chapter.isCompleted ? "completed" : "current";
+                  } else {
+                    // Real chapters: locked until tutorial is done
+                    if (!isChapter0Done) {
+                      status = "locked";
+                    } else {
+                      // Normal unlock logic for real chapters
+                      const level = index; // index=1 → Chapter 1 (order_index 1)
+                      if (chapter.isCompleted) status = "completed";
+                      else if (level === maxCompletedOrder + 1)
+                        status = "current";
+                    }
+                  }
+
+                  const nodeId = isChapter0
+                    ? "chapter-0-node"
+                    : // Always assign to the first real chapter so tour step 3 can always find it
+                    index === 1
+                    ? "active-chapter-node"
+                    : status === "current"
+                    ? "active-chapter-node"
+                    : undefined;
+
+                  // Always give the first non-tutorial chapter its card tour ID
+                  // so step 3 can spotlight it regardless of locked/current status
+                  const cardId =
+                    !isChapter0 && index === 1
+                      ? "tour-chapter-card"
+                      : undefined;
 
                   return (
                     <RoadmapNode
-                      key={chapter.id}
-                      id={
-                        status === "current" ? "active-chapter-node" : undefined
-                      }
+                      key={chapter.id ?? `chapter-${index}`}
+                      id={nodeId}
+                      cardId={cardId}
                       chapter={chapter}
                       status={status}
                       alignment={index % 2 === 0 ? "left" : "right"}

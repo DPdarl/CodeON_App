@@ -221,6 +221,7 @@ export default function AppLayout() {
 
         {/* CONTENT SCROLL AREA */}
         <div
+          id="main-content-area"
           className={`flex-1 overflow-y-auto custom-scrollbar  ${getContentPadding()}`}
         >
           <Outlet />

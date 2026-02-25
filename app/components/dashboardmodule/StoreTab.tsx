@@ -98,7 +98,9 @@ export function StoreTab() {
         <div className="absolute bottom-0 left-0 w-48 h-48 bg-purple-500/20 rounded-full blur-3xl -z-10 -translate-x-1/2 translate-y-1/2" />
 
         <div className="flex flex-col items-center justify-center gap-4 relative z-10 text-center">
-          <div className="space-y-2">
+          <div id="store-title" className="space-y-2">
+            {" "}
+            {/* [NEW] ID */}
             <h1 className="text-3xl sm:text-5xl font-black tracking-tight flex items-center justify-center gap-3">
               <IconStore className="w-10 h-10 sm:w-14 sm:h-14 text-yellow-400 drop-shadow-lg" />
               The Store
@@ -115,17 +117,22 @@ export function StoreTab() {
       <div className="px-4">
         <Tabs defaultValue="powerups" className="w-full">
           <div className="flex justify-center mb-8">
-            <TabsList className="bg-gray-100 dark:bg-gray-800 p-1.5 rounded-full shadow-inner">
+            <TabsList
+              id="store-tabs"
+              className="inline-flex h-auto w-auto items-center justify-center rounded-full bg-slate-100 p-1.5 dark:bg-gray-800/80 shadow-inner ring-1 ring-black/5 dark:ring-white/5"
+            >
+              {" "}
+              {/* [NEW] ID */}
               <TabsTrigger
                 value="powerups"
-                className="rounded-full px-6 py-2.5 text-sm sm:text-base font-bold data-[state=active]:bg-white data-[state=active]:text-indigo-600 data-[state=active]:shadow-md transition-all"
+                className="rounded-full px-6 py-2.5 text-sm sm:text-base font-bold data-[state=active]:bg-white dark:data-[state=active]:bg-gray-700 data-[state=active]:text-indigo-600 dark:data-[state=active]:text-white data-[state=active]:shadow-sm transition-all"
               >
                 <BulbIcon className="w-4 h-4 mr-2" />
                 Power-Ups
               </TabsTrigger>
               <TabsTrigger
                 value="inventory"
-                className="rounded-full px-6 py-2.5 text-sm sm:text-base font-bold data-[state=active]:bg-white data-[state=active]:text-indigo-600 data-[state=active]:shadow-md transition-all"
+                className="rounded-full px-6 py-2.5 text-sm sm:text-base font-bold data-[state=active]:bg-white dark:data-[state=active]:bg-gray-700 data-[state=active]:text-indigo-600 dark:data-[state=active]:text-white data-[state=active]:shadow-sm transition-all"
               >
                 <Backpack className="w-4 h-4 mr-2" />
                 Inventory
@@ -135,7 +142,10 @@ export function StoreTab() {
 
           <TabsContent value="powerups" className="space-y-8">
             {/* Featured Header (Optional) */}
-            <div className="flex items-center gap-2 mb-4 px-2">
+            <div
+              id="store-featured-items"
+              className="flex items-center gap-2 mb-4 px-2"
+            >
               <Sparkles className="w-5 h-5 text-indigo-500" />
               <h3 className="text-lg font-bold text-gray-900 dark:text-white">
                 Featured Items
@@ -149,12 +159,13 @@ export function StoreTab() {
               transition={{ delay: 0.1 }}
             >
               {POWER_UPS.map((item) => (
-                <PowerUpCard
-                  key={item.id}
-                  item={item}
-                  onPurchaseClick={() => openPurchaseModal(item)}
-                  userCoins={userCoins}
-                />
+                <div key={item.id} id={`powerup-${item.id}`} className="h-full">
+                  <PowerUpCard
+                    item={item}
+                    onPurchaseClick={() => openPurchaseModal(item)}
+                    userCoins={userCoins}
+                  />
+                </div>
               ))}
             </motion.div>
           </TabsContent>

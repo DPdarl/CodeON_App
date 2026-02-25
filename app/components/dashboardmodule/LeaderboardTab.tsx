@@ -21,6 +21,7 @@ import {
   Eye,
   EyeOff,
   Award,
+  Medal, // Added Medal
 } from "lucide-react";
 import { motion } from "framer-motion";
 import { AvatarDisplay } from "./AvatarDisplay";
@@ -66,6 +67,24 @@ const GAMEMODES = [
 
 const TOTAL_CHAPTERS = 10;
 
+// Duplicate Metadata for now (Shared constant would be better)
+const BADGE_METADATA: Record<string, { label: string; description: string }> = {
+  "week-warrior": { label: "Week Warrior", description: "Active for 7 days" },
+  "consistency-king": {
+    label: "Consistency King",
+    description: "Logged in 30 days straight",
+  },
+  "century-club": { label: "Century Club", description: "Earned 100 XP" },
+  "bug-hunter": { label: "Bug Hunter", description: "Reported a bug" },
+  "code-wizard": { label: "Code Wizard", description: "Completed 10 quests" },
+  "night-owl": { label: "Night Owl", description: "Coded after midnight" },
+  "early-bird": { label: "Early Bird", description: "Coded before 6 AM" },
+  "quest-master": {
+    label: "Quest Master",
+    description: "Completed all regular quests",
+  },
+};
+
 interface LeaderboardUser {
   isAdventureCompleted?: boolean;
   id: string;
@@ -99,7 +118,7 @@ const formatTime = (seconds: number) => {
 };
 
 export function LeaderboardTab() {
-  const { user, updateProfile } = useAuth();
+  const { user, user: currentUser, updateProfile } = useAuth(); // Destructure properly if needed, but 'user' is already there
   const [selectedUser, setSelectedUser] = useState<LeaderboardUser | null>(
     null,
   );
@@ -302,6 +321,7 @@ export function LeaderboardTab() {
     <div className="max-w-4xl mx-auto space-y-8 pb-12">
       {/* Header */}
       <motion.div
+        id="leaderboard-title" // [NEW] ID
         initial={{ opacity: 0, y: -20 }}
         animate={{ opacity: 1, y: 0 }}
         className="text-center relative"
@@ -311,7 +331,10 @@ export function LeaderboardTab() {
           Hall of Champions
         </h1>
 
-        <div className="flex flex-wrap items-center justify-center gap-3 mt-4 relative z-20">
+        <div
+          id="leaderboard-filters"
+          className="flex flex-wrap items-center justify-center gap-3 mt-4 relative z-20"
+        >
           {/* DESKTOP: Hover Tooltip */}
           <div className="hidden md:block">
             <TooltipProvider delayDuration={0}>
@@ -435,6 +458,7 @@ export function LeaderboardTab() {
       {!loading && filteredUsers.length > 0 && (
         <>
           <motion.div
+            id="tour-podium"
             className="flex items-end justify-center gap-2 md:grid md:grid-cols-3 md:items-end md:gap-4 mt-8 md:mt-0"
             variants={containerVariants}
             initial="hidden"
@@ -520,12 +544,13 @@ export function LeaderboardTab() {
 
       {currentUserData && (
         <motion.div
-          className="sticky bottom-6 z-20"
+          id="tour-current-user"
+          className="sticky bottom-6 z-[60]"
           initial={{ opacity: 0, y: 100 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ type: "spring", stiffness: 100 }}
         >
-          <div className="mx-4 md:mx-0 shadow-2xl rounded-xl">
+          <div className="mx-4 md:mx-0 shadow-2xl rounded-xl relative z-[60]">
             <UserRankRow
               user={currentUserData}
               rank={currentUserRank + 1}
@@ -616,9 +641,11 @@ function UserProfileModal({
           </div>
 
           <div className="text-center space-y-1">
-            <h2 className="text-lg md:text-2xl font-black text-gray-900 dark:text-white">
-              {user.displayName}
-            </h2>
+            <div className="flex items-center justify-center gap-2">
+              <h2 className="text-lg md:text-2xl font-black text-gray-900 dark:text-white">
+                {user.displayName}
+              </h2>
+            </div>
             <div className="flex items-center justify-center gap-2 text-xs md:text-sm text-gray-500 font-medium">
               <span className="uppercase tracking-wider">
                 {user.league} League
@@ -677,7 +704,7 @@ function UserProfileModal({
                     variant="secondary"
                     className="px-3 py-1 text-xs"
                   >
-                    {badge}
+                    {BADGE_METADATA[badge]?.label || badge}
                   </Badge>
                 ))}
               </div>
@@ -899,7 +926,7 @@ function UserRankRow({
               {formatTime(user.totalRuntime!)}
             </>
           ) : (
-            <span className="px-2 py-0.5 rounded-md bg-gray-100 dark:bg-gray-800 text-[10px] font-bold text-gray-400 uppercase tracking-wider">
+            <span className="px-2 py-0.5 rounded-md bg-gray-100 dark:bg-gray-800 text-[10px] font-bold text-gray-400 uppercase tracking-wide">
               In Progress {user.completedChapters?.length || 0}/{TOTAL_CHAPTERS}
             </span>
           )}

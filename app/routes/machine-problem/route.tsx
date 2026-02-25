@@ -13,6 +13,7 @@ import {
   Undo2,
   Redo2,
   Eraser,
+  Bug,
 } from "lucide-react";
 import { toast } from "sonner"; // Add toast import
 
@@ -22,6 +23,7 @@ import {
 } from "~/contexts/ChallengeContext";
 import { useAuth } from "~/contexts/AuthContext";
 import MachineProblemHeader from "~/components/playmodule/challenge/MachineProblemHeader";
+import { BugReportModal } from "~/components/playmodule/challenge/BugReportModal";
 import ChallengeInfo from "~/components/playmodule/challenge/ChallengeInfo";
 import CodeEditor from "~/components/playmodule/challenge/CodeEditor";
 import Terminal from "~/components/playmodule/challenge/Terminal";
@@ -110,8 +112,59 @@ const ComponentSkeleton = () => (
 import { useNavigate } from "@remix-run/react";
 import { useEffect } from "react";
 import { challenges } from "~/data/challenges"; // Removed duplicate challenges import line if present in source, but replacement covers the block.
+import { OnboardingTour, TourStep } from "~/components/ui/OnboardingTour";
 // ... (existing imports)
-// ... (existing imports)
+
+// Maps each tour step index to which mobile tab should be active
+const TOUR_STEP_TABS: ("learn" | "code" | "output")[] = [
+  "learn", // Step 1: Instructions
+  "code", // Step 2: Editor
+  "code", // Step 3: Toolbar (also in code panel)
+  "output", // Step 4: Terminal
+  "output", // Step 5: Run & Submit buttons (in footer, always visible)
+];
+
+const tourSteps: TourStep[] = [
+  {
+    // Highlight both the instructions panel AND the "Learn" tab pill
+    target: "tour-instructions, tour-mobile-tab-learn",
+    title: "Read Your Task",
+    content:
+      "This panel contains the story, instructions, and hints for the current challenge. Read it carefully!",
+    position: "right",
+  },
+  {
+    // Highlight both the code editor panel AND the "Code" tab pill
+    target: "tour-editor, tour-mobile-tab-code",
+    title: "Write Your Code",
+    content:
+      "This is your code editor. You will write your C# solutions here. It has syntax highlighting and auto-completion.",
+    position: "left",
+  },
+  {
+    // Highlight both the toolbar AND the "Code" tab pill (toolbar lives in the code panel)
+    target: "tour-actions, tour-mobile-tab-code",
+    title: "Helpful Tools",
+    content:
+      "Need to report a bug or undo a mistake? You can find helpful actions right here at the top of the editor.",
+    position: "bottom",
+  },
+  {
+    // Highlight both the terminal panel AND the "Output" tab pill
+    target: "tour-terminal, tour-mobile-tab-output",
+    title: "Console Output",
+    content:
+      "When your code runs, any printed output or errors will appear down here in the terminal.",
+  },
+  {
+    // Highlight BOTH the Run button and the Submit Answer button
+    target: "tour-run-btn, tour-submit-btn",
+    title: "Test & Submit",
+    content:
+      "Ready? Use this button to test your code. When you've solved it, click Submit! Give it a try now.",
+    position: "center",
+  },
+];
 
 const MachineProblemContent = () => {
   const {
@@ -150,6 +203,32 @@ const MachineProblemContent = () => {
   const [activeTab, setActiveTab] = useState<"learn" | "code" | "output">(
     "learn",
   );
+
+  const [searchParams, setSearchParams] = useSearchParams();
+  const [showTour, setShowTour] = useState(false);
+  const [isManual, setIsManual] = useState(false);
+
+  // Trigger tour if it's the tutorial or if explicitly requested via URL param
+  useEffect(() => {
+    const isManualTrigger = searchParams.get("tour") === "true";
+    if (currentChallenge?.id === "0.1" || isManualTrigger) {
+      if (isManualTrigger) {
+        setIsManual(true);
+      }
+      // Clean up the URL
+      if (isManualTrigger) {
+        setSearchParams((params) => {
+          const newParams = new URLSearchParams(params);
+          newParams.delete("tour");
+          return newParams;
+        });
+      }
+
+      // Delay slightly so layout can mount
+      const timer = setTimeout(() => setShowTour(true), 800);
+      return () => clearTimeout(timer);
+    }
+  }, [currentChallenge, searchParams, setSearchParams]);
 
   // Anti-Cheat & Global Hotkey
   useEffect(() => {
@@ -202,6 +281,7 @@ const MachineProblemContent = () => {
   const [editorInstance, setEditorInstance] = useState<any>(null);
   const [isClearCommentsModalOpen, setIsClearCommentsModalOpen] =
     useState(false); // [NEW]
+  const [isBugReportOpen, setIsBugReportOpen] = useState(false);
 
   if (isLoading) return <MachineProblemSkeleton />;
 
@@ -217,6 +297,7 @@ const MachineProblemContent = () => {
         {/* ... */}
         {/* COL 1: Instructions (Collapsible) */}
         <div
+          id="tour-instructions"
           className={`border-r border-border flex flex-col bg-card transition-all duration-300 ease-in-out ${
             // Desktop width logic
             isInstructionsCollapsed
@@ -261,6 +342,7 @@ const MachineProblemContent = () => {
 
         {/* COL 2: Editor (Flexible) */}
         <div
+          id="tour-editor"
           className={`flex flex-col border-r border-border relative bg-[#1E1E1E] transition-all duration-300 ease-in-out overflow-hidden min-h-0 ${
             // Desktop width logic
             isInstructionsCollapsed ? "md:w-[60%]" : "md:w-[45%]"
@@ -270,7 +352,10 @@ const MachineProblemContent = () => {
           }`}
         >
           {/* File Tabs - Keeping Darker for Editor Context */}
-          <div className="h-10 bg-[#1e1e1e] border-b border-[#333] flex items-center justify-between px-2 gap-1">
+          <div
+            id="tour-actions"
+            className="h-10 bg-[#1e1e1e] border-b border-[#333] flex items-center justify-between px-2 gap-1"
+          >
             <div className="flex items-center gap-1">
               <div className="h-8 px-3 bg-[#1e1e1e] border-t-2 border-primary text-gray-200 text-xs flex items-center gap-2 rounded-t-sm">
                 <div className="w-3 h-3 bg-primary/20 text-primary rounded flex items-center justify-center font-bold">
@@ -282,6 +367,14 @@ const MachineProblemContent = () => {
             {/* Actions: Undo, Redo, Clear Comments (Hidden in Review Mode) */}
             {!isReviewMode && editorInstance && (
               <div className="flex items-center gap-1">
+                <button
+                  onClick={() => setIsBugReportOpen(true)}
+                  className="p-1.5 text-gray-400 hover:text-red-400 hover:bg-red-900/30 rounded transition-colors"
+                  title="Report a Bug"
+                >
+                  <Bug size={15} />
+                </button>
+                <div className="w-px h-4 bg-gray-700 mx-1 border-r border-gray-700" />
                 <button
                   onClick={() => {
                     editorInstance?.trigger("keyboard", "undo", null);
@@ -328,6 +421,7 @@ const MachineProblemContent = () => {
 
         {/* COL 3: Preview/Terminal (30% on Desktop) */}
         <div
+          id="tour-terminal"
           className={`flex-1 md:min-w-[300px] flex-col bg-card ${
             activeTab === "output" ? "flex w-full h-full" : "hidden md:flex"
           }`}
@@ -354,6 +448,26 @@ const MachineProblemContent = () => {
       <ChallengeFooter
         onRun={() => setActiveTab("output")}
         onSubmit={() => setActiveTab("output")}
+      />
+
+      {/* Modals & Tours */}
+      <OnboardingTour
+        steps={tourSteps}
+        isOpen={showTour}
+        onComplete={() => setShowTour(false)}
+        onSkip={() => setShowTour(false)}
+        tutorialId="machineProblemTab"
+        onStepChange={(stepIndex) => {
+          // On mobile, switch to the correct tab so the highlighted element is visible
+          const tab = TOUR_STEP_TABS[stepIndex];
+          if (tab) setActiveTab(tab);
+        }}
+      />
+
+      <BugReportModal
+        isOpen={isBugReportOpen}
+        onClose={() => setIsBugReportOpen(false)}
+        challengeId={currentChallenge?.id}
       />
 
       {/* Exit Confirmation Modal */}

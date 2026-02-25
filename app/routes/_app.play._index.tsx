@@ -4,7 +4,7 @@ import { PlayTab } from "~/components/dashboardmodule/PlayTab";
 
 export const meta: MetaFunction = () => {
   return [
-    { title: "Game Center | CodeON" },
+    { title: "Play | CodeON" },
     { name: "description", content: "Choose your game mode" },
   ];
 };

@@ -71,7 +71,7 @@ interface AccountRequest {
   is_approved: boolean;
 }
 
-const SECTIONS = ["BSIT-1A", "BSIT-1B", "BSCS-1A", "BSIS", "BSAIS", "ACT"];
+const SECTIONS = ["BSIS", "BSCS", "BSAIS", "ACT"];
 
 export function StudentManagementTab() {
   const [students, setStudents] = useState<Student[]>([]);

@@ -43,7 +43,7 @@ export default function MultiplayerPage() {
 
         <div className="text-center mb-12">
           <h1 className="text-4xl font-black text-indigo-600 dark:text-indigo-400 mb-2">
-            Multiplayer Arena
+            Multiplayer
           </h1>
           <p className="text-muted-foreground">
             Battle your peers in real-time code quizzes.

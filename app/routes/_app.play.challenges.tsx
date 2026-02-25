@@ -1,6 +1,5 @@
-// app/routes/play.challenges.tsx
-import { useState, useMemo } from "react";
-import { Link, useNavigate } from "@remix-run/react";
+import { useState, useMemo, useEffect } from "react";
+import { Link, useNavigate, useSearchParams } from "@remix-run/react";
 import {
   ChevronDown,
   ChevronUp,
@@ -18,6 +17,7 @@ import {
   Layers, // [NEW]
   Wand2, // [NEW]
   Crown, // [NEW]
+  PlayCircle, // [NEW]
 } from "lucide-react";
 import { Button } from "~/components/ui/button";
 import { Badge } from "~/components/ui/badge";
@@ -30,147 +30,21 @@ import {
 } from "~/contexts/ChallengeContext"; // Import Challenge Context
 import { AvatarDisplay } from "~/components/dashboardmodule/AvatarDisplay";
 import { MODULES, type ModuleData } from "~/data/challenges"; // Import shared MODULES
+import { OnboardingTour, type TourStep } from "~/components/ui/OnboardingTour";
 
-// --- Module Definitions removed (using shared) ---
-
-// --- Components ---
-
-const StatusButton = ({
-  status,
-  onClick,
-}: {
-  status: "completed" | "active" | "locked";
-  onClick?: () => void;
-}) => {
-  if (status === "completed") {
-    return (
-      <Button
-        variant="outline"
-        className="border-green-500/50 text-green-400 hover:bg-green-500/10 hover:text-green-300 w-24 h-8 text-xs font-bold"
-      >
-        Done!
-      </Button>
-    );
-  }
-  if (status === "active") {
-    return (
-      <Button
-        className="bg-blue-600 hover:bg-blue-500 text-white shadow-[0_0_10px_rgba(37,99,235,0.5)] w-24 h-8 text-xs font-bold animate-pulse-subtle"
-        onClick={onClick}
-      >
-        Start
-      </Button>
-    );
-  }
-  return (
-    <Button variant="ghost" disabled className="text-gray-600 w-24 h-8 text-xs">
-      ???
-    </Button>
-  );
-};
-
-const isModuleLocked = (moduleId: number, completedIds: string[]) => {
-  if (moduleId === 1) return false;
-
-  // Check if previous module is fully completed?
-  // OR just check if the last challenge of the previous module is done (easier linear check)
-  // Let's go with lineal check: Find the last challenge of module (N-1)
-  const prevModuleChallenges = challenges.filter(
-    (c) => c.moduleId === moduleId - 1,
-  );
-  if (prevModuleChallenges.length === 0) return false; // Should not happen
-
-  const lastChallenge = prevModuleChallenges[prevModuleChallenges.length - 1];
-  return !completedIds.includes(lastChallenge.id);
-};
-
-const ChallengeRow = ({
-  challenge,
-  index,
-  isLocked,
-}: {
-  challenge: any;
-  index: number;
-  isLocked: boolean;
-}) => {
-  const navigate = useNavigate();
-  const { stars, completed } = useChallengeContext();
-
-  const isCompleted = completed.includes(challenge.id);
-  // Status logic:
-  // - Completed: In completed array
-  // - Active: Not completed, not locked
-  // - Locked: Locked
-  const status = isCompleted ? "completed" : isLocked ? "locked" : "active";
-
-  const earnedStars = stars[challenge.id] || 0;
-
-  const handleStart = () => {
-    if (status !== "locked") {
-      navigate(`/machine-problem?id=${challenge.id}`);
-    }
-  };
-
-  return (
-    <div
-      className={`grid grid-cols-[1fr_auto] items-center gap-3 py-3 px-3 sm:px-4 border-b border-gray-100 dark:border-gray-800/50 last:border-0 rounded-lg transition-colors group ${
-        status === "locked"
-          ? "opacity-60 cursor-not-allowed bg-transparent"
-          : "hover:bg-gray-50 dark:hover:bg-white/5 cursor-pointer"
-      }`}
-      onClick={handleStart} // Make whole row clickable if active
-    >
-      <div className="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-4 min-w-0">
-        <span className="text-gray-400 dark:text-gray-500 font-mono text-[10px] sm:text-xs flex items-center gap-1 sm:w-20 shrink-0 uppercase tracking-wide">
-          {status === "locked" && <Lock size={10} />}
-          MP {challenge.id}
-        </span>
-        <div className="flex flex-col min-w-0">
-          <span
-            className={`font-medium text-sm sm:text-base truncate pr-2 ${
-              status === "locked"
-                ? "text-gray-400 dark:text-gray-500"
-                : "text-gray-900 dark:text-gray-200"
-            }`}
-          >
-            {challenge.title}
-          </span>
-
-          {/* Star Rating Display */}
-          <div className="flex gap-0.5 mt-0.5 sm:mt-1">
-            {[1, 2, 3].map((star) => (
-              <Star
-                key={star}
-                size={12}
-                className={
-                  isCompleted
-                    ? star <= earnedStars
-                      ? "text-yellow-400 fill-yellow-400" // Earned
-                      : "text-gray-300 dark:text-gray-700" // Unearned but completed
-                    : "text-gray-200 dark:text-gray-800" // Not yet completed (Hollow/Dim)
-                }
-              />
-            ))}
-          </div>
-        </div>
-      </div>
-      <div onClick={(e) => e.stopPropagation()} className="shrink-0">
-        <StatusButton status={status} onClick={handleStart} />
-      </div>
-    </div>
-  );
-};
-
+// Update ModuleSection to accept an optional ID for the first module
 const ModuleSection = ({
   module,
   isOpen,
   onToggle,
   isLocked,
+  id, // [NEW] Accept ID
 }: {
   module: ModuleData;
   isOpen: boolean;
   onToggle: () => void;
   isLocked: boolean;
+  id?: string; // [NEW]
 }) => {
   // Filter challenges for this module
   const moduleChallenges = useMemo(
@@ -182,6 +56,7 @@ const ModuleSection = ({
 
   return (
     <div
+      id={id} // [NEW] Apply ID here
       className={`relative pl-12 pb-8 ${
         isLocked ? "opacity-75 grayscale" : ""
       }`}
@@ -297,6 +172,166 @@ const ModuleSection = ({
   );
 };
 
+// --- Components ---
+
+const StatusButton = ({
+  status,
+  onClick,
+  label, // [NEW] Added optional label
+}: {
+  status: "completed" | "active" | "locked";
+  onClick?: () => void;
+  label?: string; // [NEW]
+}) => {
+  if (status === "completed") {
+    return (
+      <Button
+        variant="outline"
+        onClick={onClick} // [NEW] Keep it clickable if needed
+        className={`border-green-500/50 text-green-400 hover:bg-green-500/10 hover:text-green-300 h-8 font-bold ${
+          label ? "px-2 text-[10px]" : "w-24 text-xs"
+        }`}
+      >
+        {label || "Done!"}
+      </Button>
+    );
+  }
+  if (status === "active") {
+    return (
+      <Button
+        className="bg-blue-600 hover:bg-blue-500 text-white shadow-[0_0_10px_rgba(37,99,235,0.5)] w-24 h-8 text-xs font-bold animate-pulse-subtle"
+        onClick={onClick}
+      >
+        Start
+      </Button>
+    );
+  }
+  return (
+    <Button variant="ghost" disabled className="text-gray-600 w-24 h-8 text-xs">
+      ???
+    </Button>
+  );
+};
+
+const isModuleLocked = (moduleId: number, completedIds: string[]) => {
+  if (moduleId === 0) return false;
+
+  const prevModuleChallenges = challenges.filter(
+    (c) => c.moduleId === moduleId - 1,
+  );
+  if (prevModuleChallenges.length === 0) return true; // Modules lock if previous doesn't exist
+
+  const lastChallenge = prevModuleChallenges[prevModuleChallenges.length - 1];
+  return !completedIds.includes(lastChallenge.id);
+};
+
+const ChallengeRow = ({
+  challenge,
+  index,
+  isLocked,
+}: {
+  challenge: any;
+  index: number;
+  isLocked: boolean;
+}) => {
+  const navigate = useNavigate();
+  const { stars, completed } = useChallengeContext();
+
+  const isCompleted = completed.includes(challenge.id);
+  // Status logic:
+  // - Completed: In completed array
+  // - Active: Not completed, not locked
+  // - Locked: Locked
+  const status = isCompleted ? "completed" : isLocked ? "locked" : "active";
+
+  const earnedStars = stars[challenge.id] || 0;
+
+  const handleStart = () => {
+    if (status !== "locked") {
+      // If it's the tutorial and it's already completed, replay the tour.
+      if (status === "completed" && challenge.id === "0.1") {
+        navigate(`/machine-problem?id=${challenge.id}&tour=true`);
+      } else {
+        navigate(`/machine-problem?id=${challenge.id}`);
+      }
+    }
+  };
+
+  return (
+    <div
+      className={`grid grid-cols-[1fr_auto] items-center gap-3 py-3 px-3 sm:px-4 border-b border-gray-100 dark:border-gray-800/50 last:border-0 rounded-lg transition-colors group ${
+        status === "locked"
+          ? "opacity-60 cursor-not-allowed bg-transparent"
+          : "hover:bg-gray-50 dark:hover:bg-white/5 cursor-pointer"
+      }`}
+      onClick={handleStart} // Make whole row clickable if active
+    >
+      <div className="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-4 min-w-0">
+        <span className="text-gray-400 dark:text-gray-500 font-mono text-[10px] sm:text-xs flex items-center gap-1 sm:w-20 shrink-0 uppercase tracking-wide">
+          {status === "locked" && <Lock size={10} />}
+          MP {challenge.id}
+        </span>
+        <div className="flex flex-col min-w-0">
+          <span
+            className={`font-medium text-sm sm:text-base truncate pr-2 ${
+              status === "locked"
+                ? "text-gray-400 dark:text-gray-500"
+                : "text-gray-900 dark:text-gray-200"
+            }`}
+          >
+            {challenge.title}
+          </span>
+
+          {/* Rewards Row */}
+          <div className="flex items-center gap-3 mt-1 sm:mt-1.5 flex-wrap">
+            {/* Star Rating Display */}
+            {challenge.moduleId !== 0 && (
+              <div className="flex gap-0.5">
+                {[1, 2, 3].map((star) => (
+                  <Star
+                    key={star}
+                    size={13}
+                    className={
+                      isCompleted
+                        ? star <= earnedStars
+                          ? "text-yellow-400 fill-yellow-400" // Earned
+                          : "text-gray-300 dark:text-gray-700" // Unearned but completed
+                        : "text-gray-200 dark:text-gray-800" // Not yet completed (Hollow/Dim)
+                    }
+                  />
+                ))}
+              </div>
+            )}
+
+            {/* XP and Coin Badges */}
+            <div className="flex items-center gap-1.5">
+              <span className="flex items-center gap-0.5 px-1.5 py-0.5 bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 rounded text-[10px] font-bold uppercase tracking-wider">
+                <span className="text-[10px]">✨</span>
+                {challenge.xpReward || 50} XP
+              </span>
+              <span className="flex items-center gap-0.5 px-1.5 py-0.5 bg-yellow-50 dark:bg-yellow-900/20 text-yellow-600 dark:text-yellow-500 rounded text-[10px] font-bold uppercase tracking-wider">
+                <span className="text-[10px]">🪙</span>
+                {challenge.coinsReward || 10}
+              </span>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div onClick={(e) => e.stopPropagation()} className="shrink-0">
+        <StatusButton
+          status={status}
+          onClick={handleStart}
+          label={
+            status === "completed" && challenge.id === "0.1"
+              ? "Replay Tutorial"
+              : undefined
+          }
+        />
+      </div>
+    </div>
+  );
+};
+
 // --- Sidebar Widgets (Connected to Real Data) ---
 
 const ProfileWidget = ({ user }: { user: any }) => (
@@ -366,7 +401,8 @@ const ProgressWidget = ({
     totalChallenges > 0 ? (completedCount / totalChallenges) * 100 : 0;
 
   // Stars Progress
-  const totalPossibleStars = totalChallenges * 3;
+  const scorableChallenges = challenges.filter((c) => c.moduleId !== 0).length;
+  const totalPossibleStars = scorableChallenges * 3;
   const userStars = user.stars || 0;
   const starProgress =
     totalPossibleStars > 0 ? (userStars / totalPossibleStars) * 100 : 0;
@@ -507,37 +543,88 @@ const BadgesWidget = ({ user }: { user: any }) => {
   );
 };
 
-// --- Main Page Component ---
+const TOUR_STEPS: TourStep[] = [
+  {
+    target: "play-title",
+    title: "C#allenges",
+    content:
+      "Welcome to Machine Problems! This is where you test your knowledge with pure coding puzzles.",
+  },
+  {
+    target: "play-module-1",
+    title: "Learning Modules",
+    content:
+      "Challenges are grouped into modules. Start with the Module 0 Tutorial to learn the interface, unlock Module 1, and grab some easy rewards!",
+  },
+  {
+    target: "play-stats",
+    title: "Course Progress",
+    content:
+      "Use this sidebar to track your stats, certificates earned, and overall progression. Earn all 6 certificates to complete the course!",
+  },
+];
 
-// ... (ChallengesContent holding the logic)
 const ChallengesContent = () => {
   const { user } = useAuth();
-  const { completed } = useChallengeContext(); // Get completed challenges
-
-  // State for which module is expanded. Default to 1.
+  const { completed } = useChallengeContext();
   const [expandedModule, setExpandedModule] = useState<number | null>(1);
+  const [searchParams, setSearchParams] = useSearchParams();
+  const [showTour, setShowTour] = useState(false);
+  const [isManual, setIsManual] = useState(false);
+
+  useEffect(() => {
+    if (user) {
+      const isManualTrigger = searchParams.get("tour") === "true";
+      const hasSeenTour = user?.settings?.tutorials?.challengesTab;
+
+      if (isManualTrigger) {
+        setShowTour(true);
+        setIsManual(true);
+        setSearchParams((params) => {
+          const newParams = new URLSearchParams(params);
+          newParams.delete("tour");
+          return newParams;
+        });
+      } else if (!hasSeenTour) {
+        const timer = setTimeout(() => setShowTour(true), 1000);
+        return () => clearTimeout(timer);
+      }
+    }
+  }, [user, searchParams, setSearchParams]);
 
   const toggleModule = (id: number) => {
     setExpandedModule(expandedModule === id ? null : id);
   };
 
-  if (!user) return null; // Or Loading state
+  if (!user) return null;
 
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-[#0F172A] text-gray-900 dark:text-white font-sans selection:bg-blue-500/30">
-      {/* Navigation Bar Placeholder (if any, typically App Header covers this) */}
-
+      <OnboardingTour
+        steps={TOUR_STEPS}
+        isOpen={showTour}
+        onComplete={() => {
+          setShowTour(false);
+          setIsManual(false);
+        }}
+        onSkip={() => {
+          setShowTour(false);
+          setIsManual(false);
+        }}
+        avatarConfig={user?.avatarConfig}
+        tutorialId="challengesTab"
+      />
       <div className="max-w-7xl mx-auto px-4 py-8 lg:px-8">
-        {/* Header Section */}
-        {/* Header Section */}
-        <div className="mb-12">
+        <div className="mb-12" id="play-title">
+          {" "}
+          {/* [NEW] Added ID */}
+          {/* ... Header content ... */}
           <Link
             to="/dashboard"
             className="inline-flex items-center text-sm text-gray-500 hover:text-blue-600 transition-colors mb-4"
           >
             <ChevronDown className="rotate-90 mr-1 w-4 h-4" /> Back to Dashboard
           </Link>
-
           <div className="flex flex-col md:flex-row md:items-end justify-between gap-4">
             <div>
               <div className="flex items-center gap-2 mb-2">
@@ -556,24 +643,35 @@ const ChallengesContent = () => {
                 journey to becoming a .NET Developer starts here.
               </p>
             </div>
+
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => {
+                setIsManual(true);
+                setShowTour(true);
+              }}
+              className="gap-2 bg-white/5 border-gray-200 dark:border-gray-800 hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-700 dark:text-gray-300 w-fit"
+            >
+              <PlayCircle className="w-4 h-4 text-blue-500" />
+              Replay Tutorial
+            </Button>
           </div>
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-          {/* LEFT COLUMN: Roadmap */}
           <div className="lg:col-span-2">
             <div className="space-y-0 max-w-2xl mx-auto">
-              {MODULES.map((module) => (
+              {MODULES.map((module, idx) => (
                 <ModuleSection
                   key={module.id}
                   module={module}
                   isOpen={expandedModule === module.id}
                   onToggle={() => toggleModule(module.id)}
                   isLocked={isModuleLocked(module.id, completed)}
+                  id={idx === 0 ? "play-module-1" : undefined} // [NEW] ID for first module
                 />
               ))}
-
-              {/* End Node */}
               <div className="relative pl-12 pt-4">
                 <div className="absolute left-4 top-0 bottom-0 w-0.5 bg-gradient-to-b from-gray-800 to-transparent h-16" />
                 <div className="w-8 h-8 rounded-full bg-gray-900 border-2 border-dashed border-gray-700 flex items-center justify-center text-gray-600 font-bold text-xs absolute left-0">
@@ -586,9 +684,10 @@ const ChallengesContent = () => {
             </div>
           </div>
 
-          {/* RIGHT COLUMN: Sidebar Stats */}
           <div className="lg:col-span-1">
-            <div className="sticky top-8">
+            <div className="sticky top-8" id="play-stats">
+              {" "}
+              {/* [NEW] ID for sidebar */}
               <ProfileWidget user={user} />
               <ProgressWidget user={user} completed={completed} />
               <BadgesWidget user={user} />

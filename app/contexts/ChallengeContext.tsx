@@ -565,7 +565,7 @@ export const ChallengeProvider = ({
 
     // --- Structural Check (IPO) ---
     // 1. Input Check
-    if (!code.includes("Console.ReadLine")) {
+    if (currentChallenge.moduleId !== 0 && !code.includes("Console.ReadLine")) {
       const failResult = {
         correct: false,
         stars: 0,
@@ -585,7 +585,9 @@ export const ChallengeProvider = ({
     }
 
     // 2. Output Check
+    // Exclude Module 0 from strict output check since some challenges (like 0.3, 0.4) don't strictly require printing the final result in a verifiable way, or are checked specifically below.
     if (
+      currentChallenge.moduleId !== 0 &&
       !code.includes("Console.WriteLine") &&
       !code.includes("Console.Write")
     ) {
@@ -606,6 +608,91 @@ export const ChallengeProvider = ({
       return failResult;
     }
 
+    // --- Module 0 Specific Checks ---
+    if (currentChallenge.moduleId === 0) {
+      const clean = code
+        .replace(/\/\/.*$/gm, "")
+        .replace(/\/\*[\s\S]*?\*\//g, "");
+
+      if (currentChallenge.id === "0.1" && !clean.includes(`"Ready!"`)) {
+        return {
+          correct: false,
+          stars: 0,
+          feedback: 'You must print exactly "Ready!".',
+          executionTimeMs: 0,
+        };
+      }
+      if (currentChallenge.id === "0.2" && !clean.includes(`"Hello, World!"`)) {
+        return {
+          correct: false,
+          stars: 0,
+          feedback: 'You must print exactly "Hello, World!".',
+          executionTimeMs: 0,
+        };
+      }
+      if (currentChallenge.id === "0.3") {
+        if (!clean.includes("playerName"))
+          return {
+            correct: false,
+            stars: 0,
+            feedback: "You must create a variable called playerName.",
+            executionTimeMs: 0,
+          };
+        if (!clean.includes("Console.ReadLine()"))
+          return {
+            correct: false,
+            stars: 0,
+            feedback: "You must use Console.ReadLine().",
+            executionTimeMs: 0,
+          };
+      }
+      if (currentChallenge.id === "0.4") {
+        if (!clean.includes("totalPrice"))
+          return {
+            correct: false,
+            stars: 0,
+            feedback: "You must create a variable called totalPrice.",
+            executionTimeMs: 0,
+          };
+        if (!clean.includes("+"))
+          return {
+            correct: false,
+            stars: 0,
+            feedback: "You must add basePrice and taxAmount together using +.",
+            executionTimeMs: 0,
+          };
+      }
+      if (currentChallenge.id === "0.5") {
+        if (!clean.includes(`"The total is: "`))
+          return {
+            correct: false,
+            stars: 0,
+            feedback: 'You must include the exact text "The total is: ".',
+            executionTimeMs: 0,
+          };
+        if (!clean.includes("+") || !clean.includes("totalPrice"))
+          return {
+            correct: false,
+            stars: 0,
+            feedback: "You must concatenate 'totalPrice' to the string.",
+            executionTimeMs: 0,
+          };
+      }
+
+      // If passing these structural checks for Module 0, consider it correct immediately to bypass output checking,
+      // as they mostly just test syntax concepts and some produce no output or partial output.
+      setState((prev) => ({
+        ...prev,
+        output: prev.output + "\n✅ Validation Passed! All tests correct.\n",
+      }));
+      return {
+        correct: true,
+        stars: 0, // Module 0 gets 0 stars
+        feedback: "Great job completing this tutorial step!",
+        executionTimeMs: 0,
+      };
+    }
+
     // 3. Process Check (Heuristic towards Logic/Formula)
     const cleanCode = code
       .replace(/\/\/.*$/gm, "") // Remove single-line comments
@@ -617,8 +704,12 @@ export const ChallengeProvider = ({
     const processPattern =
       /[\+\-\*\/%]|Math\.|\bif\s*\(|\bswitch\b|\bfor\b|\bforeach\b|\bwhile\b|\bdo\b/;
 
-    // Skip heuristic for MP 1.7 (Type Casting) as it uses Convert/Casting instead of operators
-    if (currentChallenge.id !== "1.7" && !processPattern.test(cleanCode)) {
+    // Skip heuristic for Module 0 (Onboarding) and 1.7 (Type Casting)
+    if (
+      currentChallenge.moduleId !== 0 &&
+      currentChallenge.id !== "1.7" &&
+      !processPattern.test(cleanCode)
+    ) {
       const failResult = {
         correct: false,
         stars: 0,
@@ -1329,6 +1420,11 @@ export const ChallengeProvider = ({
     if (elapsedMinutes <= targetTime) earnedStars = 3;
     else if (elapsedMinutes <= targetTime * 1.5) earnedStars = 2;
 
+    // Module 0 is strictly a tutorial and yields 0 stars globally.
+    if (currentChallenge.moduleId === 0) {
+      earnedStars = 0;
+    }
+
     const timeMsg = `Time: ${elapsedMinutes.toFixed(
       1,
     )}m / Target: ${targetTime}m`;
@@ -1368,7 +1464,7 @@ export const ChallengeProvider = ({
         prev.output +
         "\n\n✅ " +
         result.feedback +
-        `\nYou earned ${result.stars} Stars!`,
+        (result.stars > 0 ? `\nYou earned ${result.stars} Stars!` : ""),
     }));
 
     const isFirstTime = !state.completed.includes(currentChallenge.id);

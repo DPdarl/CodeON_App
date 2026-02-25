@@ -1,5 +1,5 @@
 // app/components/dashboardmodule/PlayTab.tsx
-import { useNavigate } from "@remix-run/react";
+import { useNavigate, useSearchParams } from "@remix-run/react";
 import { motion } from "framer-motion";
 import { Users, Code2, ArrowRight, Lock } from "lucide-react";
 import { useState, useEffect } from "react"; // ADDED
@@ -10,6 +10,8 @@ import { useAuth } from "~/contexts/AuthContext";
 import { cn } from "~/lib/utils";
 import { ControllerIcon, MapIcon } from "../ui/Icons";
 import { PlaySkeleton } from "./PlaySkeleton"; // ADDED
+import { OnboardingTour } from "~/components/ui/OnboardingTour";
+import type { TourStep } from "~/components/ui/OnboardingTour";
 
 // Import the Updated MatchHistoryTab
 import { MatchHistoryTab } from "./MatchHistoryTab";
@@ -20,13 +22,67 @@ export function PlayTab() {
   const currentLevel = user?.level || 1;
   const [loading, setLoading] = useState(true); // ADDED
 
+  // Tour Logic
+  const [searchParams, setSearchParams] = useSearchParams();
+  const [showTour, setShowTour] = useState(false);
+  const [isManual, setIsManual] = useState(false);
+
   // Simulate loading for consistent UX
   useEffect(() => {
     const timer = setTimeout(() => setLoading(false), 600);
     return () => clearTimeout(timer);
   }, []);
 
+  useEffect(() => {
+    if (user && !loading) {
+      const isManualTrigger = searchParams.get("tour") === "true";
+      const hasSeenTour = user?.settings?.tutorials?.playTab;
+
+      if (isManualTrigger) {
+        setShowTour(true);
+        setIsManual(true);
+        setSearchParams((prev) => {
+          const newParams = new URLSearchParams(prev);
+          newParams.delete("tour");
+          return newParams;
+        });
+      } else if (!hasSeenTour) {
+        // Small delay to ensure elements are rendered
+        const timer = setTimeout(() => setShowTour(true), 1000);
+        return () => clearTimeout(timer);
+      }
+    }
+  }, [user, loading, searchParams, setSearchParams]);
+
   if (loading) return <PlaySkeleton />; // ADDED
+
+  const TOUR_STEPS: TourStep[] = [
+    {
+      target: "mode-adventure",
+      title: "C# Adventures",
+      content:
+        "Master C# concepts step-by-step through interactive lessons and mini-games. This is where you will do most of your learning.",
+    },
+    {
+      target: "mode-multiplayer",
+      title: "Multiplayer ",
+      content: "(Coming Soon. Need a paid API to work)",
+    },
+    {
+      target: "mode-challenges",
+      title: "C#allenges",
+      content:
+        "Test your logic with raw machine problems. Great for practicing exactly what you've learned.",
+      position: "top",
+    },
+    {
+      target: "match-history-section",
+      title: "Match History",
+      content:
+        "Review your past multiplayer battles and adventure progress, including how accurate and fast you were.",
+      position: "top",
+    },
+  ];
 
   const gameModes = [
     {
@@ -43,7 +99,7 @@ export function PlayTab() {
     },
     {
       id: "multiplayer",
-      title: "Multiplayer Arena",
+      title: "Multiplayer ",
       description:
         "Compete with peers in real-time coding battles. Prove your speed and accuracy.",
       icon: Users,
@@ -68,7 +124,22 @@ export function PlayTab() {
   ];
 
   return (
-    <div className="max-w-7xl mx-auto space-y-8 pb-12 pt-4 px-4">
+    <div className="max-w-7xl mx-auto space-y-8 pb-12 pt-4 px-4 relative">
+      <OnboardingTour
+        steps={TOUR_STEPS}
+        isOpen={showTour}
+        onComplete={() => {
+          setShowTour(false);
+          setIsManual(false);
+        }}
+        onSkip={() => {
+          setShowTour(false);
+          setIsManual(false);
+        }}
+        avatarConfig={user?.avatarConfig}
+        tutorialId="playTab"
+        returnTo={isManual ? "/how-to" : undefined}
+      />
       {/* Header Section */}
       <motion.div
         initial={{ opacity: 0, y: -20 }}
@@ -81,7 +152,7 @@ export function PlayTab() {
           </div>
           <div>
             <h1 className="text-3xl font-black tracking-tight text-foreground">
-              Game Center
+              Play CodeON
             </h1>
             <p className="text-muted-foreground">
               Choose your path and level up your skills.
@@ -93,11 +164,13 @@ export function PlayTab() {
       {/* Cards Grid */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         {gameModes.map((mode, index) => {
-          const isLocked = currentLevel < mode.minLevel;
+          const isLocked =
+            mode.id === "multiplayer" ? true : currentLevel < mode.minLevel;
 
           return (
             <motion.div
               key={mode.id}
+              id={`mode-${mode.id}`}
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: index * 0.1 }}
@@ -118,9 +191,11 @@ export function PlayTab() {
                     <div className="w-12 h-12 rounded-full bg-muted flex items-center justify-center mb-3">
                       <Lock className="w-6 h-6 text-muted-foreground" />
                     </div>
-                    <p className="font-bold text-foreground">Locked</p>
-                    <p className="text-xs text-muted-foreground mt-1">
-                      Reach Level {mode.minLevel} to unlock
+                    <p className="font-bold text-lg text-foreground">
+                      Coming Soon
+                    </p>
+                    <p className="text-md text-muted-foreground mt-1">
+                      Coming Soon. Need a paid API to work.
                     </p>
                   </div>
                 )}
@@ -168,6 +243,10 @@ export function PlayTab() {
                         "bg-foreground text-background hover:bg-foreground/90",
                     )}
                     disabled={isLocked}
+                    onClick={(e) => {
+                      e.stopPropagation(); // Prevent triggering the card's onClick twice
+                      if (!isLocked) navigate(mode.route);
+                    }}
                   >
                     {isLocked ? "Locked" : "Play Now"}
                     {!isLocked && (
@@ -182,7 +261,10 @@ export function PlayTab() {
       </div>
 
       {/* History Table */}
-      <div className="mt-8">
+      <div
+        className="mt-8 h-[400px] overflow-y-auto pr-2"
+        id="match-history-section"
+      >
         <MatchHistoryTab />
       </div>
     </div>

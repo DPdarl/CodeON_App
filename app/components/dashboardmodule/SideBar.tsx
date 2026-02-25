@@ -6,6 +6,7 @@ import {
   Info,
   UserCog,
   Bug,
+  HelpCircle,
 } from "lucide-react";
 import { useState, useRef, useEffect } from "react";
 import {
@@ -24,6 +25,7 @@ import {
 } from "~/components/ui/tooltip";
 import { motion, AnimatePresence } from "framer-motion";
 import { Button } from "~/components/ui/button";
+import { useNavigate } from "@remix-run/react"; // [NEW]
 import { UserData } from "~/contexts/AuthContext";
 import { useQuestNotifications } from "~/hooks/useQuestNotifications";
 import { useStreakNotifications } from "~/hooks/useStreakNotifications";
@@ -51,11 +53,12 @@ interface SidebarProps {
 
 export function Sidebar({
   activeTab,
-  onTabChange,
+  onTabChange, // [FIX] Restore prop
   onLogout,
   user,
   collapsed = false,
 }: SidebarProps) {
+  const navigate = useNavigate(); // [FIX] Initialize hook
   const [isMoreDropdownOpen, setIsMoreDropdownOpen] = useState(false);
   const [showLogoutDialog, setShowLogoutDialog] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
@@ -140,6 +143,7 @@ export function Sidebar({
   );
 
   const moreOptions = [
+    { id: "howto", label: "How to?", icon: HelpCircle }, // [UPDATED] Renamed to How to?
     { id: "settings", label: "Settings", icon: Settings },
     { id: "about", label: "About", icon: Info },
     { id: "logout-trigger", label: "Logout", icon: LogOut },
@@ -166,6 +170,8 @@ export function Sidebar({
   const handleMoreOptionClick = (option: (typeof moreOptions)[0]) => {
     if (option.id === "logout-trigger") {
       setShowLogoutDialog(true);
+    } else if (option.id === "howto") {
+      navigate("/how-to");
     } else {
       onTabChange(option.id);
     }
@@ -182,6 +188,7 @@ export function Sidebar({
   return (
     <>
       <div
+        id="sidebar-nav" // [NEW] ID
         className={`bg-gray-150 dark:bg-gray-900 border-r shadow-sm flex flex-col h-full w-full transition-all duration-300`}
       >
         {/* Logo Section */}
@@ -236,6 +243,7 @@ export function Sidebar({
               // Define the button content separately for cleaner Tooltip usage
               const NavButton = (
                 <button
+                  id={`nav-item-${item.id}`} // [NEW] ID for tour
                   className={`w-full flex items-center rounded-lg text-left transition-colors group relative
                     ${
                       activeTab === item.id

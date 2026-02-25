@@ -385,7 +385,7 @@ export function MatchHistoryTab() {
           </div>
 
           {/* MOBILE CARD VIEW */}
-          <div className="md:hidden space-y-4 pt-4">
+          <div className="md:hidden space-y-4 pt-4 pb-4 h-[400px] overflow-y-auto custom-scrollbar">
             {loading ? (
               <div className="p-8 text-center text-gray-500">
                 <Loader2 className="animate-spin mx-auto mb-2" />

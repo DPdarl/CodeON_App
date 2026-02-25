@@ -108,7 +108,7 @@ export function SettingsTab() {
           <CardDescription>Customize your experience.</CardDescription>
         </CardHeader>
         <CardContent className="space-y-6">
-          <div className="flex items-center justify-between">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
             <div className="space-y-0.5">
               <Label className="text-base">Reduce Motion</Label>
               <p className="text-sm text-muted-foreground">
@@ -123,7 +123,7 @@ export function SettingsTab() {
             />
           </div>
 
-          <div className="flex items-center justify-between">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
             <div className="space-y-0.5">
               <Label className="text-base">High Contrast</Label>
               <p className="text-sm text-muted-foreground">
@@ -149,7 +149,7 @@ export function SettingsTab() {
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-6">
-          <div className="flex items-center justify-between">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
             <div className="space-y-0.5">
               <Label className="text-base">Sound Effects</Label>
               <p className="text-sm text-muted-foreground">
@@ -200,17 +200,53 @@ export function SettingsTab() {
           <CardDescription>Found an issue? Let us know.</CardDescription>
         </CardHeader>
         <CardContent className="space-y-6">
-          <div className="flex items-center justify-between">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
             <div className="space-y-0.5">
               <Label className="text-base">Report a Bug</Label>
               <p className="text-sm text-muted-foreground">
                 Help us improve CodeON by reporting bugs.
               </p>
             </div>
-            <Button variant="outline" onClick={() => setIsBugReportOpen(true)}>
+            <Button
+              variant="outline"
+              className="w-full sm:w-auto"
+              onClick={() => setIsBugReportOpen(true)}
+            >
               <Bug className="mr-2 h-4 w-4" /> Report Issue
             </Button>
           </div>
+
+          {/* Simulate Onboarding Button for Admins - Kept as a testing tool since it manually changes is_onboarded to false */}
+          {(user?.role === "admin" || user?.role === "superadmin") && (
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pt-4 border-t border-gray-100 dark:border-gray-800">
+              <div className="space-y-0.5">
+                <Label className="text-base text-red-500">Admin Testing</Label>
+                <p className="text-sm text-muted-foreground">
+                  Manually set is_onboarded to false.
+                </p>
+              </div>
+              <Button
+                variant="destructive"
+                className="w-full sm:w-auto"
+                onClick={async () => {
+                  try {
+                    await updateProfile({
+                      isOnboarded: false,
+                      avatarConfig: null,
+                    });
+                    toast.success("Onboarding reset. Reloading...");
+                    setTimeout(() => {
+                      window.location.href = "/dashboard";
+                    }, 500);
+                  } catch (e) {
+                    toast.error("Failed to simulate onboarding.");
+                  }
+                }}
+              >
+                <Bug className="w-4 h-4 mr-2" /> Simulate Onboarding
+              </Button>
+            </div>
+          )}
         </CardContent>
       </Card>
 

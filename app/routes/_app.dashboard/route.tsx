@@ -112,12 +112,23 @@ export default function Dashboard() {
   const activeUser = contextUser || loaderUser;
 
   useEffect(() => {
-    if (activeUser && activeUser.isOnboarded === false) {
-      navigate("/onboarding");
+    // VARIANT B: Only force onboarding if they legitimately have no avatar.
+    // If they have an avatar but isOnboarded is false, they need to see the Dashboard Tour!
+    if (
+      activeUser &&
+      !activeUser.avatarConfig &&
+      activeUser.isOnboarded === false
+    ) {
+      navigate("/auth/onboarding");
     }
   }, [activeUser, navigate]);
 
-  if (activeUser && activeUser.isOnboarded === false) return null;
+  if (
+    activeUser &&
+    !activeUser.avatarConfig &&
+    activeUser.isOnboarded === false
+  )
+    return null;
 
   // --- RENDER ---
   return (
@@ -130,6 +141,7 @@ export default function Dashboard() {
           onTabChange={(tab) => {
             // If HomeTab has internal navigation buttons, handle them here
             if (tab === "play") navigate("/play");
+            if (tab === "Profile") navigate("/profile");
           }}
         />
         <StreakChecker />

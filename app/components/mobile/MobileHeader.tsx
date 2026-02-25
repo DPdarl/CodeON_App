@@ -82,7 +82,10 @@ export function MobileHeader({
 
   return (
     <>
-      <header className="sticky top-0 z-30 w-full border-b bg-white/95 dark:bg-gray-900/95 backdrop-blur-md h-14 px-2 flex items-center justify-between gap-1">
+      <header
+        id="mobile-header" // [NEW] ID
+        className="sticky top-0 z-30 w-full border-b bg-white/95 dark:bg-gray-900/95 backdrop-blur-md h-14 px-2 flex items-center justify-between gap-1"
+      >
         {/* LEFT: Logo Section */}
         <div className="flex-none flex items-center">
           <img

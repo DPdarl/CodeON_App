@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
+import { useSearchParams } from "@remix-run/react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   Swords,
@@ -50,7 +51,8 @@ import {
 } from "~/components/ui/dialog";
 import { useGameSound } from "~/hooks/useGameSound";
 import { QuestSkeleton } from "./QuestSkeleton";
-import { QuestListSkeleton } from "./QuestListSkeleton"; // ADDED
+import { QuestListSkeleton } from "./QuestListSkeleton";
+import { OnboardingTour, TourStep } from "../ui/OnboardingTour";
 
 // --- ICON MAPPING ---
 const ICON_MAP: Record<string, any> = {
@@ -117,6 +119,67 @@ export function QuestTab() {
   const [rewardModalOpen, setRewardModalOpen] = useState(false);
   const [justClaimedQuest, setJustClaimedQuest] = useState<Quest | null>(null);
   const { playSound } = useGameSound();
+  const { updateProfile } = useAuth(); // Needed for tour completion
+
+  // --- TOUR STATE ---
+  const [showTour, setShowTour] = useState(false);
+  const [isManual, setIsManual] = useState(false);
+  const isMobile =
+    typeof window !== "undefined" ? window.innerWidth < 1024 : false; // lg breakpoint in Tailwind is 1024px
+
+  const TOUR_STEPS: TourStep[] = [
+    {
+      target: "tour-quest-progress",
+      title: "📈 Total Progress",
+      content: "Track your overall quest completion here. Let's get them all!",
+    },
+    {
+      target: isMobile ? "tour-quest-item-mobile" : "tour-quest-item-desktop",
+      title: "📜 Quest Cards",
+      content:
+        "Each quest shows what you need to do, your current progress, and the rewards. Some tough quests even award unique Titles!",
+    },
+    {
+      target: isMobile
+        ? "tour-quest-categories-mobile"
+        : "tour-quest-categories-desktop",
+      title: "🗂️ Quest Tiers",
+      content:
+        "Switch between Bronze, Silver, and Gold tiers. Higher tiers offer harder challenges and richer rewards.",
+      position: isMobile ? "center" : undefined,
+    },
+  ];
+
+  const [searchParams, setSearchParams] = useSearchParams();
+
+  useEffect(() => {
+    if (user && !loading) {
+      // 1. Check URL param (Manual Trigger from How-To page)
+      const isManualTrigger = searchParams.get("tour") === "true";
+      // 2. Check Settings (Auto Trigger)
+      const hasSeenTour = user.settings?.tutorials?.questTab;
+
+      if (isManualTrigger) {
+        setShowTour(true);
+        setIsManual(true);
+        // Clear the param so it doesn't persist
+        setSearchParams((prev) => {
+          const newParams = new URLSearchParams(prev);
+          newParams.delete("tour");
+          return newParams;
+        });
+      } else if (!hasSeenTour) {
+        const timer = setTimeout(() => setShowTour(true), 800);
+        return () => clearTimeout(timer);
+      }
+    }
+  }, [user, loading, searchParams, setSearchParams]);
+
+  const handleTourComplete = async () => {
+    setShowTour(false);
+    setIsManual(false);
+    refreshUser();
+  };
 
   // --- FETCH DATA ---
   const loadQuests = useCallback(async () => {
@@ -301,8 +364,21 @@ export function QuestTab() {
 
   return (
     <div className="fixed top-14 bottom-16 inset-x-0 z-0 flex flex-col bg-gray-50 dark:bg-gray-950 lg:bg-transparent lg:static lg:h-[calc(100vh-140px)] lg:max-w-7xl lg:mx-auto font-pixelify">
+      <OnboardingTour
+        steps={TOUR_STEPS}
+        isOpen={showTour}
+        onComplete={handleTourComplete}
+        onSkip={handleTourComplete}
+        avatarConfig={user?.avatarConfig}
+        tutorialId="questTab"
+        returnTo={isManual ? "/how-to" : undefined}
+      />
+
       {/* 1. TOP HEADER (Progress) */}
-      <div className="flex-none bg-white dark:bg-gray-900 text-gray-900 dark:text-white lg:rounded-t-3xl p-4 sm:p-6 shadow-sm dark:shadow-xl border-b border-gray-200 dark:border-gray-800 z-10">
+      <div
+        id="tour-quest-progress"
+        className="flex-none bg-white dark:bg-gray-900 text-gray-900 dark:text-white lg:rounded-t-3xl p-4 sm:p-6 shadow-sm dark:shadow-xl border-b border-gray-200 dark:border-gray-800 z-10"
+      >
         <div className="flex justify-between items-center mb-2">
           <div className="flex items-center gap-3">
             <div className="p-2 bg-yellow-100 dark:bg-yellow-500/20 rounded-lg">
@@ -343,9 +419,10 @@ export function QuestTab() {
           ) : (
             <AnimatePresence>
               {filteredQuests.length > 0 ? (
-                filteredQuests.map((quest) => (
+                filteredQuests.map((quest, index) => (
                   <QuestItem
                     key={quest.id}
+                    id={index === 0 ? "tour-quest-item-mobile" : undefined}
                     quest={quest}
                     onClaim={handleClaim}
                     isClaiming={claimingId === quest.id}
@@ -363,7 +440,10 @@ export function QuestTab() {
 
         {/* 3. BOTTOM TABS (Floating Pill) */}
         <div className="absolute bottom-6 left-1/2 -translate-x-1/2 z-30 w-auto max-w-[90%]">
-          <div className="flex items-center gap-1.5 p-1.5 bg-white/90 dark:bg-gray-900/90 backdrop-blur-xl border border-gray-200 dark:border-white/10 shadow-xl dark:shadow-2xl rounded-full">
+          <div
+            id="tour-quest-categories-mobile"
+            className="flex items-center gap-1.5 p-1.5 bg-white/90 dark:bg-gray-900/90 backdrop-blur-xl border border-gray-200 dark:border-white/10 shadow-xl dark:shadow-2xl rounded-full"
+          >
             <CategoryTab
               label="Bronze"
               isActive={activeCategory === "Bronze"}
@@ -421,9 +501,10 @@ export function QuestTab() {
               ) : (
                 <AnimatePresence>
                   {filteredQuests.length > 0 ? (
-                    filteredQuests.map((quest) => (
+                    filteredQuests.map((quest, index) => (
                       <QuestItem
                         key={quest.id}
+                        id={index === 0 ? "tour-quest-item-desktop" : undefined}
                         quest={quest}
                         onClaim={handleClaim}
                         isClaiming={claimingId === quest.id}
@@ -444,7 +525,10 @@ export function QuestTab() {
 
           {/* Floating Tabs (Desktop Sized & Positioned) */}
           <div className="absolute bottom-8 left-1/2 -translate-x-1/2 z-30">
-            <div className="flex items-center gap-2 p-2 bg-white/90 dark:bg-gray-950/80 backdrop-blur-xl border border-gray-200 dark:border-white/10 shadow-2xl rounded-full scale-110 origin-bottom hover:scale-115 transition-transform duration-300">
+            <div
+              id="tour-quest-categories-desktop"
+              className="flex items-center gap-2 p-2 bg-white/90 dark:bg-gray-950/80 backdrop-blur-xl border border-gray-200 dark:border-white/10 shadow-2xl rounded-full scale-110 origin-bottom hover:scale-115 transition-transform duration-300"
+            >
               <CategoryTab
                 label="Bronze"
                 isActive={activeCategory === "Bronze"}
@@ -636,10 +720,12 @@ function QuestItem({
   quest,
   onClaim,
   isClaiming,
+  id,
 }: {
   quest: Quest;
   onClaim: (quest: Quest) => void;
   isClaiming: boolean;
+  id?: string;
 }) {
   const Icon = ICON_MAP[quest.icon_key] || Scroll;
   const isReady = quest.status === "ready-to-claim";
@@ -647,6 +733,7 @@ function QuestItem({
 
   return (
     <motion.div
+      id={id}
       initial={{ opacity: 0, y: 10 }}
       animate={{ opacity: 1, y: 0 }}
       exit={{ opacity: 0, y: -10 }}

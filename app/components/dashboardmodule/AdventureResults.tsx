@@ -93,7 +93,7 @@ export function AdventureResults({
   };
 
   return (
-    <div className="flex flex-col items-center justify-center w-full h-full p-6 text-center space-y-8 bg-background/95 backdrop-blur-sm">
+    <div className="flex flex-col items-center justify-center w-full h-full px-4 py-6 sm:p-6 text-center space-y-6 sm:space-y-8 bg-background/95 backdrop-blur-sm">
       {/* 1. Header Celebration */}
       <motion.div
         initial={{ scale: 0 }}
@@ -102,14 +102,14 @@ export function AdventureResults({
         className="relative"
       >
         <div className="absolute inset-0 bg-yellow-400 blur-[50px] opacity-20 rounded-full" />
-        <Trophy className="w-24 h-24 text-yellow-500 mx-auto drop-shadow-lg" />
+        <Trophy className="w-16 h-16 sm:w-24 sm:h-24 text-yellow-500 mx-auto drop-shadow-lg" />
       </motion.div>
 
-      <div className="space-y-2">
+      <div className="space-y-1 sm:space-y-2">
         <motion.h2
           initial={{ opacity: 0, y: 10 }}
           animate={{ opacity: 1, y: 0 }}
-          className="text-3xl font-black text-indigo-900 dark:text-indigo-100 uppercase tracking-tight"
+          className="text-2xl sm:text-3xl font-black text-indigo-900 dark:text-indigo-100 uppercase tracking-tight"
         >
           Lesson Complete!
         </motion.h2>
@@ -117,7 +117,7 @@ export function AdventureResults({
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           transition={{ delay: 0.2 }}
-          className="text-muted-foreground font-medium"
+          className="text-muted-foreground font-medium text-sm sm:text-base"
         >
           You're crushing it! Keep the momentum going.
         </motion.p>
@@ -128,18 +128,18 @@ export function AdventureResults({
         variants={container}
         initial="hidden"
         animate="show"
-        className="grid grid-cols-2 gap-4 w-full max-w-sm"
+        className="grid grid-cols-2 gap-3 sm:gap-4 w-full max-w-xs sm:max-w-sm"
       >
         {/* Run-Time */}
         <motion.div variants={item}>
-          <Card className="p-4 border-2 border-indigo-100 dark:border-indigo-900 bg-indigo-50/50 dark:bg-indigo-950/20">
-            <div className="flex flex-col items-center gap-2">
-              <Clock className="w-6 h-6 text-indigo-500" />
+          <Card className="p-3 sm:p-4 border-2 border-indigo-100 dark:border-indigo-900 bg-indigo-50/50 dark:bg-indigo-950/20">
+            <div className="flex flex-col items-center gap-1 sm:gap-2">
+              <Clock className="w-5 h-5 sm:w-6 sm:h-6 text-indigo-500" />
               <div>
-                <div className="text-sm font-bold text-muted-foreground uppercase tracking-wider">
+                <div className="text-xs font-bold text-muted-foreground uppercase tracking-wider">
                   Time
                 </div>
-                <div className="text-2xl font-black text-indigo-700 dark:text-indigo-300">
+                <div className="text-xl sm:text-2xl font-black text-indigo-700 dark:text-indigo-300">
                   {formatTime(stats.timeSeconds)}
                 </div>
               </div>
@@ -149,14 +149,14 @@ export function AdventureResults({
 
         {/* Accuracy */}
         <motion.div variants={item}>
-          <Card className="p-4 border-2 border-emerald-100 dark:border-emerald-900 bg-emerald-50/50 dark:bg-emerald-950/20">
-            <div className="flex flex-col items-center gap-2">
-              <Target className="w-6 h-6 text-emerald-500" />
+          <Card className="p-3 sm:p-4 border-2 border-emerald-100 dark:border-emerald-900 bg-emerald-50/50 dark:bg-emerald-950/20">
+            <div className="flex flex-col items-center gap-1 sm:gap-2">
+              <Target className="w-5 h-5 sm:w-6 sm:h-6 text-emerald-500" />
               <div>
-                <div className="text-sm font-bold text-muted-foreground uppercase tracking-wider">
+                <div className="text-xs font-bold text-muted-foreground uppercase tracking-wider">
                   Accuracy
                 </div>
-                <div className="text-2xl font-black text-emerald-700 dark:text-emerald-300">
+                <div className="text-xl sm:text-2xl font-black text-emerald-700 dark:text-emerald-300">
                   {stats.accuracy}%
                 </div>
               </div>
@@ -170,37 +170,37 @@ export function AdventureResults({
         variants={container}
         initial="hidden"
         animate="show"
-        className="w-full max-w-sm space-y-3"
+        className="w-full max-w-xs sm:max-w-sm space-y-2 sm:space-y-3"
       >
-        <div className="text-sm font-bold text-muted-foreground uppercase tracking-widest text-left pl-1">
+        <div className="text-xs sm:text-sm font-bold text-muted-foreground uppercase tracking-widest text-left pl-1">
           Rewards
         </div>
 
         {/* XP & Coins Row */}
-        <motion.div variants={item} className="flex gap-3">
-          <div className="flex-1 bg-yellow-400/10 border border-yellow-400/20 rounded-xl p-3 flex items-center gap-3">
-            <div className="p-2 bg-yellow-400 rounded-lg text-yellow-900">
-              <Zap className="w-5 h-5 fill-current" />
+        <motion.div variants={item} className="flex gap-2 sm:gap-3">
+          <div className="flex-1 bg-yellow-400/10 border border-yellow-400/20 rounded-xl p-2.5 sm:p-3 flex items-center gap-2 sm:gap-3">
+            <div className="p-1.5 sm:p-2 bg-yellow-400 rounded-lg text-yellow-900 flex-shrink-0">
+              <Zap className="w-4 h-4 sm:w-5 sm:h-5 fill-current" />
             </div>
             <div className="text-left">
-              <div className="text-xs font-bold text-yellow-600 dark:text-yellow-400 uppercase">
+              <div className="text-[10px] sm:text-xs font-bold text-yellow-600 dark:text-yellow-400 uppercase">
                 Total XP
               </div>
-              <div className="text-xl font-black text-yellow-700 dark:text-yellow-300">
+              <div className="text-lg sm:text-xl font-black text-yellow-700 dark:text-yellow-300">
                 +{rewards.xp}
               </div>
             </div>
           </div>
 
-          <div className="flex-1 bg-blue-400/10 border border-blue-400/20 rounded-xl p-3 flex items-center gap-3">
-            <div className="p-2 bg-blue-400 rounded-lg text-blue-900">
-              <Coins className="w-5 h-5 fill-current" />
+          <div className="flex-1 bg-blue-400/10 border border-blue-400/20 rounded-xl p-2.5 sm:p-3 flex items-center gap-2 sm:gap-3">
+            <div className="p-1.5 sm:p-2 bg-blue-400 rounded-lg text-blue-900 flex-shrink-0">
+              <Coins className="w-4 h-4 sm:w-5 sm:h-5 fill-current" />
             </div>
             <div className="text-left">
-              <div className="text-xs font-bold text-blue-600 dark:text-blue-400 uppercase">
+              <div className="text-[10px] sm:text-xs font-bold text-blue-600 dark:text-blue-400 uppercase">
                 Coins
               </div>
-              <div className="text-xl font-black text-blue-700 dark:text-blue-300">
+              <div className="text-lg sm:text-xl font-black text-blue-700 dark:text-blue-300">
                 +{rewards.coins}
               </div>
             </div>
@@ -209,18 +209,18 @@ export function AdventureResults({
 
         {/* Optional Badge Unlock */}
         {unlockedBadge && (
-          <motion.div variants={item} className="mt-4">
-            <Card className="p-4 border-2 border-purple-500 bg-purple-50 dark:bg-purple-900/20 relative overflow-hidden">
+          <motion.div variants={item} className="mt-3 sm:mt-4">
+            <Card className="p-3 sm:p-4 border-2 border-purple-500 bg-purple-50 dark:bg-purple-900/20 relative overflow-hidden">
               <div className="absolute -right-4 -top-4 bg-purple-500 text-white text-[10px] font-bold px-6 py-1 rotate-45">
                 NEW!
               </div>
-              <div className="flex items-center gap-4">
-                <div className="text-4xl">{unlockedBadge.icon}</div>
+              <div className="flex items-center gap-3 sm:gap-4">
+                <div className="text-3xl sm:text-4xl">{unlockedBadge.icon}</div>
                 <div className="text-left">
-                  <div className="text-xs font-bold text-purple-600 dark:text-purple-400 uppercase tracking-wider">
+                  <div className="text-[10px] sm:text-xs font-bold text-purple-600 dark:text-purple-400 uppercase tracking-wider">
                     Badge Unlocked
                   </div>
-                  <div className="text-lg font-black text-purple-900 dark:text-purple-100">
+                  <div className="text-base sm:text-lg font-black text-purple-900 dark:text-purple-100">
                     {unlockedBadge.name}
                   </div>
                   <div className="text-xs text-muted-foreground">
@@ -238,19 +238,19 @@ export function AdventureResults({
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ delay: 1.5 }} // Delay buttons so user looks at stats first
-        className="w-full max-w-sm space-y-3 pt-4"
+        className="w-full max-w-xs sm:max-w-sm space-y-2 sm:space-y-3 pt-2 sm:pt-4"
       >
         <Button
           size="lg"
-          className="w-full h-14 text-lg font-bold bg-indigo-600 hover:bg-indigo-700 hover:scale-[1.02] transition-all shadow-xl shadow-indigo-500/20"
+          className="w-full h-12 sm:h-14 text-base sm:text-lg font-bold bg-indigo-600 hover:bg-indigo-700 hover:scale-[1.02] transition-all shadow-xl shadow-indigo-500/20"
           onClick={onContinue}
         >
-          Claim Rewards <ArrowRight className="w-5 h-5 ml-2" />
+          Claim Rewards <ArrowRight className="w-4 h-4 sm:w-5 sm:h-5 ml-2" />
         </Button>
 
         <Button
           variant="ghost"
-          className="w-full text-muted-foreground hover:text-indigo-500"
+          className="w-full text-muted-foreground hover:text-indigo-500 text-sm"
         >
           <Share2 className="w-4 h-4 mr-2" /> Share Result
         </Button>

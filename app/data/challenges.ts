@@ -2,6 +2,319 @@ import { Challenge } from "~/types/challenge.types";
 
 export const challenges: Challenge[] = [
   {
+    id: "0.1",
+    moduleId: 0,
+    title: "Interface Walkthrough",
+    description: `Welcome to the CodeON coding environment!
+    
+This tutorial will guide you through the interface. You are currently in the **Instructions Panel**.
+
+**Your Task:**
+Write \`Console.WriteLine("Ready!");\` in the editor and click **Run**.`,
+    page: 2,
+    starterCode: `using System;
+
+class Program
+{
+    static void Main(string[] args)
+    {
+        // Type your code below this line:
+        
+    }
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+`,
+    hint: "Make sure you include the semicolon `;` at the end!",
+    solution: `using System;
+
+class Program
+{
+    static void Main(string[] args)
+    {
+        Console.WriteLine("Ready!");
+    }
+}`,
+    language: "csharp",
+    xpReward: 100,
+    coinsReward: 50,
+    difficulty: "Easy",
+    testInputs: [],
+    runner: async (input, output) => {
+      output("Ready!");
+    },
+  },
+  {
+    id: "0.2",
+    moduleId: 0,
+    title: "Console.WriteLine",
+    description: `Let's practice displaying text again, but on your own this time!
+    
+**Your Task:**
+Learn how to display/print text to the console. Write \`Console.WriteLine("Hello, World!");\` in the editor and click **Run**.`,
+    page: 2,
+    starterCode: `using System;
+
+class Program
+{
+    static void Main(string[] args)
+    {
+        // Type your code below this line:
+        
+    }
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+`,
+    hint: 'Make sure you include the semicolon `;` at the end! Check the capitalization of "Hello, World!"',
+    solution: `using System;
+
+class Program
+{
+    static void Main(string[] args)
+    {
+        Console.WriteLine("Hello, World!");
+    }
+}`,
+    language: "csharp",
+    xpReward: 100,
+    coinsReward: 50,
+    difficulty: "Easy",
+    testInputs: [],
+    runner: async (input, output) => {
+      output("Hello, World!");
+    },
+  },
+  {
+    id: "0.3",
+    moduleId: 0,
+    title: "Console.ReadLine",
+    description: `User input is essential for interactive programs.
+    
+In C#, we use \`Console.ReadLine()\` to read text typed by the user, and we can store it in a \`string\` variable.
+
+**Your Task:**
+Learn how to ask and store user input. Create a string variable called \`playerName\` and assign it the value of \`Console.ReadLine()\`.`,
+    page: 3,
+    starterCode: `using System;
+
+class Program
+{
+    static void Main(string[] args)
+    {
+        Console.WriteLine("Enter your name:");
+        
+        // Ask and store the user input in a variable called playerName:
+        
+    }
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+`,
+    hint: "Use `string playerName = Console.ReadLine();`.",
+    solution: `using System;
+
+class Program
+{
+    static void Main(string[] args)
+    {
+        Console.WriteLine("Enter your name:");
+        string playerName = Console.ReadLine();
+    }
+}`,
+    language: "csharp",
+    xpReward: 100,
+    coinsReward: 50,
+    difficulty: "Easy",
+    testInputs: ["Thea"],
+    runner: async (input, output) => {
+      output("Enter your name:");
+      await input("Name");
+    },
+  },
+  {
+    id: "0.4",
+    moduleId: 0,
+    title: "Process",
+    description: `Now let's learn how to process data. Often you need to apply mathematical formulas to numbers.
+    
+**Your Task:**
+Learn how to use a formula. We have two variables: \`basePrice\` and \`taxAmount\`. Create a new variable called \`totalPrice\` that adds them together.`,
+    page: 3,
+    starterCode: `using System;
+
+class Program
+{
+    static void Main(string[] args)
+    {
+        int basePrice = 50;
+        int taxAmount = 10;
+        
+        // Add them together and store in totalPrice:
+        
+    }
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+`,
+    hint: "Use `int totalPrice = basePrice + taxAmount;`",
+    solution: `using System;
+
+class Program
+{
+    static void Main(string[] args)
+    {
+        int basePrice = 50;
+        int taxAmount = 10;
+        int totalPrice = basePrice + taxAmount;
+    }
+}`,
+    language: "csharp",
+    xpReward: 100,
+    coinsReward: 50,
+    difficulty: "Easy",
+    testInputs: [],
+    // Since there is no output expected by the problem description, we just return empty string to pass validation.
+    // In actual implementation students will just click submit.
+    runner: async (input, output) => {},
+  },
+  {
+    id: "0.5",
+    moduleId: 0,
+    title: "Console.WriteLine(Result)",
+    description: `Finally, when our process is done, we need to show the user the result!
+    
+We can concatenate (glue together) text and numbers using the \`+\` operator inside \`Console.WriteLine()\`.
+
+**Your Task:**
+Learn how to display a process result. Output the text \`"The total is: "\` followed by the \`totalPrice\` variable.`,
+    page: 3,
+    starterCode: `using System;
+
+class Program
+{
+    static void Main(string[] args)
+    {
+        int totalPrice = 60;
+        
+        // Display the text "The total is: " followed by totalPrice:
+        
+    }
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+`,
+    hint: 'Use `Console.WriteLine("The total is: " + totalPrice);`',
+    solution: `using System;
+
+class Program
+{
+    static void Main(string[] args)
+    {
+        int totalPrice = 60;
+        Console.WriteLine("The total is: " + totalPrice);
+    }
+}`,
+    language: "csharp",
+    xpReward: 100,
+    coinsReward: 50,
+    difficulty: "Easy",
+    testInputs: [],
+    runner: async (input, output) => {
+      output("The total is: 60");
+    },
+  },
+  {
     id: "1.1",
     moduleId: 1,
     title: "Volume of Sphere",
@@ -29,6 +342,26 @@ class Program
         
     }
 }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 `,
     hint: "Remember to convert user input from string to double using `Convert.ToDouble()` or `double.Parse()`, and use `Math.PI` and `Math.Pow()` for calculations.",
     solution: `using System;
@@ -46,8 +379,8 @@ class Program
     }
 }`,
     language: "csharp",
-    xpReward: 20,
-    coinsReward: 5,
+    xpReward: 40,
+    coinsReward: 20,
     difficulty: "Easy",
     testInputs: ["5", "10"],
 
@@ -92,12 +425,32 @@ class Program
         
     }
 }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 `,
     hint: "Use a menu system with `Console.ReadLine()` to determine which conversion the user wants to perform. Remember to format the output to show only 2 decimal places.",
     solution: `using System;\r\n\r\nclass Program\r\n{\r\n    static void Main(string[] args)\r\n    {\r\n        Console.WriteLine("1. Celsius to Fahrenheit");\r\n        Console.WriteLine("2. Fahrenheit to Celsius");\r\n        Console.Write("Choose (1 or 2): ");\r\n        int choice = Convert.ToInt32(Console.ReadLine());\r\n\r\n        /* === Approach 1: Using If-Else Statements === */\r\n        if (choice == 1)\r\n        {\r\n            Console.Write("Enter Celsius: ");\r\n            double c = Convert.ToDouble(Console.ReadLine());\r\n            double f = (c * 9.0 / 5.0) + 32; \r\n            Console.WriteLine("C - F is: " + f);\r\n        }\r\n        else if (choice == 2)\r\n        {\r\n            Console.Write("Enter Fahrenheit: ");\r\n            double f = Convert.ToDouble(Console.ReadLine());\r\n            double c = (f - 32) * 5.0 / 9.0;\r\n            Console.WriteLine("F - C is: " + c);\r\n        }\r\n        else \r\n        {\r\n            Console.WriteLine("Invalid choice.");\r\n        }\r\n\r\n    }\r\n}`,
     language: "csharp",
-    xpReward: 30,
-    coinsReward: 10,
+    xpReward: 60,
+    coinsReward: 30,
     difficulty: "Medium",
     testInputs: ["1\n100", "2\n212"], // [NEW] Verify both branches
     runner: async (input, output) => {
@@ -161,6 +514,26 @@ class Program
         
     }
 }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 `,
     hint: "Choose either a Switch statement or If-Else. Remember: Switch uses placeholders (`{0}`), If-Else uses concatenation (`+`).",
     solution: `using System;
@@ -197,8 +570,8 @@ class Program
     }
 }`,
     language: "csharp",
-    xpReward: 30,
-    coinsReward: 10,
+    xpReward: 60,
+    coinsReward: 30,
     difficulty: "Medium",
     testInputs: ["1\n100", "2\n100"], // Simple single-pass inputs
     // Runner removed: logic handled dynamically in ChallengeContext
@@ -237,6 +610,26 @@ class Program
         
     }
 }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 `,
     hint: "Use correct conversion factors. Approach 1 (Switch) uses `{0}` and `{1:F2}`. Approach 2 (If-Else) uses `+ '...' + Math.Round(val, 2)`.",
     solution: `using System;
@@ -307,8 +700,8 @@ class Program
     }
 }`,
     language: "csharp",
-    xpReward: 30,
-    coinsReward: 10,
+    xpReward: 60,
+    coinsReward: 30,
     difficulty: "Medium",
     testInputs: ["1\n10", "2\n5", "3\n100"], // Case 1, Case 2, Case 3
     // Runner handled in ChallengeContext
@@ -339,6 +732,26 @@ class Program
         
     }
 }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 `,
     hint: "Use descriptive variable names. When dividing, check if the divisor is zero to avoid runtime errors. Use `Console.WriteLine()` to display results of each operation.",
     solution: `using System;
@@ -370,8 +783,8 @@ class Program
 }
 `,
     language: "csharp",
-    xpReward: 20,
-    coinsReward: 5,
+    xpReward: 40,
+    coinsReward: 20,
     difficulty: "Easy",
     testInputs: ["10\n5", "10\n0"],
     runner: async (input, output) => {
@@ -408,6 +821,26 @@ class Program
         
     }
 }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 `,
     hint: "Use `Math.PI` for the value of π. Format the output to display only two decimal places using the `:F2` format specifier in string interpolation.",
     solution: `using System;
@@ -427,8 +860,8 @@ class Program
 }
 `,
     language: "csharp",
-    xpReward: 20,
-    coinsReward: 5,
+    xpReward: 40,
+    coinsReward: 20,
     difficulty: "Easy",
     testInputs: ["5", "10"],
     runner: async (input, output) => {
@@ -460,6 +893,26 @@ class Program
         
     }
 }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 `,
     hint: "`Convert.ToInt32(5.9)` -> 6. `(int)5.9` -> 5.",
     solution: `using System;
@@ -484,8 +937,8 @@ class Program
     }
 }`,
     language: "csharp",
-    xpReward: 20,
-    coinsReward: 5,
+    xpReward: 40,
+    coinsReward: 20,
     difficulty: "Easy",
     testInputs: ["5.9", "3.2"],
   },
@@ -513,6 +966,26 @@ class Program
         
     }
 }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 `,
     hint: "Tax amount is calculated as `price * (taxRate / 100)`. The final price is the original price plus the tax amount. Use appropriate formatting for currency values.",
     solution: `using System;
@@ -541,8 +1014,8 @@ class Program
     }
 }`,
     language: "csharp",
-    xpReward: 20,
-    coinsReward: 5,
+    xpReward: 40,
+    coinsReward: 20,
     difficulty: "Easy",
     testInputs: ["100\n12", "50\n5"],
     runner: async (input, output) => {
@@ -581,6 +1054,26 @@ class Program
         
     }
 }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 `,
     hint: "Use `Math.Sqrt()` to calculate the square root. Validate that the input values are positive before performing the calculation.",
     solution: `using System;
@@ -611,8 +1104,8 @@ class Program
     }
 }`,
     language: "csharp",
-    xpReward: 50,
-    coinsReward: 20,
+    xpReward: 100,
+    coinsReward: 50,
     difficulty: "Hard",
     testInputs: ["1000\n10\n2", "500\n5\n1"],
     runner: async (input, output) => {
@@ -654,6 +1147,26 @@ class Program
         
     }
 }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 `,
     hint: "Use `Math.PI` for the value of π and `Math.Sqrt()` for the square root calculation. Make sure to handle negative input values appropriately.",
     solution: `using System;
@@ -685,8 +1198,8 @@ class Program
     }
 }`,
     language: "csharp",
-    xpReward: 20,
-    coinsReward: 5,
+    xpReward: 40,
+    coinsReward: 20,
     difficulty: "Easy",
     testInputs: ["50", "100", "-25"],
     runner: async (input, output) => {
@@ -712,6 +1225,13 @@ export interface ModuleData {
 
 // --- Module Definitions (C# Focused) ---
 export const MODULES: ModuleData[] = [
+  {
+    id: 0,
+    title: "Onboarding",
+    description: "Learn how to use the CodeON interface.",
+    status: "unlocked",
+    csharpTopic: "Interface Walkthrough",
+  },
   {
     id: 1,
     title: "The Basics",

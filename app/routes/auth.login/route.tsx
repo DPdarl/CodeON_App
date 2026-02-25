@@ -34,12 +34,159 @@ import { motion } from "framer-motion";
 import { supabase } from "~/lib/supabase";
 import { CoinIcon } from "~/components/ui/Icons";
 
+const InteractiveLogo = ({
+  role,
+  setRole,
+  hoverArea,
+  setHoverArea,
+  className = "",
+  forceDark = false,
+}: {
+  role: "student" | "instructor" | "admin";
+  setRole: (r: "student" | "instructor" | "admin") => void;
+  hoverArea: "student" | "instructor" | "admin" | null;
+  setHoverArea: (r: "student" | "instructor" | "admin" | null) => void;
+  className?: string;
+  forceDark?: boolean;
+}) => {
+  return (
+    <div className={`flex items-end justify-center gap-2 ${className}`}>
+      {/* Student ('Code') */}
+      <div
+        className="cursor-pointer relative"
+        onMouseEnter={() => setHoverArea("student")}
+        onMouseLeave={() => setHoverArea(null)}
+        onClick={() => setRole("student")}
+      >
+        {!forceDark && (
+          <img
+            src="/assets/icons/CodeONTextLogoStudents.png"
+            alt="Code"
+            className="h-10 sm:h-12 lg:h-16 dark:hidden"
+          />
+        )}
+        <img
+          src="/assets/icons/CodeONTextLogoDarkStudents.png"
+          alt="Code"
+          className={`h-10 sm:h-12 lg:h-16 ${
+            forceDark ? "block" : "hidden dark:block"
+          }`}
+        />
+        <img
+          src="/assets/icons/CodeONTextLogoStudentsHover.png"
+          alt="Code Hover"
+          className={`absolute inset-0 w-full h-full object-contain transition-opacity duration-300 ${
+            hoverArea === "student" ? "opacity-100" : "opacity-0"
+          }`}
+        />
+      </div>
+
+      {/* Instructor ('O') */}
+      <div
+        className="cursor-pointer relative"
+        onMouseEnter={() => setHoverArea("instructor")}
+        onMouseLeave={() => setHoverArea(null)}
+        onClick={() => setRole("instructor")}
+      >
+        {!forceDark && (
+          <img
+            src="/assets/icons/CodeONTextLogoInstructOrs.png"
+            alt="O"
+            className="h-10 sm:h-12 lg:h-16 dark:hidden"
+          />
+        )}
+        <img
+          src="/assets/icons/CodeONTextLogoDarkInstructOrs.png"
+          alt="O"
+          className={`h-10 sm:h-12 lg:h-16 ${
+            forceDark ? "block" : "hidden dark:block"
+          }`}
+        />
+        <img
+          src="/assets/icons/CodeONTextLogoInstructOrsHover.png"
+          alt="O Hover"
+          className={`absolute inset-0 w-full h-full object-contain transition-opacity duration-300 ${
+            hoverArea === "instructor" ? "opacity-100" : "opacity-0"
+          }`}
+        />
+      </div>
+
+      {/* Admin ('N') */}
+      <div
+        className="cursor-pointer relative"
+        onMouseEnter={() => setHoverArea("admin")}
+        onMouseLeave={() => setHoverArea(null)}
+        onClick={() => setRole("admin")}
+      >
+        {!forceDark && (
+          <img
+            src="/assets/icons/CodeONTextLogoIAdmin.png"
+            alt="N"
+            className="h-10 sm:h-12 lg:h-16 dark:hidden"
+          />
+        )}
+        <img
+          src="/assets/icons/CodeONTextLogoDarkAdmiN.png"
+          alt="N"
+          className={`h-10 sm:h-12 lg:h-16 ${
+            forceDark ? "block" : "hidden dark:block"
+          }`}
+        />
+        {/* Admin Hover - Handles both dark and light hover using the only known hover image for Admin */}
+        <img
+          src="/assets/icons/CodeONTextLogoDarkAdmiNHover.png"
+          alt="N Hover"
+          className={`absolute inset-0 w-full h-full object-contain transition-opacity duration-300 ${
+            hoverArea === "admin" ? "opacity-100" : "opacity-0"
+          }`}
+        />
+      </div>
+    </div>
+  );
+};
 export default function Login() {
   const [studentId, setStudentId] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState("");
   const [isLoading, setIsLoading] = useState(false);
+
+  // Login Role States
+  const [loginRole, setLoginRole] = useState<
+    "student" | "instructor" | "admin"
+  >("student");
+  const [hoverArea, setHoverArea] = useState<
+    "student" | "instructor" | "admin" | null
+  >(null);
+
+  const getRoleContent = () => {
+    switch (loginRole) {
+      case "instructor":
+        return {
+          title: "Instructor Access",
+          desc: "Please log in with your instructor ID and password.",
+          idLabel: "Instructor ID / Email",
+          idPlaceholder: "e.g., INST-001 or email@school.edu",
+        };
+      case "admin":
+        return {
+          title: "Admin Access",
+          desc: "Please log in with your admin credentials.",
+          idLabel: "Admin ID / Email",
+          idPlaceholder: "e.g., ADMIN-01 or admin@school.edu",
+        };
+      case "student":
+      default:
+        return {
+          title: "Student Access",
+          desc: "Please log in with your student ID and password.",
+          idLabel: "Student ID No. / Email",
+          idPlaceholder: "e.g., 2023-1024-IC or email@school.edu",
+        };
+    }
+  };
+
+  const roleContent = getRoleContent();
 
   // Modals
   const [showForgotPass, setShowForgotPass] = useState(false);
@@ -124,10 +271,12 @@ export default function Login() {
               <CoinIcon className="h-24 w-24" />
             </div>
           </div>
-          <img
-            src="/assets/icons/CodeONTextLogoDark.png"
-            alt="CodeON"
-            className="h-16 mx-auto"
+          <InteractiveLogo
+            role={loginRole}
+            setRole={setLoginRole}
+            hoverArea={hoverArea}
+            setHoverArea={setHoverArea}
+            forceDark={true}
           />
           <p className="text-lg text-gray-300">
             Enter the battlefield. Master the code. Claim your victory.
@@ -143,11 +292,19 @@ export default function Login() {
           className="w-full max-w-md space-y-8"
         >
           <div className="text-center lg:text-left">
+            <div className="flex justify-center mb-6 lg:hidden">
+              <InteractiveLogo
+                role={loginRole}
+                setRole={setLoginRole}
+                hoverArea={hoverArea}
+                setHoverArea={setHoverArea}
+              />
+            </div>
             <h2 className="text-3xl font-bold text-gray-900 dark:text-white">
-              Student Access
+              {roleContent.title}
             </h2>
             <p className="mt-2 text-gray-600 dark:text-gray-400">
-              Please log in with your student ID and password.
+              {roleContent.desc}
             </p>
           </div>
 
@@ -162,13 +319,13 @@ export default function Login() {
             <form onSubmit={handleSubmit} className="space-y-5">
               <div className="space-y-2">
                 <Label htmlFor="studentId" className="text-base">
-                  Student ID No. / Email
+                  {roleContent.idLabel}
                 </Label>
                 <div className="relative">
                   <User className="absolute left-4 top-3.5 h-5 w-5 text-gray-400" />
                   <Input
                     id="studentId"
-                    placeholder="e.g., 2023-1024-IC or email@school.edu"
+                    placeholder={roleContent.idPlaceholder}
                     required
                     className="pl-12 h-12 text-lg font-mono"
                     value={studentId}
@@ -431,11 +588,9 @@ function RequestAccountModal({
                     <SelectValue placeholder="Select" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="BSIS 1-1">BSIS 1-1</SelectItem>
-                    <SelectItem value="BSIS 1-2">BSIS 1-2</SelectItem>
-                    <SelectItem value="BSCS 1-1">BSCS 1-1</SelectItem>
-                    <SelectItem value="BSCS 1-2 ">BSCS 1-2</SelectItem>
-                    <SelectItem value="ACT 1-1">ACT 1-1</SelectItem>
+                    <SelectItem value="BSIS">BSIS</SelectItem>
+                    <SelectItem value="BSCS">BSCS</SelectItem>
+                    <SelectItem value="ACT">ACT</SelectItem>
                     <SelectItem value="BSAIS">BSAIS</SelectItem>
                   </SelectContent>
                 </Select>

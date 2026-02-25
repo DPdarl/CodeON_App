@@ -247,6 +247,7 @@ export function StreakTab() {
     <div className="max-w-6xl mx-auto space-y-8 pb-12">
       {/* Header */}
       <motion.div
+        id="streak-title" // [NEW] ID
         initial={{ opacity: 0, y: -20 }}
         animate={{ opacity: 1, y: 0 }}
         className="flex items-center justify-between gap-3"
@@ -295,21 +296,32 @@ export function StreakTab() {
             </div>
           )}
 
-          <CurrentStreakCard streak={currentStreak} visualState={visualState} />
-          <StreakCalendarCard
-            month={currentMonth}
-            days={calendarDays}
-            visualState={visualState}
-          />
+          <div id="streak-current-box">
+            <CurrentStreakCard
+              streak={currentStreak}
+              visualState={visualState}
+            />
+          </div>
+          <div id="streak-calendar">
+            <StreakCalendarCard
+              month={currentMonth}
+              days={calendarDays}
+              visualState={visualState}
+            />
+          </div>
         </motion.div>
 
         <motion.div variants={itemVariants} className="lg:col-span-1 space-y-6">
-          <StreakInventoryCard freezeCount={freezeCount} />
-          <StreakMilestonesCard
-            milestones={milestonesList}
-            onViewMilestone={setSelectedMilestone}
-            onClaim={handleClaim}
-          />
+          <div id="streak-freeze-box">
+            <StreakInventoryCard freezeCount={freezeCount} />
+          </div>
+          <div id="streak-goal-roadmap">
+            <StreakMilestonesCard
+              milestones={milestonesList}
+              onViewMilestone={setSelectedMilestone}
+              onClaim={handleClaim}
+            />
+          </div>
         </motion.div>
       </motion.div>
 
