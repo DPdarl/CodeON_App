@@ -1,4 +1,5 @@
-import { useCallback, useEffect } from "react";
+import { useCallback, useEffect, useRef } from "react";
+import { useAuth } from "~/contexts/AuthContext";
 
 // ✅ Global Cache: Created once, persists across all component re-renders and unmounts.
 const audioCache: Record<string, HTMLAudioElement> = {};
@@ -11,11 +12,17 @@ const SOUND_FILES = {
   complete: "/sounds/duolingo-completed-chapter.mp3",
   gameover: "/sounds/fah.mp3",
   claim: "/sounds/happy-happy-happy-cat.mp3",
+  purchase: "/sounds/purchase-gold-sfx.mp3",
   tour_voice:
     "/sounds/animal-crossing-isabelle-voice-clips-no-background-music-youtubemp3free.mp3",
 };
 
 export function useGameSound() {
+  const { user } = useAuth();
+  const soundEnabled = user?.settings?.soundEnabled ?? true;
+  const sfxVolume = user?.settings?.sfxVolume ?? 50;
+  const actualVolume = soundEnabled ? sfxVolume / 100 : 0;
+
   useEffect(() => {
     // 1. Preload all sounds immediately when this hook is first used
     if (typeof window !== "undefined") {
@@ -23,12 +30,19 @@ export function useGameSound() {
         if (!audioCache[key]) {
           const audio = new Audio(src);
           audio.preload = "auto"; // Force browser to fetch headers/data
-          audio.volume = 0.5;
+          audio.volume = actualVolume;
           audioCache[key] = audio;
         }
       });
     }
   }, []);
+
+  // 2. Update volume for all cached sounds when settings change
+  useEffect(() => {
+    Object.values(audioCache).forEach((audio) => {
+      audio.volume = actualVolume;
+    });
+  }, [actualVolume]);
 
   const playSound = useCallback((type: keyof typeof SOUND_FILES) => {
     const audio = audioCache[type];

@@ -24,6 +24,7 @@ export function SettingsTab() {
     reduceMotion: user?.settings?.reduceMotion || false,
     highContrast: user?.settings?.highContrast || false,
     soundEnabled: user?.settings?.soundEnabled ?? true,
+    sfxVolume: user?.settings?.sfxVolume ?? 50,
   });
 
   // Password State
@@ -39,6 +40,7 @@ export function SettingsTab() {
         reduceMotion: user.settings.reduceMotion || false,
         highContrast: user.settings.highContrast || false,
         soundEnabled: user.settings.soundEnabled ?? true,
+        sfxVolume: user.settings.sfxVolume ?? 50,
       });
     }
   }, [user]);
@@ -149,19 +151,55 @@ export function SettingsTab() {
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-6">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-            <div className="space-y-0.5">
-              <Label className="text-base">Sound Effects</Label>
-              <p className="text-sm text-muted-foreground">
-                Play sounds when completing tasks.
-              </p>
+          <div className="space-y-4">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+              <div className="space-y-0.5">
+                <Label className="text-base">Sound Effects</Label>
+                <p className="text-sm text-muted-foreground">
+                  Play sounds when completing tasks.
+                </p>
+              </div>
+              <Switch
+                checked={settings.soundEnabled}
+                onCheckedChange={(checked) =>
+                  handleSettingChange("soundEnabled", checked)
+                }
+              />
             </div>
-            <Switch
-              checked={settings.soundEnabled}
-              onCheckedChange={(checked) =>
-                handleSettingChange("soundEnabled", checked)
-              }
-            />
+
+            {settings.soundEnabled && (
+              <div className="flex items-center gap-4 bg-gray-50 dark:bg-gray-800/50 p-3 rounded-xl border border-gray-100 dark:border-gray-800">
+                <Label className="text-sm font-medium whitespace-nowrap">
+                  Volume
+                </Label>
+                <input
+                  type="range"
+                  min="0"
+                  max="100"
+                  className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer dark:bg-gray-700 accent-indigo-600"
+                  value={settings.sfxVolume}
+                  onChange={(e) => {
+                    const val = parseInt(e.target.value);
+                    setSettings({ ...settings, sfxVolume: val });
+                  }}
+                  onMouseUp={(e) => {
+                    const val = parseInt(
+                      (e.currentTarget as HTMLInputElement).value,
+                    );
+                    handleSettingChange("sfxVolume", val);
+                  }}
+                  onTouchEnd={(e) => {
+                    const val = parseInt(
+                      (e.currentTarget as HTMLInputElement).value,
+                    );
+                    handleSettingChange("sfxVolume", val);
+                  }}
+                />
+                <span className="w-12 text-sm font-bold text-right text-indigo-600 dark:text-indigo-400">
+                  {settings.sfxVolume}%
+                </span>
+              </div>
+            )}
           </div>
 
           <div className="space-y-3">

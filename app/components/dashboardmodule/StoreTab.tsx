@@ -31,9 +31,11 @@ import { useAuth } from "~/contexts/AuthContext";
 import { toast } from "sonner";
 import { POWER_UPS, processPurchase, type ShopItem } from "~/lib/store-logic";
 import { SnowflakeIcon, BulbIcon, HeartIcon, IconStore } from "../ui/Icons";
+import { useGameSound } from "~/hooks/useGameSound";
 
 export function StoreTab() {
   const { user, updateProfile } = useAuth();
+  const { playSound } = useGameSound();
 
   // Modal State
   const [selectedItem, setSelectedItem] = useState<ShopItem | null>(null);
@@ -44,17 +46,20 @@ export function StoreTab() {
 
   // Open Modal
   const openPurchaseModal = (item: ShopItem) => {
+    playSound("click");
     setSelectedItem(item);
     setQuantity(1);
   };
 
   // Handle Quantity Change
   const adjustQuantity = (delta: number) => {
+    playSound("click");
     setQuantity((prev) => Math.max(1, Math.min(10, prev + delta))); // Cap at 10
   };
 
   // Execute Purchase
   const handleConfirmPurchase = async () => {
+    playSound("click");
     if (!user || !selectedItem) return;
 
     setIsProcessing(true);
@@ -68,6 +73,7 @@ export function StoreTab() {
     );
 
     if (result.success) {
+      playSound("purchase");
       // 2. Optimistic Update (Update UI immediately while DB syncs)
       const totalCost = selectedItem.cost * quantity;
       const updates: any = { coins: userCoins - totalCost };
@@ -126,6 +132,7 @@ export function StoreTab() {
               <TabsTrigger
                 value="powerups"
                 className="rounded-full px-6 py-2.5 text-sm sm:text-base font-bold data-[state=active]:bg-white dark:data-[state=active]:bg-gray-700 data-[state=active]:text-indigo-600 dark:data-[state=active]:text-white data-[state=active]:shadow-sm transition-all"
+                onClick={() => playSound("click")}
               >
                 <BulbIcon className="w-4 h-4 mr-2" />
                 Power-Ups
@@ -133,6 +140,7 @@ export function StoreTab() {
               <TabsTrigger
                 value="inventory"
                 className="rounded-full px-6 py-2.5 text-sm sm:text-base font-bold data-[state=active]:bg-white dark:data-[state=active]:bg-gray-700 data-[state=active]:text-indigo-600 dark:data-[state=active]:text-white data-[state=active]:shadow-sm transition-all"
+                onClick={() => playSound("click")}
               >
                 <Backpack className="w-4 h-4 mr-2" />
                 Inventory
@@ -313,7 +321,10 @@ export function StoreTab() {
             <Button
               variant="outline"
               className="w-full h-12 rounded-xl font-bold border-gray-200 dark:border-gray-800 hover:bg-gray-100 dark:hover:bg-gray-800"
-              onClick={() => setSelectedItem(null)}
+              onClick={() => {
+                playSound("click");
+                setSelectedItem(null);
+              }}
               disabled={isProcessing}
             >
               Cancel
