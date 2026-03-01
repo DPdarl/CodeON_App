@@ -455,6 +455,7 @@ export function OnboardingTour({
                 </p>
                 <div className="flex items-center gap-3">
                   <Button
+                    type="button"
                     variant="outline"
                     size="sm"
                     disabled={currentStep === 0}
@@ -464,6 +465,7 @@ export function OnboardingTour({
                     <ChevronLeft className="w-3 h-3 mr-1" /> Back
                   </Button>
                   <Button
+                    type="button"
                     size="sm"
                     className="bg-indigo-600 hover:bg-indigo-700 text-white px-4 font-bold shadow-lg shadow-indigo-500/20 text-xs py-1 h-8"
                     onClick={handleNext}
@@ -517,6 +519,7 @@ export function OnboardingTour({
                 </p>
                 <div className="flex items-center gap-3">
                   <Button
+                    type="button"
                     variant="outline"
                     size="sm"
                     disabled={currentStep === 0}
@@ -526,6 +529,7 @@ export function OnboardingTour({
                     <ChevronLeft className="w-4 h-4 mr-1" /> Back
                   </Button>
                   <Button
+                    type="button"
                     size="sm"
                     className="bg-indigo-600 hover:bg-indigo-700 text-white px-6 font-bold shadow-lg shadow-indigo-500/20"
                     onClick={handleNext}

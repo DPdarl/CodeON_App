@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { supabase } from "~/lib/supabase";
+import { supabase } from "~/utils/supabase";
 import { Card, CardHeader, CardTitle, CardContent } from "~/components/ui/card";
 import { Button } from "~/components/ui/button";
 import { Input } from "~/components/ui/input";
@@ -58,6 +58,7 @@ interface Student {
   created_at: string;
   google_bound: boolean;
   birthdate?: string;
+  xp?: number;
 }
 
 interface AccountRequest {
@@ -417,8 +418,15 @@ export function StudentManagementTab() {
         <TabsContent value="active" className="mt-4">
           <Card className="border-gray-200 dark:border-gray-800">
             <CardHeader>
-              <div className="flex items-center justify-between">
-                <CardTitle>Student Directory</CardTitle>
+              <div className="flex items-center justify-between flex-wrap gap-2">
+                <div className="flex items-center gap-3">
+                  <CardTitle>Student Directory</CardTitle>
+                  <span className="text-xs font-semibold bg-indigo-100 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 px-2.5 py-1 rounded-full">
+                    {filteredStudents.length}
+                    {searchQuery ? ` of ${students.length}` : ""} student
+                    {students.length !== 1 ? "s" : ""}
+                  </span>
+                </div>
                 <div className="relative w-64">
                   <Search className="absolute left-2 top-2.5 h-4 w-4 text-gray-400" />
                   <Input
@@ -439,8 +447,10 @@ export function StudentManagementTab() {
                       <tr>
                         <th className="px-4 py-3">ID</th>
                         <th className="px-4 py-3">Name</th>
+                        <th className="px-4 py-3">Email</th>
                         <th className="px-4 py-3">Section</th>
                         <th className="px-4 py-3">Birthdate</th>
+                        <th className="px-4 py-3">XP</th>
                         <th className="px-4 py-3 text-right">Actions</th>
                       </tr>
                     </thead>
@@ -448,7 +458,7 @@ export function StudentManagementTab() {
                       {isLoading ? (
                         <tr>
                           <td
-                            colSpan={5}
+                            colSpan={7}
                             className="p-4 text-center text-gray-500"
                           >
                             <div className="flex justify-center items-center gap-2">
@@ -460,7 +470,7 @@ export function StudentManagementTab() {
                       ) : filteredStudents.length === 0 ? (
                         <tr>
                           <td
-                            colSpan={5}
+                            colSpan={7}
                             className="p-4 text-center text-gray-500"
                           >
                             No students found.
@@ -478,11 +488,19 @@ export function StudentManagementTab() {
                             <td className="px-4 py-3 font-bold">
                               {s.display_name}
                             </td>
+                            <td className="px-4 py-3 text-gray-500 text-xs font-mono">
+                              {s.email || "—"}
+                            </td>
                             <td className="px-4 py-3">
                               <Badge variant="outline">{s.section}</Badge>
                             </td>
                             <td className="px-4 py-3 text-gray-500">
                               {s.birthdate || "-"}
+                            </td>
+                            <td className="px-4 py-3">
+                              <span className="font-mono text-indigo-600 dark:text-indigo-400 font-semibold text-xs">
+                                {(s.xp || 0).toLocaleString()} XP
+                              </span>
                             </td>
                             <td className="px-4 py-3 text-right">
                               {canManage && (
@@ -584,7 +602,14 @@ export function StudentManagementTab() {
                         <Badge variant="outline" className="text-xs">
                           {s.section}
                         </Badge>
+                        <span className="text-xs font-mono font-semibold text-indigo-600 dark:text-indigo-400">
+                          {(s.xp || 0).toLocaleString()} XP
+                        </span>
                       </div>
+
+                      <p className="text-xs text-gray-500 dark:text-gray-400 font-mono mb-2 truncate">
+                        {s.email || "No email"}
+                      </p>
 
                       <div className="flex items-center gap-2 text-sm text-gray-500 dark:text-gray-400 border-t pt-3 mt-3 border-gray-100 dark:border-gray-800">
                         <CalendarDays className="w-3 h-3" />

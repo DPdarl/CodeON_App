@@ -17,19 +17,10 @@ export default function Onboarding() {
   const [isSaving, setIsSaving] = useState(false);
   const isCompletingRef = useRef(false);
 
-  // Editable Name State
-  const [displayName, setDisplayName] = useState(user?.displayName || "Coder");
-
   // Tour State
   const [isTourOpen, setIsTourOpen] = useState(false);
 
   const tourSteps: TourStep[] = [
-    {
-      target: "onboarding-name-input",
-      title: "What's your name?",
-      content:
-        "Enter the display name you want other coders to see in the arena.",
-    },
     {
       target: "onboarding-avatar-customizer",
       title: "Customize Your Avatar",
@@ -62,7 +53,6 @@ export default function Onboarding() {
 
       await updateProfile({
         avatarConfig,
-        displayName,
       }); // 2. Success Feedback
 
       toast.success("Welcome to CodeON!"); // Using sonner for consistent UI
@@ -163,15 +153,9 @@ export default function Onboarding() {
 
             <h1 className="text-4xl md:text-5xl lg:text-6xl font-black text-gray-900 dark:text-white font-pixelify tracking-tight flex flex-col md:flex-row items-center justify-center gap-2 md:gap-4">
               <span>Welcome,</span>
-              <input
-                id="onboarding-name-input"
-                type="text"
-                value={displayName}
-                onChange={(e) => setDisplayName(e.target.value)}
-                maxLength={20}
-                className="bg-white/50 dark:bg-black/20 border-b-4 border-indigo-500 text-center focus:outline-none focus:border-purple-500 focus:bg-white dark:focus:bg-black/50 transition-all rounded-t-xl px-4 py-1 w-[280px] md:w-[350px] bg-gradient-to-r from-indigo-600 to-purple-600 dark:from-indigo-400 dark:via-purple-400 dark:to-pink-400 bg-clip-text text-transparent drop-shadow-sm font-pixelify caret-indigo-600 dark:caret-indigo-400"
-                placeholder="Coder"
-              />
+              <span className="text-center px-4 py-1 bg-gradient-to-r from-indigo-600 to-purple-600 dark:from-indigo-400 dark:via-purple-400 dark:to-pink-400 bg-clip-text text-transparent drop-shadow-sm font-pixelify">
+                {user?.displayName || "Coder"}
+              </span>
               <span>!</span>
             </h1>
             <p className="text-lg md:text-xl text-gray-600 dark:text-gray-400 max-w-2xl mx-auto font-medium">

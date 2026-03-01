@@ -1,5 +1,5 @@
 // app/lib/store-logic.ts
-import { supabase } from "./supabase";
+import { supabase } from "../utils/supabase";
 import { UserData } from "~/contexts/AuthContext";
 import { Heart, Snowflake, Lightbulb } from "lucide-react";
 

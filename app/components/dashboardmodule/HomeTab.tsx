@@ -15,7 +15,7 @@ import { Button } from "~/components/ui/button";
 import { Progress } from "~/components/ui/progress";
 import { useNavigate, useSearchParams } from "@remix-run/react";
 import { useAuth } from "~/contexts/AuthContext";
-import { supabase } from "~/lib/supabase";
+import { supabase } from "~/utils/supabase";
 import { Challenge } from "~/types/challenge.types";
 import { MODULES } from "~/data/challenges"; // Imported MODULES
 import { SelectionCarousel } from "./SelectionCarousel";

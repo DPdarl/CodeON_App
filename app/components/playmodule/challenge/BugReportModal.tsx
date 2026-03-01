@@ -13,7 +13,7 @@ import { Textarea } from "~/components/ui/textarea";
 import { Label } from "~/components/ui/label";
 import { ImagePlus, X, Loader2, Bug } from "lucide-react";
 import { toast } from "sonner";
-import { supabase } from "~/lib/supabase";
+import { supabase } from "~/utils/supabase";
 import { useAuth } from "~/contexts/AuthContext";
 
 interface BugReportModalProps {

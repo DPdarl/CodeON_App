@@ -146,6 +146,7 @@ export function CustomizeAvatar({
 
             <div className="mt-6 max-w-[450px] mx-auto w-full">
               <Button
+                type="button"
                 onClick={handleSave}
                 disabled={isLoading}
                 className={cn(

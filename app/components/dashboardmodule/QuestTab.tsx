@@ -39,7 +39,7 @@ import { Button } from "~/components/ui/button";
 import { Badge } from "~/components/ui/badge";
 import { cn } from "~/lib/utils";
 import { useAuth } from "~/contexts/AuthContext";
-import { supabase } from "~/lib/supabase";
+import { supabase } from "~/utils/supabase";
 import { toast } from "sonner";
 import { ScrollQuestIcon } from "../ui/Icons";
 import {

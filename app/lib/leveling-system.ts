@@ -1,5 +1,5 @@
 // app/lib/leveling-system.ts
-import { supabase } from "~/lib/supabase";
+import { supabase } from "~/utils/supabase";
 
 export const LEVELING_CONSTANTS = {
   BASE_XP: 100,
@@ -64,7 +64,7 @@ export function calculateProgress(totalXP: number): LevelProgress {
  */
 export function addXP(
   currentTotalXP: number,
-  amountToAdd: number
+  amountToAdd: number,
 ): XPGainResult {
   const oldStats = calculateProgress(currentTotalXP);
   const newTotalXP = currentTotalXP + amountToAdd;

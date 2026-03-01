@@ -2,7 +2,7 @@
 import { useState } from "react";
 import { Link, useNavigate } from "@remix-run/react";
 import { useAuth } from "~/contexts/AuthContext";
-import { supabase } from "~/lib/supabase"; // 1. Import Supabase directly
+import { supabase } from "~/utils/supabase"; // 1. Import Supabase directly
 import { Button } from "~/components/ui/button";
 import { Input } from "~/components/ui/input";
 import { Label } from "~/components/ui/label";

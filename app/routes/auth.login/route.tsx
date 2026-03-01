@@ -31,7 +31,7 @@ import {
 } from "~/components/ui/select";
 import { ThemeToggle } from "~/components/ThemeToggle";
 import { motion } from "framer-motion";
-import { supabase } from "~/lib/supabase";
+import { supabase } from "~/utils/supabase";
 import { CoinIcon } from "~/components/ui/Icons";
 
 const InteractiveLogo = ({
@@ -159,6 +159,21 @@ export default function Login() {
     "student" | "instructor" | "admin" | null
   >(null);
 
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      const urlParams = new URLSearchParams(window.location.search);
+      const errParam = urlParams.get("error");
+      if (errParam && !error) {
+        setError(errParam);
+        window.history.replaceState(
+          {},
+          document.title,
+          window.location.pathname,
+        );
+      }
+    }
+  }, [error]);
+
   const getRoleContent = () => {
     switch (loginRole) {
       case "instructor":
@@ -196,9 +211,35 @@ export default function Login() {
   const { loginWithStudentId, signInWithGoogle, user } = useAuth();
   const navigate = useNavigate();
 
-  // Redirect if already logged in
+  // Redirect or handle unlinked account if already logged in
   useEffect(() => {
     if (user) {
+      const urlParams = new URLSearchParams(window.location.search);
+      const isGoogleLoginCheck = urlParams.get("check_google") === "1";
+
+      if (isGoogleLoginCheck) {
+        if (!user.isOnboarded || !user.avatarConfig) {
+          // INTERCEPT UNRECOGNIZED GOOGLE ACCOUNTS
+          supabase.auth.signOut().then(() => {
+            setError("google_not_linked");
+            window.history.replaceState(
+              {},
+              document.title,
+              window.location.pathname,
+            );
+          });
+          return; // Stop execution, do not navigate
+        } else {
+          // RECOGNIZED GOOGLE ACCOUNT - SCRUB URL & ALLOW NAVIGATION
+          window.history.replaceState(
+            {},
+            document.title,
+            window.location.pathname,
+          );
+        }
+      }
+
+      // NAVIGATE
       if (user.isOnboarded) {
         navigate("/dashboard");
       } else {
@@ -232,8 +273,11 @@ export default function Login() {
 
   const handleGoogleLogin = async () => {
     try {
-      await signInWithGoogle();
-      // Note: No navigation here because Google login redirects away from the page
+      if (typeof window !== "undefined") {
+        await signInWithGoogle(
+          window.location.origin + "/auth/login?check_google=1",
+        );
+      }
     } catch (err) {
       console.error("Google Login Failed", err);
       setError("Failed to initiate Google Login");
@@ -309,10 +353,32 @@ export default function Login() {
           </div>
 
           <div className="space-y-6">
-            {error && (
+            {error && error !== "google_not_linked" && (
               <div className="p-4 text-sm text-red-500 bg-red-50 dark:bg-red-950/50 border border-red-200 dark:border-red-900 rounded-xl flex items-center gap-2">
                 <AlertCircle className="w-4 h-4" />
                 {error}
+              </div>
+            )}
+
+            {error === "google_not_linked" && (
+              <div className="p-4 text-sm text-amber-800 bg-amber-50 dark:text-amber-200 dark:bg-amber-950/50 border border-amber-200 dark:border-amber-900/50 rounded-xl flex flex-col gap-3">
+                <div className="flex items-start gap-2">
+                  <AlertCircle className="w-5 h-5 shrink-0 mt-0.5" />
+                  <p>
+                    <strong>Google account not recognized.</strong>
+                    <br />
+                    This Google account isn't linked to any CodeON profile yet.
+                    If you are a new student, you need to request access first.
+                  </p>
+                </div>
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="w-full border-amber-300 text-amber-900 hover:bg-amber-100 dark:border-amber-700/50 dark:text-amber-100 dark:hover:bg-amber-900/50 dark:bg-transparent"
+                  onClick={() => setShowRequestAccount(true)}
+                >
+                  Request Account Access
+                </Button>
               </div>
             )}
 

@@ -11,7 +11,7 @@ import type { MetaFunction } from "@remix-run/node";
 import { HomeTab } from "~/components/dashboardmodule/HomeTab";
 
 import { useAuth, type UserData } from "~/contexts/AuthContext";
-import { supabase } from "~/lib/supabase";
+import { supabase } from "~/utils/supabase";
 import { Skeleton } from "~/components/ui/skeleton";
 import { StreakChecker } from "~/components/dashboardmodule/StreakChecker";
 

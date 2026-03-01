@@ -56,7 +56,7 @@ import {
 import { toast } from "sonner";
 
 // --- IMPORTS ---
-import { supabase } from "~/lib/supabase";
+import { supabase } from "~/utils/supabase";
 import { useAuth } from "~/contexts/AuthContext";
 import { useGameProgress } from "~/hooks/useGameProgress";
 import { useHeartSystem, MAX_HEARTS, HEART_COST } from "~/hooks/useHeartSystem";
@@ -1747,8 +1747,9 @@ export default function AdventurePage() {
     let currentBadges = userData.badges || [];
     let badgeUnlocked = false;
     const BADGE_NAME = "Adventure Champion";
+    const realChaptersCount = lessons.filter((l) => !l.isTutorial).length;
 
-    if (updatedChapters.length === lessons.length) {
+    if (updatedChapters.length >= realChaptersCount && realChaptersCount > 0) {
       if (!currentBadges.includes(BADGE_NAME)) {
         currentBadges.push(BADGE_NAME);
         badgeUnlocked = true;
@@ -1829,8 +1830,9 @@ export default function AdventurePage() {
 
   const progressHeight = Math.min(calculatedProgress, maxLineHeight);
 
+  const realChaptersCount = lessons.filter((l) => !l.isTutorial).length;
   const isAdventureFinished =
-    stats.completed_chapters >= lessons.length && lessons.length > 0;
+    stats.completed_chapters >= realChaptersCount && realChaptersCount > 0;
 
   // Auto-scroll to bottom on finish
   useEffect(() => {

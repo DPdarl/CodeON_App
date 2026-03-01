@@ -17,7 +17,7 @@ import {
   saveChallengeProgress,
   fetchUserProgress,
 } from "~/utils/challenge.client";
-import { supabase } from "~/lib/supabase";
+import { supabase } from "~/utils/supabase";
 import { useGameSound } from "~/hooks/useGameSound";
 import { calculateStreakUpdate } from "~/lib/streak-logic";
 

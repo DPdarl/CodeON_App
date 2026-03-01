@@ -9,7 +9,7 @@ import {
   useMemo,
 } from "react";
 import { User } from "@supabase/supabase-js";
-import { supabase } from "~/lib/supabase";
+import { supabase } from "~/utils/supabase";
 import { trackQuestEvent } from "~/lib/quest-tracker";
 
 export interface UserData {
@@ -57,7 +57,7 @@ interface AuthContextType {
     p: string,
   ) => Promise<UserData | null>;
   logout: () => Promise<void>;
-  signInWithGoogle: () => Promise<void>;
+  signInWithGoogle: (redirectTo?: string) => Promise<void>;
   linkGoogleAccount: () => Promise<void>;
   unlinkGoogleAccount: () => Promise<void>;
   updateProfile: (data: Partial<UserData>) => Promise<void>;
@@ -213,6 +213,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       // I will adhere strictly to the user's provided "working" code structure from step 261.
 
       const mapped = mapUserFromDB(data);
+
       setUser(mapped);
       localStorage.setItem(USER_CACHE_KEY, JSON.stringify(mapped));
       return mapped;
@@ -273,8 +274,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     supabase.auth.getSession().then(({ data }) => {
       if (data.session?.user) {
+        // Always fetch fresh from DB (never rely on stale localStorage on startup)
         fetchUserData(data.session.user).finally(() => setLoading(false));
       } else {
+        // No session — clear any leftover cache from a previous user
+        localStorage.removeItem(USER_CACHE_KEY);
         setLoading(false);
       }
     });
@@ -286,7 +290,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           localStorage.removeItem(USER_CACHE_KEY);
           setLoading(false);
         }
-        if (session?.user) {
+        if (event === "SIGNED_IN" && session?.user) {
+          // On sign-in always fetch fresh from DB so tutorials/settings are current
           fetchUserData(session.user);
         }
       },
@@ -369,6 +374,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       // I will intelligently merge: Use the user's connection logic, but keep the email login capability inside the function.
 
       let emailForLogin = "";
+      let displayNameForLogin = "";
       let isEmail = false;
 
       if (identifier.includes("@")) {
@@ -377,8 +383,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       } else {
         const { data: profile, error: profileError } = await supabase
           .from("users")
-          .select("email")
-          .eq("student_id", identifier)
+          .select("email, display_name")
+          .ilike("student_id", identifier)
           .single();
 
         if (profileError || !profile?.email) {
@@ -386,6 +392,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           throw new Error("Student ID not found in records.");
         }
         emailForLogin = profile.email;
+        displayNameForLogin = profile.display_name || "";
       }
 
       const { data: loginData, error: loginError } =
@@ -409,7 +416,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
               await supabase.auth.signUp({
                 email: emailForLogin,
                 password: p,
-                options: { data: { student_id: identifier } },
+                options: {
+                  data: {
+                    student_id: identifier,
+                    full_name: displayNameForLogin,
+                    display_name: displayNameForLogin,
+                  },
+                },
               });
 
             if (signUpError) {
@@ -443,11 +456,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUser(null);
   };
 
-  const signInWithGoogle = async () => {
+  const signInWithGoogle = async (redirectTo?: string) => {
     // Reverting to the simpler google sign in from user's code
     await supabase.auth.signInWithOAuth({
       provider: "google",
-      options: { redirectTo: window.location.origin + "/dashboard" },
+      options: {
+        redirectTo: redirectTo || window.location.origin + "/dashboard",
+      },
     });
     // User code returns boolean in interface but implementation returns false/void
     // Interface says Promise<boolean>, implementation in paste: return false;

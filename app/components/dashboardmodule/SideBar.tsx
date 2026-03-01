@@ -29,6 +29,7 @@ import { useNavigate } from "@remix-run/react"; // [NEW]
 import { UserData } from "~/contexts/AuthContext";
 import { useQuestNotifications } from "~/hooks/useQuestNotifications";
 import { useStreakNotifications } from "~/hooks/useStreakNotifications";
+import { usePendingRequests } from "~/hooks/usePendingRequests";
 import {
   AdminIcon,
   CoinIcon,
@@ -63,9 +64,10 @@ export function Sidebar({
   const [showLogoutDialog, setShowLogoutDialog] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
 
-  // Notification Hook
+  // Notification Hooks
   const { hasUnclaimedQuests } = useQuestNotifications();
   const { hasUnclaimedStreak } = useStreakNotifications();
+  const { hasPendingRequests } = usePendingRequests();
 
   // --- NAVIGATION CONFIGURATION ---
   const ALL_ROLES = ["superadmin", "admin", "instructor", "user"];
@@ -274,6 +276,12 @@ export function Sidebar({
                       </span>
                     )}
                     {item.id === "streak" && hasUnclaimedStreak && (
+                      <span className="absolute -top-0.5 -right-0.5 flex h-3 w-3 z-10">
+                        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
+                        <span className="relative inline-flex rounded-full h-3 w-3 bg-red-500 border-2 border-white dark:border-gray-900"></span>
+                      </span>
+                    )}
+                    {item.id === "student-management" && hasPendingRequests && (
                       <span className="absolute -top-0.5 -right-0.5 flex h-3 w-3 z-10">
                         <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
                         <span className="relative inline-flex rounded-full h-3 w-3 bg-red-500 border-2 border-white dark:border-gray-900"></span>

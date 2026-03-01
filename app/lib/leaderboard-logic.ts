@@ -1,4 +1,4 @@
-import { supabase } from "~/lib/supabase";
+import { supabase } from "~/utils/supabase";
 
 export const LEAGUES = [
   { name: "Novice", minXp: 0, color: "text-gray-500" },
@@ -24,7 +24,7 @@ export function getLeagueFromXP(xp: number): string {
  */
 export function checkLeagueUpdate(
   currentXp: number,
-  currentLeague: string
+  currentLeague: string,
 ): string | null {
   const correctLeague = getLeagueFromXP(currentXp);
   if (correctLeague !== currentLeague) {

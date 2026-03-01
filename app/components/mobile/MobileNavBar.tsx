@@ -23,6 +23,7 @@ import { useNavigate } from "@remix-run/react"; // [FIX] Import
 import { UserData } from "~/contexts/AuthContext";
 import { useQuestNotifications } from "~/hooks/useQuestNotifications";
 import { useStreakNotifications } from "~/hooks/useStreakNotifications";
+import { usePendingRequests } from "~/hooks/usePendingRequests";
 import {
   AdminIcon,
   ControllerIcon,
@@ -55,9 +56,10 @@ export function MobileNavBar({
   const [showLogoutDialog, setShowLogoutDialog] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
 
-  // Notification Hook
+  // Notification Hooks
   const { hasUnclaimedQuests } = useQuestNotifications();
   const { hasUnclaimedStreak } = useStreakNotifications();
+  const { hasPendingRequests } = usePendingRequests();
 
   // --- CONFIGURATION ---
   const ALL_ROLES = ["superadmin", "admin", "instructor", "user"];
@@ -242,7 +244,14 @@ export function MobileNavBar({
                         )}
                       >
                         <Icon className="w-5 h-5" />
-                        <span>{item.label}</span>
+                        <span className="flex-1">{item.label}</span>
+                        {item.id === "student-management" &&
+                          hasPendingRequests && (
+                            <span className="flex h-2.5 w-2.5">
+                              <span className="animate-ping absolute inline-flex h-2.5 w-2.5 rounded-full bg-red-400 opacity-75"></span>
+                              <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-red-500"></span>
+                            </span>
+                          )}
                       </button>
                     );
                   })}

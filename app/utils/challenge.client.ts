@@ -1,4 +1,4 @@
-import { supabase } from "~/lib/supabase";
+import { supabase } from "~/utils/supabase";
 import { Challenge } from "~/types/challenge.types";
 
 export const saveChallengeProgress = async (

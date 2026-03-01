@@ -2,7 +2,7 @@ import { json, type MetaFunction } from "@remix-run/node";
 import { useAuth } from "~/contexts/AuthContext";
 import { useEffect, useState } from "react";
 import { useNavigate } from "@remix-run/react";
-import { supabase } from "~/lib/supabase";
+import { supabase } from "~/utils/supabase";
 import {
   BugReportsTable,
   type BugReport,

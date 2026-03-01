@@ -28,7 +28,7 @@ import {
   Bug,
 } from "lucide-react";
 import { format } from "date-fns";
-import { supabase } from "~/lib/supabase";
+import { supabase } from "~/utils/supabase";
 import { toast } from "sonner";
 import {
   Dialog,

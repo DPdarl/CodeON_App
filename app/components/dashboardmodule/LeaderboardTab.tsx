@@ -1,7 +1,7 @@
 // app/components/dashboardmodule/LeaderboardTab.tsx
 import { useState, useEffect, useCallback, useMemo } from "react";
 import { useAuth } from "~/contexts/AuthContext";
-import { supabase } from "~/lib/supabase";
+import { supabase } from "~/utils/supabase";
 import { Card } from "~/components/ui/card";
 import { Skeleton } from "~/components/ui/skeleton";
 import {
@@ -60,9 +60,14 @@ export const LEAGUES = [
 
 const SECTIONS = ["ALL", "BSCS", "BSIS", "BSAIS", "ACT"];
 const GAMEMODES = [
-  { id: "MULTIPLAYER", label: "Multiplayer", icon: TrophyIcon },
-  { id: "CHALLENGES", label: "Challenges", icon: StarIcon },
-  { id: "ADVENTURE", label: "Adventure", icon: Clock },
+  {
+    id: "MULTIPLAYER",
+    label: "Multiplayer",
+    icon: TrophyIcon,
+    comingSoon: true,
+  },
+  { id: "CHALLENGES", label: "Challenges", icon: StarIcon, comingSoon: false },
+  { id: "ADVENTURE", label: "Adventure", icon: Clock, comingSoon: false },
 ];
 
 const TOTAL_CHAPTERS = 10;
@@ -100,10 +105,10 @@ interface LeaderboardUser {
   streaks?: number;
   section?: string;
   stars?: number;
-  // REFACTORED: Now using totalRuntime from DB
   totalRuntime?: number;
   role?: string;
   completedChapters?: any[];
+  studentId?: string;
 }
 
 const LEADERBOARD_CACHE_KEY = "codeon_leaderboard_cache";
@@ -190,6 +195,7 @@ export function LeaderboardTab() {
               role: u.role,
               completedChapters: u.completed_chapters || [],
               isAdventureCompleted: u.is_adventure_completed,
+              studentId: u.student_id,
             }),
           );
 
@@ -400,19 +406,29 @@ export function LeaderboardTab() {
                 <ChevronDown className="w-3.5 h-3.5 ml-2 opacity-50" />
               </Button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="center" className="w-40">
+            <DropdownMenuContent align="center" className="w-48">
               {GAMEMODES.map((mode) => (
                 <DropdownMenuItem
                   key={mode.id}
-                  onClick={() => setGamemode(mode.id)}
-                  className={`cursor-pointer font-medium ${
-                    gamemode === mode.id
+                  onClick={() => !mode.comingSoon && setGamemode(mode.id)}
+                  disabled={mode.comingSoon}
+                  className={`font-medium ${
+                    mode.comingSoon
+                      ? "opacity-50 cursor-not-allowed"
+                      : "cursor-pointer"
+                  } ${
+                    gamemode === mode.id && !mode.comingSoon
                       ? "text-orange-600 bg-orange-50 dark:bg-orange-950/30"
                       : ""
                   }`}
                 >
                   <mode.icon className="w-4 h-4 mr-2" />
-                  {mode.label}
+                  <span className="flex-1">{mode.label}</span>
+                  {mode.comingSoon && (
+                    <span className="ml-2 text-[10px] font-bold bg-amber-100 dark:bg-amber-900/40 text-amber-600 dark:text-amber-400 px-1.5 py-0.5 rounded-full leading-none">
+                      Soon
+                    </span>
+                  )}
                 </DropdownMenuItem>
               ))}
             </DropdownMenuContent>
@@ -641,12 +657,17 @@ function UserProfileModal({
           </div>
 
           <div className="text-center space-y-1">
-            <div className="flex items-center justify-center gap-2">
+            <div className="flex flex-col items-center justify-center gap-1">
               <h2 className="text-lg md:text-2xl font-black text-gray-900 dark:text-white">
                 {user.displayName}
               </h2>
+              {user.studentId && (
+                <span className="text-xs md:text-sm font-mono text-gray-500 bg-gray-100 dark:bg-gray-800 px-2 py-0.5 rounded-md">
+                  ID: {user.studentId}
+                </span>
+              )}
             </div>
-            <div className="flex items-center justify-center gap-2 text-xs md:text-sm text-gray-500 font-medium">
+            <div className="flex items-center justify-center gap-2 text-xs md:text-sm text-gray-500 font-medium mt-2">
               <span className="uppercase tracking-wider">
                 {user.league} League
               </span>

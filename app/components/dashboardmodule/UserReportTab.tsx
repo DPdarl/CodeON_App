@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { supabase } from "~/lib/supabase";
+import { supabase } from "~/utils/supabase";
 import { Card, CardHeader, CardTitle, CardContent } from "~/components/ui/card";
 import { Button } from "~/components/ui/button";
 import { Input } from "~/components/ui/input";
@@ -15,15 +15,7 @@ import { Badge } from "~/components/ui/badge";
 import { exportToCSV } from "~/utils/exportHelper"; // Import the helper
 import { toast } from "sonner";
 
-const SECTIONS = [
-  "All Sections",
-  "BSIT-1A",
-  "BSIT-1B",
-  "BSCS-1A",
-  "BSIS",
-  "BSAIS",
-  "ACT",
-];
+const SECTIONS = ["All Sections", "BSIS", "BSCS", "BSAIS", "ACT"];
 
 export function UserReportTab() {
   const [students, setStudents] = useState<any[]>([]);
@@ -37,8 +29,6 @@ export function UserReportTab() {
 
   const fetchStudentProgress = async () => {
     setLoading(true);
-    // In a real app, you would join tables here (users + game_stats)
-    // For now, we simulate the fetch with the existing user table
     const { data, error } = await supabase
       .from("users")
       .select("*")
@@ -48,14 +38,25 @@ export function UserReportTab() {
     if (error) {
       toast.error("Failed to load reports");
     } else {
-      // Mocking progress data if it doesn't exist in your DB yet
-      const enhancedData = data.map((s) => ({
-        ...s,
-        adventure_progress:
-          s.settings?.adventure_progress || Math.floor(Math.random() * 100), // Placeholder
-        mp_wins: s.stats?.mp_wins || Math.floor(Math.random() * 20),
-        challenge_stars: s.stats?.stars || Math.floor(Math.random() * 15),
-      }));
+      const TOTAL_ADVENTURE_CHAPTERS = 10; // CSHARP_LESSONS has 10 real chapters
+
+      const enhancedData = data.map((s) => {
+        const completedCount = s.completed_chapters
+          ? s.completed_chapters.length
+          : 0;
+        const calculatedAdventureProgress = Math.min(
+          100,
+          Math.round((completedCount / TOTAL_ADVENTURE_CHAPTERS) * 100),
+        );
+
+        return {
+          ...s,
+          adventure_progress:
+            s.settings?.adventure_progress ?? calculatedAdventureProgress,
+          mp_wins: s.stats?.mp_wins || 0,
+          challenge_stars: s.stars || s.stats?.stars || 0,
+        };
+      });
       setStudents(enhancedData || []);
     }
     setLoading(false);
@@ -66,13 +67,13 @@ export function UserReportTab() {
     const exportData = filteredStudents.map((s) => ({
       "Student ID": s.student_id,
       Name: s.display_name,
+      Email: s.email || "",
       Section: s.section,
       Level: Math.floor((s.xp || 0) / 1000) + 1,
       "Total XP": s.xp || 0,
       "Adventure Progress (%)": `${s.adventure_progress}%`,
-      "Multiplayer Wins": s.mp_wins,
+      Multiplayer: "Coming Soon",
       "Challenge Stars": s.challenge_stars,
-      "Joined Date": new Date(s.created_at).toLocaleDateString(),
     }));
 
     exportToCSV(
@@ -145,6 +146,7 @@ export function UserReportTab() {
               <thead className="bg-gray-100 dark:bg-gray-800 font-medium text-gray-700 dark:text-gray-300">
                 <tr>
                   <th className="p-3">Student</th>
+                  <th className="p-3">Email</th>
                   <th className="p-3">Level / XP</th>
                   <th className="p-3">Adventure</th>
                   <th className="p-3">Multiplayer</th>
@@ -154,13 +156,13 @@ export function UserReportTab() {
               <tbody className="divide-y divide-gray-200 dark:divide-gray-800 bg-white dark:bg-gray-900">
                 {loading ? (
                   <tr>
-                    <td colSpan={5} className="p-8 text-center">
+                    <td colSpan={6} className="p-8 text-center">
                       <Loader2 className="animate-spin mx-auto" />
                     </td>
                   </tr>
                 ) : filteredStudents.length === 0 ? (
                   <tr>
-                    <td colSpan={5} className="p-8 text-center text-gray-500">
+                    <td colSpan={6} className="p-8 text-center text-gray-500">
                       No records found.
                     </td>
                   </tr>
@@ -176,6 +178,11 @@ export function UserReportTab() {
                         </div>
                         <div className="text-xs text-gray-500">
                           {s.student_id} • {s.section}
+                        </div>
+                      </td>
+                      <td className="p-3">
+                        <div className="text-xs font-mono text-gray-500 dark:text-gray-400">
+                          {s.email || "—"}
                         </div>
                       </td>
                       <td className="p-3">
@@ -202,9 +209,9 @@ export function UserReportTab() {
                       <td className="p-3">
                         <Badge
                           variant="outline"
-                          className="bg-blue-50 text-blue-700 dark:bg-blue-900/20 dark:text-blue-300"
+                          className="bg-gray-50 text-gray-500 dark:bg-gray-800 dark:text-gray-400 italic"
                         >
-                          {s.mp_wins} Wins
+                          Coming Soon
                         </Badge>
                       </td>
                       <td className="p-3">
@@ -245,6 +252,9 @@ export function UserReportTab() {
                     <div className="text-xs text-gray-500 mt-1">
                       {s.student_id} • {s.section}
                     </div>
+                    <div className="text-xs font-mono text-gray-400 mt-0.5 truncate">
+                      {s.email || ""}
+                    </div>
                   </div>
                   <div className="text-right">
                     <div className="font-mono text-indigo-600 dark:text-indigo-400 font-bold">
@@ -276,12 +286,12 @@ export function UserReportTab() {
 
                   {/* MP & Stars */}
                   <div className="flex items-center gap-3">
-                    <div className="flex-1 bg-blue-50 dark:bg-blue-900/10 rounded-lg p-2 flex items-center justify-between border border-blue-100 dark:border-blue-900/30">
-                      <span className="text-xs text-blue-700 dark:text-blue-300">
-                        PVP Wins
+                    <div className="flex-1 bg-gray-50 dark:bg-gray-800/50 rounded-lg p-2 flex items-center justify-between border border-gray-100 dark:border-gray-800">
+                      <span className="text-xs text-gray-500 dark:text-gray-400">
+                        Multiplayer
                       </span>
-                      <span className="font-bold text-blue-700 dark:text-blue-300">
-                        {s.mp_wins}
+                      <span className="text-[10px] font-bold text-gray-400 uppercase italic">
+                        Soon
                       </span>
                     </div>
                     <div className="flex-1 bg-yellow-50 dark:bg-yellow-900/10 rounded-lg p-2 flex items-center justify-between border border-yellow-100 dark:border-yellow-900/30">
