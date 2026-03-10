@@ -670,6 +670,11 @@ export const MatchingActivity = forwardRef<
 
   return (
     <div className="space-y-6 w-full max-w-3xl mx-auto">
+      {data.question && (
+        <h3 className="text-xl sm:text-2xl font-bold text-center text-slate-800 dark:text-slate-100">
+          {data.question}
+        </h3>
+      )}
       <div
         id="matching-grid"
         className="w-full grid grid-cols-2 gap-4 sm:gap-6"

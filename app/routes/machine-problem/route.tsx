@@ -111,7 +111,7 @@ const ComponentSkeleton = () => (
 // ... imports ...
 import { useNavigate } from "@remix-run/react";
 import { useEffect } from "react";
-import { challenges } from "~/data/challenges"; // Removed duplicate challenges import line if present in source, but replacement covers the block.
+// challenges are sourced from ChallengeContext (DB-fetched) — no static import needed
 import { OnboardingTour, TourStep } from "~/components/ui/OnboardingTour";
 // ... (existing imports)
 

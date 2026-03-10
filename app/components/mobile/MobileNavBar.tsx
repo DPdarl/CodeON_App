@@ -7,6 +7,8 @@ import {
   UserCog,
   Bug, // [NEW]
   HelpCircle,
+  MapPin, // [NEW] Side Quests Icon
+  Users,
   // Menu, // Unused import removed
 } from "lucide-react";
 import { useState, useRef, useEffect } from "react";
@@ -80,10 +82,10 @@ export function MobileNavBar({
 
     // Management Tabs
     {
-      id: "student-management",
-      label: "Students",
-      icon: TogaIcon,
-      roles: STAFF_ROLES,
+      id: "admin-management",
+      label: "Admins",
+      icon: AdminIcon,
+      roles: SUPER_ONLY,
     },
     {
       id: "instructor-management",
@@ -92,10 +94,22 @@ export function MobileNavBar({
       roles: ADMIN_ROLES,
     },
     {
-      id: "admin-management",
-      label: "Admins",
-      icon: AdminIcon,
-      roles: SUPER_ONLY,
+      id: "student-management",
+      label: "Students",
+      icon: TogaIcon,
+      roles: STAFF_ROLES,
+    },
+    {
+      id: "instructor-sections",
+      label: "Sections",
+      icon: Users,
+      roles: STAFF_ROLES,
+    },
+    {
+      id: "instructor-side-quests",
+      label: "Side Quests",
+      icon: MapPin,
+      roles: STAFF_ROLES,
     },
     {
       id: "user-reports",

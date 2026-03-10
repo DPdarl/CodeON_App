@@ -1,9 +1,11 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { supabase } from "~/utils/supabase";
+import { useAuth } from "~/contexts/AuthContext";
 import { Card, CardHeader, CardTitle, CardContent } from "~/components/ui/card";
 import { Button } from "~/components/ui/button";
 import { Input } from "~/components/ui/input";
 import { Label } from "~/components/ui/label";
+import { Textarea } from "~/components/ui/textarea";
 import {
   Dialog,
   DialogContent,
@@ -12,6 +14,13 @@ import {
   DialogFooter,
   DialogDescription,
 } from "~/components/ui/dialog";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "~/components/ui/select";
 import {
   Search,
   Plus,
@@ -25,6 +34,8 @@ import {
   Eye,
   EyeOff,
   Briefcase,
+  GitBranch,
+  BookOpen,
 } from "lucide-react";
 import {
   DropdownMenu,
@@ -48,7 +59,33 @@ interface Instructor {
   birthdate?: string;
 }
 
+interface CoreLesson {
+  id: string;
+  title: string;
+  order_index: number;
+}
+
+interface Classroom {
+  id: string;
+  name: string;
+  academic_year: string;
+  join_code: string;
+  is_locked: boolean;
+}
+
+interface SideQuest {
+  id: string;
+  title: string;
+  description: string;
+  xp_reward: number;
+  parent_lesson_id: string;
+  classroom_id?: string;
+  parent_title?: string;
+  created_at?: string;
+}
+
 export function InstructorManagementTab() {
+  const { user } = useAuth();
   const [instructors, setInstructors] = useState<Instructor[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
@@ -224,10 +261,14 @@ export function InstructorManagementTab() {
     setIsEditOpen(true);
   };
 
-  const filteredInstructors = instructors.filter(
-    (i) =>
-      i.display_name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      i.student_id?.toLowerCase().includes(searchQuery.toLowerCase()),
+  const filteredInstructors = useMemo(
+    () =>
+      instructors.filter(
+        (i) =>
+          i.display_name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+          i.student_id?.toLowerCase().includes(searchQuery.toLowerCase()),
+      ),
+    [instructors, searchQuery],
   );
 
   return (

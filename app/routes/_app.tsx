@@ -66,7 +66,11 @@ export default function AppLayout() {
       return "instructor-management";
     if (currentPath.startsWith("/admin-management")) return "admin-management";
     if (currentPath.startsWith("/user-reports")) return "user-reports";
-    if (currentPath.startsWith("/bug-reports")) return "bug-reports"; // [NEW]
+    if (currentPath.startsWith("/bug-reports")) return "bug-reports";
+    if (currentPath.startsWith("/instructor/class-sections"))
+      return "instructor-sections";
+    if (currentPath.startsWith("/instructor-side-quests"))
+      return "instructor-side-quests";
 
     return "home";
   };
@@ -117,8 +121,14 @@ export default function AppLayout() {
       case "user-reports":
         navigate("/user-reports");
         break;
-      case "bug-reports": // [NEW]
+      case "bug-reports":
         navigate("/bug-reports");
+        break;
+      case "instructor-sections":
+        navigate("/instructor/class-sections");
+        break;
+      case "instructor-side-quests":
+        navigate("/instructor-side-quests");
         break;
       default:
         navigate("/dashboard");

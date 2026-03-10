@@ -20,6 +20,9 @@ export function PlayTab() {
   const navigate = useNavigate();
   const { user } = useAuth();
   const currentLevel = user?.level || 1;
+  const completedChaptersCount = user?.completedChapters?.length || 0;
+  const CHAPTERS_REQUIRED = 5;
+  const isChallengesLocked = completedChaptersCount < CHAPTERS_REQUIRED;
   const [loading, setLoading] = useState(true); // ADDED
 
   // Tour Logic
@@ -120,6 +123,7 @@ export function PlayTab() {
       borderColor: "hover:border-orange-500/50",
       route: "/play/challenges",
       minLevel: 1,
+      requiresChapters: true,
     },
   ];
 
@@ -165,7 +169,11 @@ export function PlayTab() {
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         {gameModes.map((mode, index) => {
           const isLocked =
-            mode.id === "multiplayer" ? true : currentLevel < mode.minLevel;
+            mode.id === "multiplayer"
+              ? true
+              : mode.id === "challenges"
+              ? isChallengesLocked
+              : currentLevel < mode.minLevel;
 
           return (
             <motion.div
@@ -191,12 +199,51 @@ export function PlayTab() {
                     <div className="w-12 h-12 rounded-full bg-muted flex items-center justify-center mb-3">
                       <Lock className="w-6 h-6 text-muted-foreground" />
                     </div>
-                    <p className="font-bold text-lg text-foreground">
-                      Coming Soon
-                    </p>
-                    <p className="text-md text-muted-foreground mt-1">
-                      Coming Soon. Need a paid API to work.
-                    </p>
+                    {mode.id === "challenges" ? (
+                      <>
+                        <p className="font-bold text-lg text-foreground">
+                          Complete 5 Adventure Chapters
+                        </p>
+                        <p className="text-sm text-muted-foreground mt-1">
+                          Finish adventure chapters to unlock C#allenges.
+                        </p>
+                        <div className="mt-3 flex items-center gap-2">
+                          <div className="h-1.5 w-28 bg-muted-foreground/20 rounded-full overflow-hidden">
+                            <div
+                              className="h-full bg-orange-500 rounded-full transition-all"
+                              style={{
+                                width: `${Math.min(
+                                  (completedChaptersCount / CHAPTERS_REQUIRED) *
+                                    100,
+                                  100,
+                                )}%`,
+                              }}
+                            />
+                          </div>
+                          <span className="text-xs font-bold text-orange-500">
+                            {completedChaptersCount} / {CHAPTERS_REQUIRED}
+                          </span>
+                        </div>
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            navigate("/play/adventure");
+                          }}
+                          className="mt-3 text-xs font-bold text-indigo-500 hover:underline"
+                        >
+                          Go to Adventure →
+                        </button>
+                      </>
+                    ) : (
+                      <>
+                        <p className="font-bold text-lg text-foreground">
+                          Coming Soon
+                        </p>
+                        <p className="text-md text-muted-foreground mt-1">
+                          Coming Soon. Need a paid API to work.
+                        </p>
+                      </>
+                    )}
                   </div>
                 )}
 

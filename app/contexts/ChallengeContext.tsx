@@ -7,7 +7,7 @@ import React, {
   useMemo,
 } from "react";
 import { useNavigate } from "@remix-run/react";
-import { challenges } from "~/data/challenges";
+// challenges are now fetched from DB — no static import needed
 import { toast } from "sonner";
 import type { Challenge } from "~/types/challenge.types";
 import { executeCodeCode as executeCode } from "~/utils/judge0";
@@ -94,11 +94,14 @@ export const ChallengeProvider = ({
   children,
   initialChallengeId,
 }: ChallengeProviderProps) => {
+  // challenges are loaded from DB; index is set after fetch
+  const [challenges, setChallenges] = useState<Challenge[]>([]);
+
   const initialIndex = useMemo(() => {
-    if (!initialChallengeId) return 0;
+    if (!initialChallengeId || challenges.length === 0) return 0;
     const idx = challenges.findIndex((c) => c.id === initialChallengeId);
     return idx >= 0 ? idx : 0;
-  }, [initialChallengeId]);
+  }, [initialChallengeId, challenges]);
 
   const [state, setState] = useState<ChallengeState>({
     currentChallengeIndex: initialIndex,
@@ -132,38 +135,64 @@ export const ChallengeProvider = ({
   const { user, refreshUser, updateProfile, syncUser } = useAuth(); // Added syncUser for streak updates
   const { playSound } = useGameSound();
 
-  // Sync basic stats from User Profile on mount
+  // Fetch challenges from DB + sync user stats/progress on mount
   useEffect(() => {
-    if (user) {
-      setState((prev) => ({
-        ...prev,
-        coins: user.coins || 0,
-        hints: user.hints || 0, // [NEW]
-        exp: user.xp || 0,
-        level: user.level || 1,
-        // user.levelThreshold might not be in user object, keep default or calculate
-      }));
+    const load = async () => {
+      // --- 1. Fetch challenges from DB ---
+      const { data: challengeData, error: challengeError } = await supabase
+        .from("challenges")
+        .select("*")
+        .order("id", { ascending: true });
 
-      // Fetch specific challenge progress
-      // Fetch specific challenge progress
-      fetchUserProgress(user.uid).then((progressData) => {
-        // progressData is now [{ challenge_id, stars, code_submitted, execution_time_ms }, ...]
+      if (challengeError) {
+        console.error("Failed to load challenges:", challengeError);
+      } else if (challengeData) {
+        const mapped = (challengeData as any[]).map((c) => ({
+          ...c,
+          starterCode: c.starter_code || c.starterCode || "",
+          xpReward: c.xp_reward ?? c.xpReward ?? 50,
+          coinsReward: c.coins_reward ?? c.coinsReward ?? 10,
+          // Derive moduleId from the id string (e.g. "1.3" → 1)
+          moduleId: c.module_id ?? parseInt(c.id.split(".")[0], 10),
+          difficulty: c.difficulty || "Easy",
+          testInputs: c.test_inputs || [],
+        })) as Challenge[];
+
+        // Sort numerically by moduleId then by challenge number within module
+        // Handles "1.10" > "1.9" correctly (text sort would fail this)
+        mapped.sort((a, b) => {
+          const [aMod, aNum] = a.id.split(".").map(Number);
+          const [bMod, bNum] = b.id.split(".").map(Number);
+          if (aMod !== bMod) return aMod - bMod;
+          return aNum - bNum;
+        });
+
+        setChallenges(mapped);
+      }
+
+      // --- 2. Sync user stats + progress ---
+      if (user) {
+        setState((prev) => ({
+          ...prev,
+          coins: user.coins || 0,
+          hints: user.hints || 0,
+          exp: user.xp || 0,
+          level: user.level || 1,
+        }));
+
+        const progressData = await fetchUserProgress(user.uid);
         const completedIds = user.completedMachineProblems || [];
-
         const starsMap: Record<string, number> = {};
-        const codesMap: Record<string, string> = {}; // [NEW]
-        const timesMap: Record<string, number> = {}; // [NEW]
+        const codesMap: Record<string, string> = {};
+        const timesMap: Record<string, number> = {};
 
         if (progressData) {
           progressData.forEach((p: any) => {
             if (p.challenge_id) {
               starsMap[p.challenge_id] = p.stars || 0;
-              if (p.code_submitted) {
-                codesMap[p.challenge_id] = p.code_submitted;
-              }
-              if (p.execution_time_ms) {
+              if (p.code_submitted) codesMap[p.challenge_id] = p.code_submitted;
+              if (p.execution_time_ms)
                 timesMap[p.challenge_id] = p.execution_time_ms;
-              }
             }
           });
         }
@@ -176,11 +205,12 @@ export const ChallengeProvider = ({
           executionTimes: timesMap,
           isLoading: false,
         }));
-      });
-    } else {
-      // If no user, technically we stop loading but it will be empty
-      setState((prev) => ({ ...prev, isLoading: false }));
-    }
+      } else {
+        setState((prev) => ({ ...prev, isLoading: false }));
+      }
+    };
+
+    load();
   }, [user]);
 
   // [NEW] Navigation Flag
@@ -222,8 +252,19 @@ export const ChallengeProvider = ({
 
   const currentChallenge = useMemo(
     () => challenges[state.currentChallengeIndex],
-    [state.currentChallengeIndex],
+    [challenges, state.currentChallengeIndex],
   );
+
+  // Once challenges load from DB, resolve the initial index by challenge ID
+  useEffect(() => {
+    if (initialChallengeId && challenges.length > 0) {
+      const idx = challenges.findIndex((c) => c.id === initialChallengeId);
+      if (idx >= 0 && idx !== state.currentChallengeIndex) {
+        setState((prev) => ({ ...prev, currentChallengeIndex: idx }));
+      }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [challenges, initialChallengeId]);
 
   // Track last initialized challenge to prevent resets on re-renders
   const lastChallengeIdRef = React.useRef<string | null>(null);

@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { supabase } from "~/utils/supabase";
 import { Card, CardHeader, CardTitle, CardContent } from "~/components/ui/card";
 import { Button } from "~/components/ui/button";
@@ -230,10 +230,14 @@ export function AdminManagementTab() {
     setIsEditOpen(true);
   };
 
-  const filteredAdmins = admins.filter(
-    (a) =>
-      a.display_name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      a.student_id?.toLowerCase().includes(searchQuery.toLowerCase()),
+  const filteredAdmins = useMemo(
+    () =>
+      admins.filter(
+        (a) =>
+          a.display_name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+          a.student_id?.toLowerCase().includes(searchQuery.toLowerCase()),
+      ),
+    [admins, searchQuery],
   );
 
   return (

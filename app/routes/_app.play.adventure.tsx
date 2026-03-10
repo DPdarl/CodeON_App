@@ -26,6 +26,7 @@ import {
   ArrowRight,
   Gift,
   Bug,
+  GitBranch,
 } from "lucide-react";
 import { cn } from "~/lib/utils";
 import { Button } from "~/components/ui/button";
@@ -71,10 +72,9 @@ import { AdventureCompletedCelebration } from "~/components/dashboardmodule/Adve
 import { AdventureSkeleton } from "~/components/dashboardmodule/AdventureSkeleton"; // ✅ NEW COMPONENT
 import {
   CHAPTER_VISUALS,
-  CSHARP_LESSONS,
   CHAPTER_0_VISUAL,
   CHAPTER_0_LESSON,
-} from "~/data/adventureContent";
+} from "~/data/adventureContent"; // CSHARP_LESSONS removed — content now from DB
 import { trackQuestEvent } from "~/lib/quest-tracker";
 import { useGameSound } from "~/hooks/useGameSound";
 import { BugReportModal } from "~/components/playmodule/challenge/BugReportModal";
@@ -400,6 +400,98 @@ function RoadmapNode({
           )}
         </motion.div>
       </motion.div>
+    </TooltipProvider>
+  );
+}
+
+// --- COMPONENT: SIDE QUEST NODE ---
+function SideQuestNode({
+  quest,
+  parentCompleted,
+  onClick,
+}: {
+  quest: any;
+  parentCompleted: boolean;
+  onClick: () => void;
+}) {
+  const isCompleted = quest.isCompleted;
+  const isLocked = !parentCompleted && !isCompleted;
+  const isActive = parentCompleted && !isCompleted;
+
+  return (
+    <TooltipProvider delayDuration={100}>
+      {/* Connector line from main node path */}
+      <div className="relative flex items-center ml-8 md:ml-auto md:absolute md:right-0 md:top-1/2 md:-translate-y-1/2 md:flex-row-reverse">
+        {/* Dashed branch line */}
+        <div
+          className={cn(
+            "hidden md:block w-8 h-0.5 border-t-2 border-dashed mx-1",
+            isCompleted
+              ? "border-purple-400"
+              : isLocked
+              ? "border-muted-foreground/30"
+              : "border-purple-400/60",
+          )}
+        />
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <motion.button
+              whileHover={!isLocked ? { scale: 1.1 } : {}}
+              whileTap={!isLocked ? { scale: 0.95 } : {}}
+              disabled={isLocked}
+              onClick={!isLocked ? onClick : undefined}
+              className={cn(
+                "w-10 h-10 rounded-full flex items-center justify-center border-2 transition-all shrink-0",
+                isLocked
+                  ? "bg-muted text-muted-foreground border-dashed border-muted-foreground/30"
+                  : isCompleted
+                  ? "bg-purple-500 text-white border-purple-400 shadow-md ring-2 ring-purple-300/50 ring-offset-2 ring-offset-background"
+                  : "bg-orange-400 text-white border-orange-300 shadow-md ring-2 ring-orange-300/50 ring-offset-2 ring-offset-background",
+              )}
+            >
+              {isCompleted ? (
+                <Check className="w-4 h-4 stroke-[3]" />
+              ) : isLocked ? (
+                <Lock className="w-3.5 h-3.5" />
+              ) : (
+                <GitBranch className="w-4 h-4" />
+              )}
+              {isActive && (
+                <span className="absolute inset-0 rounded-full animate-ping opacity-20 bg-orange-400" />
+              )}
+            </motion.button>
+          </TooltipTrigger>
+          <TooltipContent side="left">
+            <p>
+              {isLocked
+                ? "Complete parent chapter to unlock"
+                : isCompleted
+                ? "Replay Side Quest"
+                : "Side Quest — Start!"}
+            </p>
+          </TooltipContent>
+        </Tooltip>
+
+        {/* Info pill */}
+        <div
+          className={cn(
+            "ml-2 md:ml-0 md:mr-2 px-2 py-1 rounded-xl text-[10px] font-bold max-w-[120px] leading-tight border",
+            isLocked
+              ? "bg-muted text-muted-foreground border-dashed border-muted-foreground/20"
+              : isCompleted
+              ? "bg-purple-50 text-purple-700 border-purple-200 dark:bg-purple-900/20 dark:text-purple-300 dark:border-purple-800"
+              : "bg-orange-50 text-orange-700 border-orange-200 dark:bg-orange-900/20 dark:text-orange-300 dark:border-orange-800",
+          )}
+        >
+          <p className="text-[9px] uppercase tracking-wider opacity-60 mb-0.5">
+            Side Quest
+          </p>
+          <p className="truncate">{quest.title}</p>
+          {!isLocked && (
+            <p className="opacity-60 mt-0.5">+{quest.xp_reward ?? 30} XP</p>
+          )}
+        </div>
+      </div>
     </TooltipProvider>
   );
 }
@@ -1339,6 +1431,7 @@ export default function AdventurePage() {
   const { hearts, timeRemaining, buyHearts } = useHeartSystem();
 
   const [lessons, setLessons] = useState<any[]>([]);
+  const [sideQuestMap, setSideQuestMap] = useState<Record<string, any[]>>({});
   const [loading, setLoading] = useState(true);
   const [selectedChapter, setSelectedChapter] = useState<any>(null);
   const [maxCompletedOrder, setMaxCompletedOrder] = useState(0);
@@ -1426,7 +1519,7 @@ export default function AdventurePage() {
       const { data: userStats, error: statsError } = await supabase
         .from("users")
         .select(
-          "level, xp, completed_chapters, hints, streak_freezes, total_runtime, adventure_rewards_claimed",
+          "level, xp, completed_chapters, hints, streak_freezes, total_runtime, adventure_rewards_claimed, classroom_id",
         )
         .eq("id", user.uid)
         .single();
@@ -1507,17 +1600,60 @@ export default function AdventurePage() {
         }
       }
 
-      const { data: dbLessons } = await supabase
+      // 3a. Fetch core lessons (always) + classroom-scoped side quests
+      const { data: coreDbLessons, error: lessonsError } = await supabase
         .from("lessons")
-        .select("id, order_index")
+        .select(
+          "id, title, slug, description, content_markdown, xp_reward, order_index, activity_type, is_core_node, parent_lesson_id",
+        )
+        .eq("is_core_node", true)
         .order("order_index", { ascending: true });
 
-      const totalChapters = dbLessons?.length || 0;
+      if (lessonsError) console.error("Error fetching lessons:", lessonsError);
+
+      // 3b. Fetch side quests only for this student's classroom
+      const studentClassroomId = userStats?.classroom_id ?? null;
+      let dbSideQuests: any[] = [];
+      if (studentClassroomId) {
+        const { data: sqData } = await supabase
+          .from("lessons")
+          .select(
+            "id, title, slug, description, content_markdown, xp_reward, order_index, activity_type, is_core_node, parent_lesson_id, classroom_id",
+          )
+          .eq("is_core_node", false)
+          .eq("classroom_id", studentClassroomId);
+        dbSideQuests = sqData ?? [];
+      }
+
+      const totalChapters = (coreDbLessons ?? []).length || 0;
       const completedChaptersArray = userStats?.completed_chapters || [];
+      const safeCoreDbLessons = coreDbLessons ?? [];
+
+      // 3b. Fetch all activities for the fetched lessons
+      let activitiesMap: Record<string, any[]> = {};
+      const allDbLessons: any[] = [...safeCoreDbLessons, ...dbSideQuests];
+      if (allDbLessons.length > 0) {
+        const lessonIds = allDbLessons.map((l: any) => l.id);
+        const { data: dbActivities, error: actErr } = await supabase
+          .from("activities")
+          .select("id, lesson_id, type, prompt, data")
+          .in("lesson_id", lessonIds);
+
+        if (actErr) console.error("Error fetching activities:", actErr);
+        if (dbActivities) {
+          dbActivities.forEach((a) => {
+            if (!activitiesMap[a.lesson_id]) activitiesMap[a.lesson_id] = [];
+            activitiesMap[a.lesson_id].push({
+              ...a,
+              data: typeof a.data === "string" ? JSON.parse(a.data) : a.data,
+            });
+          });
+        }
+      }
 
       let maxOrder = 0;
-      if (dbLessons) {
-        const completedDbLessons = dbLessons.filter((l) =>
+      if (safeCoreDbLessons.length > 0) {
+        const completedDbLessons = safeCoreDbLessons.filter((l) =>
           completedChaptersArray.includes(l.id),
         );
         if (completedDbLessons.length > 0) {
@@ -1525,6 +1661,21 @@ export default function AdventurePage() {
         }
       }
       setMaxCompletedOrder(maxOrder);
+
+      // --- BUILD SIDE QUEST MAP (parent_lesson_id → side quest list) ---
+      const newSideQuestMap: Record<string, any[]> = {};
+      dbSideQuests.forEach((sq) => {
+        const pid = sq.parent_lesson_id;
+        if (!pid) return;
+        if (!newSideQuestMap[pid]) newSideQuestMap[pid] = [];
+        newSideQuestMap[pid].push({
+          ...sq,
+          activities: activitiesMap[sq.id] || [],
+          isSideQuest: true,
+          isCompleted: completedChaptersArray.includes(sq.id),
+        });
+      });
+      setSideQuestMap(newSideQuestMap);
 
       if (userStats) {
         setStats({
@@ -1556,21 +1707,26 @@ export default function AdventurePage() {
         setInventory(items.filter((i) => i.quantity > 0));
       }
 
+      // Merge CHAPTER_VISUALS (icons/colors) with full DB core lesson content
       const mergedLessons = CHAPTER_VISUALS.map((visual) => {
-        const localContent = CSHARP_LESSONS.find((c) => c.id === visual.id);
-        const dbMatch = dbLessons?.find((l) => l.order_index === visual.id);
+        const dbLesson = safeCoreDbLessons?.find(
+          (l) => l.order_index === visual.id,
+        );
 
-        const isCompleted = dbMatch
-          ? completedChaptersArray.includes(dbMatch.id)
+        const isCompleted = dbLesson
+          ? completedChaptersArray.includes(dbLesson.id)
           : false;
 
         return {
           ...visual,
-          ...localContent,
-          id: dbMatch?.id || visual.id,
-          activities: localContent?.activities || [],
+          id: dbLesson?.id || visual.id,
+          title: dbLesson?.title || `Chapter ${visual.id}`,
+          description: dbLesson?.description || "",
+          content_markdown: dbLesson?.content_markdown || "",
+          xp_reward: dbLesson?.xp_reward || 50,
+          activities: dbLesson ? activitiesMap[dbLesson.id] || [] : [],
           order_index: visual.id,
-          activityType: visual.activityLabel,
+          activityType: dbLesson?.activity_type || visual.activityLabel,
           isCompleted: isCompleted,
         };
       });
@@ -1599,12 +1755,16 @@ export default function AdventurePage() {
     loadAdventureProgress();
   }, [loadAdventureProgress]);
 
+  const hasAutoScrolled = useRef(false);
+
   useEffect(() => {
+    if (hasAutoScrolled.current) return;
     const timer = setTimeout(() => {
       if (!loading && lessons.length > 0) {
         const activeNode = document.getElementById("active-chapter-node");
         if (activeNode) {
           activeNode.scrollIntoView({ behavior: "smooth", block: "center" });
+          hasAutoScrolled.current = true;
         }
       }
     }, 500);
@@ -1782,6 +1942,17 @@ export default function AdventurePage() {
           return l;
         }),
       );
+
+      // Also mark completed in sideQuestMap (if it was a side quest)
+      setSideQuestMap((prev) => {
+        const updated = { ...prev };
+        for (const pid in updated) {
+          updated[pid] = updated[pid].map((sq) =>
+            sq.id === lessonId ? { ...sq, isCompleted: true } : sq,
+          );
+        }
+        return updated;
+      });
 
       const justCompletedLesson = lessons.find((l) => l.id === lessonId);
       if (
@@ -2306,10 +2477,7 @@ export default function AdventurePage() {
 
                   const nodeId = isChapter0
                     ? "chapter-0-node"
-                    : // Always assign to the first real chapter so tour step 3 can always find it
-                    index === 1
-                    ? "active-chapter-node"
-                    : status === "current"
+                    : status === "current" || (!isChapter0Done && index === 1)
                     ? "active-chapter-node"
                     : undefined;
 
@@ -2320,17 +2488,32 @@ export default function AdventurePage() {
                       ? "tour-chapter-card"
                       : undefined;
 
+                  const attachedSideQuests: any[] =
+                    sideQuestMap[chapter.id] ?? [];
+
                   return (
-                    <RoadmapNode
+                    <div
                       key={chapter.id ?? `chapter-${index}`}
-                      id={nodeId}
-                      cardId={cardId}
-                      chapter={chapter}
-                      status={status}
-                      alignment={index % 2 === 0 ? "left" : "right"}
-                      isAdventureComplete={isAdventureFinished}
-                      onClick={() => handleNodeClick(chapter)}
-                    />
+                      className="relative"
+                    >
+                      <RoadmapNode
+                        id={nodeId}
+                        cardId={cardId}
+                        chapter={chapter}
+                        status={status}
+                        alignment={index % 2 === 0 ? "left" : "right"}
+                        isAdventureComplete={isAdventureFinished}
+                        onClick={() => handleNodeClick(chapter)}
+                      />
+                      {attachedSideQuests.map((sq) => (
+                        <SideQuestNode
+                          key={sq.id}
+                          quest={sq}
+                          parentCompleted={chapter.isCompleted}
+                          onClick={() => handleNodeClick(sq)}
+                        />
+                      ))}
+                    </div>
                   );
                 })}
               </div>

@@ -10,6 +10,8 @@ import {
   Loader2,
   Sparkles,
   Database,
+  Volume2,
+  VolumeX,
 } from "lucide-react";
 import { Button } from "~/components/ui/button";
 import { cn } from "~/lib/utils";
@@ -62,6 +64,14 @@ export function OnboardingTour({
   const [currentStep, setCurrentStep] = useState(0);
   const [showRewardView, setShowRewardView] = useState(false);
   const [isClaiming, setIsClaiming] = useState(false);
+  const [isMuted, setIsMuted] = useState(user?.settings?.isVoiceMuted || false); // [NEW] Tour voice mute toggle
+
+  useEffect(() => {
+    if (user?.settings?.isVoiceMuted !== undefined) {
+      setIsMuted(user.settings.isVoiceMuted);
+    }
+  }, [user?.settings?.isVoiceMuted]);
+
   // Suppresses the "element not found" error while tab-switch + positioning is settling
   const [isPositioning, setIsPositioning] = useState(true);
 
@@ -180,10 +190,31 @@ export function OnboardingTour({
 
   // Play dialogue sound when jumping to a new step
   useEffect(() => {
-    if (isOpen && !showRewardView && !rewardOnly) {
+    if (isOpen && !showRewardView && !rewardOnly && !isMuted) {
       playSound("tour_voice");
     }
-  }, [isOpen, currentStep, showRewardView, rewardOnly, playSound]);
+  }, [isOpen, currentStep, showRewardView, rewardOnly, playSound, isMuted]);
+
+  // [NEW] Handle mute toggle mid-tour
+  const handleMuteToggle = async () => {
+    const newMuted = !isMuted;
+    if (newMuted) {
+      stopSound("tour_voice");
+    } else {
+      playSound("tour_voice");
+    }
+    setIsMuted(newMuted);
+
+    if (user) {
+      const currentSettings = user.settings || {};
+      await updateProfile({
+        settings: {
+          ...currentSettings,
+          isVoiceMuted: newMuted,
+        },
+      });
+    }
+  };
 
   // Notify parent of step change (e.g. to switch tabs on mobile)
   useEffect(() => {
@@ -235,9 +266,10 @@ export function OnboardingTour({
     if (isLastStep) {
       stopSound("tour_voice"); // Stop the voice immediately on final step progression
       if (tutorialId && user) {
-        // Force the DB update if they somehow aren't onboarded yet,
-        // or if they just haven't completed this specific tutorial.
-        const hasCompleted = user.settings?.tutorials?.[tutorialId];
+        // Check the new dedicated column first, fall back to legacy settings
+        const hasCompleted =
+          user.claimedTutorials?.includes(tutorialId) ||
+          user.settings?.tutorials?.[tutorialId];
         if (!user.isOnboarded || !hasCompleted || forceReward) {
           if (returnTo) {
             onComplete();
@@ -261,6 +293,13 @@ export function OnboardingTour({
     if (!user || !tutorialId) return;
     setIsClaiming(true);
     try {
+      // 1. Update the new dedicated claimedTutorials column
+      const existingTutorials = user.claimedTutorials || [];
+      const updatedTutorials = existingTutorials.includes(tutorialId)
+        ? existingTutorials
+        : [...existingTutorials, tutorialId];
+
+      // 2. Also update legacy settings.tutorials for backward compat
       const currentSettings = user.settings || {};
       const updatedSettings = {
         ...currentSettings,
@@ -271,8 +310,9 @@ export function OnboardingTour({
       };
 
       const updates: any = {
-        settings: updatedSettings,
-        isOnboarded: true, // Always enforce this to true when any tour reward is claimed
+        claimedTutorials: updatedTutorials, // [NEW] Primary source of truth
+        settings: updatedSettings, // [LEGACY] Keep in sync
+        isOnboarded: true,
       };
       updates.coins = (user.coins || 0) + 50;
 
@@ -300,7 +340,7 @@ export function OnboardingTour({
   return (
     <AnimatePresence>
       {isOpen && (
-        <div className="fixed inset-0 z-[100] pointer-events-none">
+        <div className="fixed inset-0 z-[100] pointer-events-auto">
           {/* Full Screen SVG Masking for Spotlight */}
           <svg
             className="absolute inset-0 w-full h-full pointer-events-none"
@@ -446,6 +486,19 @@ export function OnboardingTour({
                     Step {currentStep + 1} of{" "}
                     {steps.length > 0 ? steps.length : 1}
                   </span>
+                  {/* Mute Toggle */}
+                  <button
+                    type="button"
+                    onClick={handleMuteToggle}
+                    title={isMuted ? "Unmute voice" : "Mute voice"}
+                    className="w-7 h-7 rounded-full flex items-center justify-center bg-gray-100 dark:bg-white/10 hover:bg-gray-200 dark:hover:bg-white/20 text-gray-500 dark:text-gray-400 transition-colors"
+                  >
+                    {isMuted ? (
+                      <VolumeX className="w-3.5 h-3.5" />
+                    ) : (
+                      <Volume2 className="w-3.5 h-3.5" />
+                    )}
+                  </button>
                 </div>
                 <h3 className="text-lg font-black text-gray-900 dark:text-white mb-2 tracking-tight leading-tight">
                   {step?.title || "Tutorial"}
@@ -510,6 +563,19 @@ export function OnboardingTour({
                     Step {currentStep + 1} of{" "}
                     {steps.length > 0 ? steps.length : 1}
                   </span>
+                  {/* Mute Toggle */}
+                  <button
+                    type="button"
+                    onClick={handleMuteToggle}
+                    title={isMuted ? "Unmute voice" : "Mute voice"}
+                    className="w-8 h-8 rounded-full flex items-center justify-center bg-gray-100 dark:bg-white/10 hover:bg-gray-200 dark:hover:bg-white/20 text-gray-500 dark:text-gray-400 transition-colors"
+                  >
+                    {isMuted ? (
+                      <VolumeX className="w-4 h-4" />
+                    ) : (
+                      <Volume2 className="w-4 h-4" />
+                    )}
+                  </button>
                 </div>
                 <h3 className="text-xl font-black text-gray-900 dark:text-white mb-2 tracking-tight">
                   {step?.title || "Tutorial"}

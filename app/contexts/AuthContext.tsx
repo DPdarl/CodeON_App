@@ -47,6 +47,7 @@ export interface UserData {
   stars?: number;
   completedMachineProblems?: string[];
   equippedBadge?: string; // [FIX] Added missing property
+  claimedTutorials?: string[]; // [NEW] Dedicated column for tutorial persistence
 }
 
 interface AuthContextType {
@@ -113,6 +114,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       stars: db.stars ?? 0,
       completedMachineProblems: db.completed_machineproblems ?? [],
       equippedBadge: db.equipped_badge, // [FIX] Map from DB
+      claimedTutorials: db.claimed_tutorials ?? [], // [NEW]
     }),
     [],
   );
@@ -152,6 +154,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       // [FIX] Map to DB
       db.equipped_badge = db.equippedBadge;
       delete db.equippedBadge;
+    }
+    if ("claimedTutorials" in db) {
+      // [NEW] Map to DB
+      db.claimed_tutorials = db.claimedTutorials;
+      delete db.claimedTutorials;
     }
     if ("googleBound" in db) {
       db.google_bound = db.googleBound;
@@ -410,7 +417,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (loginError) {
         // Fallback only if not email login (student id assumption)
         if (!isEmail) {
-          const isDefaultFormat = /^Ici\d{4}-\d{2}-\d{2}$/.test(p);
+          const isDefaultFormat = /^(Ici|Prof|Adm)\d{4}-\d{2}-\d{2}$/.test(p);
           if (isDefaultFormat) {
             const { data: signUpData, error: signUpError } =
               await supabase.auth.signUp({

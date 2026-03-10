@@ -9,6 +9,7 @@ import {
   Compass,
   CheckCircle2,
   User,
+  Lock,
 } from "lucide-react";
 import { toast } from "sonner"; // ADDED
 import { Button } from "~/components/ui/button";
@@ -28,6 +29,122 @@ import { LevelUpModal } from "./LevelUpModal";
 import { HomeSkeleton } from "./HomeSkeleton"; // ADDED
 import { AvatarDisplay } from "./AvatarDisplay"; // ADDED
 import { useIsMobile } from "~/hooks/use-mobile"; // [NEW]
+
+// --- Sub-component: unlocked practice section (carousel + module progress) ---
+function UnlockedPracticeSection({
+  challenges,
+  completedMachineProblems,
+  handleSelectChallenge,
+  navigate,
+}: {
+  challenges: Challenge[];
+  completedMachineProblems: string[];
+  handleSelectChallenge: (c: Challenge) => void;
+  navigate: ReturnType<typeof import("@remix-run/react").useNavigate>;
+}) {
+  // --- CENTRALIZED MODULE SELECTION LOGIC ---
+  let activeModule = MODULES[0];
+  let isModuleCompleted = false;
+  for (const mod of MODULES) {
+    const modChallenges = challenges.filter((c) => c.moduleId === mod.id);
+    if (modChallenges.length === 0) continue;
+    activeModule = mod;
+    const allDone = modChallenges.every((c) =>
+      completedMachineProblems.includes(c.id),
+    );
+    if (!allDone) {
+      isModuleCompleted = false;
+      break;
+    } else {
+      isModuleCompleted = true;
+    }
+  }
+  const activeChallenges = challenges.filter(
+    (c) => c.moduleId === activeModule.id,
+  );
+  const firstId = activeChallenges.length > 0 ? activeChallenges[0].id : "?";
+  const lastId =
+    activeChallenges.length > 0
+      ? activeChallenges[activeChallenges.length - 1].id
+      : "?";
+  const completedCount = activeChallenges.filter((c) =>
+    completedMachineProblems.includes(c.id),
+  ).length;
+  const totalCount = activeChallenges.length;
+  const percentage = totalCount > 0 ? (completedCount / totalCount) * 100 : 0;
+
+  return (
+    <>
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-end px-2 gap-2 md:gap-0">
+        <div className="w-full">
+          <h2 className="text-lg md:text-2xl font-bold text-gray-900 dark:text-white flex items-center gap-2">
+            <Code2 className="w-5 h-5 md:w-6 md:h-6 text-indigo-500" />
+            <span className="flex flex-col md:flex-row md:items-center gap-1 md:gap-2 text-base md:text-xl font-bold">
+              <span className="text-gray-900 dark:text-white truncate">
+                Mod {activeModule.id}: {activeModule.title}
+              </span>
+              <span className="text-gray-500 text-xs md:text-base font-normal">
+                ({firstId} - {lastId})
+              </span>
+            </span>
+          </h2>
+          {/* Progress Bar */}
+          <div className="mt-2 md:mt-3 w-full md:max-w-lg min-w-[200px]">
+            <div className="flex items-center gap-3">
+              <div className="flex-1 h-1.5 md:h-2 bg-gray-200 dark:bg-gray-800 rounded-full overflow-hidden">
+                <div
+                  className="h-full bg-blue-500 rounded-full transition-all duration-500"
+                  style={{ width: `${percentage}%` }}
+                />
+              </div>
+              <span className="text-xs text-gray-500 font-mono font-bold">
+                {Math.round(percentage)}%
+              </span>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div className="bg-white dark:bg-[#050510] rounded-[1.5rem] md:rounded-[2rem] p-4 md:p-6 border border-gray-200 dark:border-gray-800 shadow-xl relative overflow-hidden transition-colors duration-300">
+        <div className="absolute top-0 right-0 w-96 h-96 bg-indigo-50 dark:bg-indigo-900/10 rounded-full blur-[100px] -mr-32 -mt-32 pointer-events-none" />
+        <div className="relative z-10">
+          {isModuleCompleted ? (
+            <div className="text-center py-10 md:py-16">
+              <div className="inline-flex p-3 md:p-4 rounded-full bg-green-100 dark:bg-green-900/30 text-green-600 dark:text-green-400 mb-4 md:mb-6 ring-4 ring-green-50 dark:ring-green-900/10">
+                <CheckCircle2 className="w-8 h-8 md:w-12 md:h-12" />
+              </div>
+              <h3 className="text-2xl md:text-3xl font-black text-gray-900 dark:text-white mb-2 md:mb-3">
+                Module Completed!
+              </h3>
+              <p className="text-gray-500 dark:text-gray-400 max-w-md mx-auto mb-6 md:mb-8 text-sm md:text-base">
+                You have successfully finished all challenges in this module.
+                Great job!
+              </p>
+              <Button
+                onClick={() => navigate("/play/challenges")}
+                className="h-10 md:h-12 px-6 md:px-8 rounded-xl font-bold bg-indigo-600 hover:bg-indigo-700 text-white shadow-lg active:scale-95 transition-all text-sm md:text-base"
+              >
+                Review Challenges
+              </Button>
+            </div>
+          ) : challenges.length > 0 ? (
+            <SelectionCarousel
+              challenges={activeChallenges}
+              onSelectChallenge={handleSelectChallenge}
+              completedChallenges={completedMachineProblems}
+            />
+          ) : (
+            <div className="text-center py-20 rounded-xl border border-dashed border-gray-300 dark:border-gray-700">
+              <p className="text-gray-500 text-lg">
+                No challenges found in the database.
+              </p>
+            </div>
+          )}
+        </div>
+      </div>
+    </>
+  );
+}
+
 interface HomeTabProps {
   onTabChange: (tab: string) => void;
   isActive?: boolean;
@@ -238,6 +355,10 @@ export function HomeTab({ onTabChange, isActive = true }: HomeTabProps) {
   const handleSelectChallenge = (challenge: Challenge) => {
     navigate(`/play/challenges`);
   };
+  const CHAPTERS_REQUIRED = 5;
+  const isChallengesLocked =
+    (user?.completedChapters?.length || 0) < CHAPTERS_REQUIRED;
+  const completedChaptersCount = user?.completedChapters?.length || 0;
   const containerVariants = {
     hidden: { opacity: 0 },
     visible: { opacity: 1, transition: { staggerChildren: 0.1 } },
@@ -465,118 +586,64 @@ export function HomeTab({ onTabChange, isActive = true }: HomeTabProps) {
         animate="visible"
         className="space-y-4 pt-2"
       >
-        {(() => {
-          // --- CENTRALIZED MODULE SELECTION LOGIC ---
-          let activeModule = MODULES[0];
-          let isModuleCompleted = false;
-          for (const mod of MODULES) {
-            const modChallenges = challenges.filter(
-              (c) => c.moduleId === mod.id,
-            );
-            // Skip empty modules
-            if (modChallenges.length === 0) {
-              continue;
-            }
-            activeModule = mod;
-            const allDone = modChallenges.every((c) =>
-              completedMachineProblems.includes(c.id),
-            );
-            if (!allDone) {
-              isModuleCompleted = false;
-              break; // Found the current active module
-            } else {
-              isModuleCompleted = true; // This module is done, continue checking next
-            }
-          }
-          // If we went through all modules and the last one with content is also completed:
-          // activeModule is the last non-empty module, and isModuleCompleted is true.
-          const activeChallenges = challenges.filter(
-            (c) => c.moduleId === activeModule.id,
-          );
-          const firstId =
-            activeChallenges.length > 0 ? activeChallenges[0].id : "?";
-          const lastId =
-            activeChallenges.length > 0
-              ? activeChallenges[activeChallenges.length - 1].id
-              : "?";
-          const completedCount = activeChallenges.filter((c) =>
-            completedMachineProblems.includes(c.id),
-          ).length;
-          const totalCount = activeChallenges.length;
-          const percentage =
-            totalCount > 0 ? (completedCount / totalCount) * 100 : 0;
-          return (
-            <>
-              <div className="flex flex-col md:flex-row justify-between items-start md:items-end px-2 gap-2 md:gap-0">
-                <div className="w-full">
-                  <h2 className="text-lg md:text-2xl font-bold text-gray-900 dark:text-white flex items-center gap-2">
-                    <Code2 className="w-5 h-5 md:w-6 md:h-6 text-indigo-500" />
-                    <span className="flex flex-col md:flex-row md:items-center gap-1 md:gap-2 text-base md:text-xl font-bold">
-                      <span className="text-gray-900 dark:text-white truncate">
-                        Mod {activeModule.id}: {activeModule.title}
-                      </span>
-                      <span className="text-gray-500 text-xs md:text-base font-normal">
-                        ({firstId} - {lastId})
-                      </span>
-                    </span>
-                  </h2>
-                  {/* Progress Bar */}
-                  <div className="mt-2 md:mt-3 w-full md:max-w-lg min-w-[200px]">
-                    <div className="flex items-center gap-3">
-                      <div className="flex-1 h-1.5 md:h-2 bg-gray-200 dark:bg-gray-800 rounded-full overflow-hidden">
-                        <div
-                          className="h-full bg-blue-500 rounded-full transition-all duration-500"
-                          style={{ width: `${percentage}%` }}
-                        />
-                      </div>
-                      <span className="text-xs text-gray-500 font-mono font-bold">
-                        {Math.round(percentage)}%
-                      </span>
-                    </div>
-                  </div>
+        {isChallengesLocked ? (
+          // --- LOCKED STATE ---
+          <div className="relative rounded-[2rem] border-2 border-dashed border-orange-200 dark:border-orange-900/50 bg-white dark:bg-[#0B0B15] overflow-hidden">
+            <div className="absolute inset-0 bg-gradient-to-br from-orange-50/80 to-red-50/50 dark:from-orange-950/30 dark:to-red-950/20 pointer-events-none" />
+            <div className="relative p-8 md:p-12 flex flex-col items-center justify-center text-center gap-5">
+              <div className="w-16 h-16 rounded-full bg-orange-100 dark:bg-orange-900/30 flex items-center justify-center ring-4 ring-orange-50 dark:ring-orange-900/10">
+                <Lock className="w-8 h-8 text-orange-500" />
+              </div>
+              <div>
+                <h3 className="text-xl md:text-2xl font-black text-gray-900 dark:text-white mb-2">
+                  C#allenges Are Locked
+                </h3>
+                <p className="text-gray-500 dark:text-gray-400 max-w-sm mx-auto text-sm md:text-base">
+                  Complete{" "}
+                  <span className="font-bold text-orange-500">
+                    {CHAPTERS_REQUIRED} Adventure Chapters
+                  </span>{" "}
+                  to unlock Machine Problems.
+                </p>
+              </div>
+              {/* Progress bar */}
+              <div className="w-full max-w-xs">
+                <div className="flex justify-between text-xs font-bold mb-1.5">
+                  <span className="text-gray-500">Progress</span>
+                  <span className="text-orange-500">
+                    {completedChaptersCount} / {CHAPTERS_REQUIRED} chapters
+                  </span>
+                </div>
+                <div className="h-2 bg-gray-200 dark:bg-gray-800 rounded-full overflow-hidden">
+                  <div
+                    className="h-full bg-gradient-to-r from-orange-400 to-red-500 rounded-full transition-all duration-500"
+                    style={{
+                      width: `${Math.min(
+                        (completedChaptersCount / CHAPTERS_REQUIRED) * 100,
+                        100,
+                      )}%`,
+                    }}
+                  />
                 </div>
               </div>
-              <div className="bg-white dark:bg-[#050510] rounded-[1.5rem] md:rounded-[2rem] p-4 md:p-6 border border-gray-200 dark:border-gray-800 shadow-xl relative overflow-hidden transition-colors duration-300">
-                {/* Subtle Glow */}
-                <div className="absolute top-0 right-0 w-96 h-96 bg-indigo-50 dark:bg-indigo-900/10 rounded-full blur-[100px] -mr-32 -mt-32 pointer-events-none" />
-                <div className="relative z-10">
-                  {isModuleCompleted ? (
-                    <div className="text-center py-10 md:py-16">
-                      <div className="inline-flex p-3 md:p-4 rounded-full bg-green-100 dark:bg-green-900/30 text-green-600 dark:text-green-400 mb-4 md:mb-6 ring-4 ring-green-50 dark:ring-green-900/10">
-                        <CheckCircle2 className="w-8 h-8 md:w-12 md:h-12" />
-                      </div>
-                      <h3 className="text-2xl md:text-3xl font-black text-gray-900 dark:text-white mb-2 md:mb-3">
-                        Module Completed!
-                      </h3>
-                      <p className="text-gray-500 dark:text-gray-400 max-w-md mx-auto mb-6 md:mb-8 text-sm md:text-base">
-                        You have successfully finished all challenges in this
-                        module. Great job!
-                      </p>
-                      <Button
-                        onClick={() => navigate("/play/challenges")}
-                        className="h-10 md:h-12 px-6 md:px-8 rounded-xl font-bold bg-indigo-600 hover:bg-indigo-700 text-white shadow-lg active:scale-95 transition-all text-sm md:text-base"
-                      >
-                        Review Challenges
-                      </Button>
-                    </div>
-                  ) : challenges.length > 0 ? (
-                    <SelectionCarousel
-                      challenges={activeChallenges}
-                      onSelectChallenge={handleSelectChallenge}
-                      completedChallenges={completedMachineProblems}
-                    />
-                  ) : (
-                    <div className="text-center py-20 rounded-xl border border-dashed border-gray-300 dark:border-gray-700">
-                      <p className="text-gray-500 text-lg">
-                        No challenges found in the database.
-                      </p>
-                    </div>
-                  )}
-                </div>
-              </div>
-            </>
-          );
-        })()}
+              <button
+                onClick={() => navigate("/play/adventure")}
+                className="inline-flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-orange-500 to-red-600 text-white font-bold rounded-xl shadow-lg shadow-orange-500/20 hover:scale-105 active:scale-95 transition-all text-sm"
+              >
+                <Compass className="w-4 h-4" />
+                Go to C# Adventures
+                <ArrowRight className="w-4 h-4" />
+              </button>
+            </div>
+          </div>
+        ) : (
+          <UnlockedPracticeSection
+            challenges={challenges}
+            completedMachineProblems={completedMachineProblems}
+            handleSelectChallenge={handleSelectChallenge}
+            navigate={navigate}
+          />
+        )}
       </motion.div>
     </div>
   );

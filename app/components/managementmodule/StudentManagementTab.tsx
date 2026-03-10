@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { supabase } from "~/utils/supabase";
 import { Card, CardHeader, CardTitle, CardContent } from "~/components/ui/card";
 import { Button } from "~/components/ui/button";
@@ -357,10 +357,14 @@ export function StudentManagementTab() {
     setIsEditOpen(true);
   };
 
-  const filteredStudents = students.filter(
-    (s) =>
-      s.display_name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      s.student_id?.toLowerCase().includes(searchQuery.toLowerCase()),
+  const filteredStudents = useMemo(
+    () =>
+      students.filter(
+        (s) =>
+          s.display_name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+          s.student_id?.toLowerCase().includes(searchQuery.toLowerCase()),
+      ),
+    [students, searchQuery],
   );
 
   const pendingCount = requests.filter((r) => !r.is_approved).length;

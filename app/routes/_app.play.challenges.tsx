@@ -18,11 +18,14 @@ import {
   Wand2, // [NEW]
   Crown, // [NEW]
   PlayCircle, // [NEW]
+  ArrowRight, // [NEW]
+  Compass, // [NEW]
+  MapPin, // [NEW]
 } from "lucide-react";
 import { Button } from "~/components/ui/button";
 import { Badge } from "~/components/ui/badge";
 import { Progress } from "~/components/ui/progress";
-import { challenges } from "~/data/challenges"; // Import actual challenge data
+// challenges are now fetched from DB via ChallengeContext — no static import needed
 import { useAuth } from "~/contexts/AuthContext"; // Import Auth Context
 import {
   useChallengeContext,
@@ -38,18 +41,20 @@ const ModuleSection = ({
   isOpen,
   onToggle,
   isLocked,
-  id, // [NEW] Accept ID
+  id,
+  challenges, // [DB] received from parent
 }: {
   module: ModuleData;
   isOpen: boolean;
   onToggle: () => void;
   isLocked: boolean;
-  id?: string; // [NEW]
+  id?: string;
+  challenges: any[];
 }) => {
   // Filter challenges for this module
   const moduleChallenges = useMemo(
     () => challenges.filter((c) => c.moduleId === module.id),
-    [module.id],
+    [module.id, challenges],
   );
 
   const { completed } = useChallengeContext();
@@ -213,13 +218,17 @@ const StatusButton = ({
   );
 };
 
-const isModuleLocked = (moduleId: number, completedIds: string[]) => {
+const isModuleLocked = (
+  moduleId: number,
+  completedIds: string[],
+  challenges: any[],
+) => {
   if (moduleId === 0) return false;
 
   const prevModuleChallenges = challenges.filter(
     (c) => c.moduleId === moduleId - 1,
   );
-  if (prevModuleChallenges.length === 0) return true; // Modules lock if previous doesn't exist
+  if (prevModuleChallenges.length === 0) return true;
 
   const lastChallenge = prevModuleChallenges[prevModuleChallenges.length - 1];
   return !completedIds.includes(lastChallenge.id);
@@ -390,9 +399,11 @@ const ProfileWidget = ({ user }: { user: any }) => (
 const ProgressWidget = ({
   user,
   completed,
+  challenges,
 }: {
   user: any;
   completed: string[];
+  challenges: any[];
 }) => {
   // Machine Problems Progress
   const totalChallenges = challenges.length;
@@ -453,7 +464,7 @@ const ProgressWidget = ({
 };
 
 const BadgesWidget = ({ user }: { user: any }) => {
-  const { completed } = useChallengeContext();
+  const { completed, challenges } = useChallengeContext();
 
   // Define Badge Data with Titles
   const badges = [
@@ -564,13 +575,19 @@ const TOUR_STEPS: TourStep[] = [
   },
 ];
 
+const CHAPTERS_REQUIRED = 5;
+
 const ChallengesContent = () => {
   const { user } = useAuth();
-  const { completed } = useChallengeContext();
+  const { completed, challenges } = useChallengeContext();
+  const navigate = useNavigate();
   const [expandedModule, setExpandedModule] = useState<number | null>(1);
   const [searchParams, setSearchParams] = useSearchParams();
   const [showTour, setShowTour] = useState(false);
   const [isManual, setIsManual] = useState(false);
+
+  const completedChaptersCount = user?.completedChapters?.length || 0;
+  const isChallengesLocked = completedChaptersCount < CHAPTERS_REQUIRED;
 
   useEffect(() => {
     if (user) {
@@ -597,6 +614,73 @@ const ChallengesContent = () => {
   };
 
   if (!user) return null;
+
+  // --- LOCK GATE ---
+  if (isChallengesLocked) {
+    return (
+      <div className="min-h-screen bg-gray-50 dark:bg-[#0F172A] text-gray-900 dark:text-white font-sans flex items-center justify-center p-6">
+        <div className="max-w-md w-full text-center space-y-6">
+          {/* Icon */}
+          <div className="mx-auto w-20 h-20 rounded-full bg-orange-100 dark:bg-orange-900/30 flex items-center justify-center ring-4 ring-orange-50 dark:ring-orange-900/10">
+            <Lock className="w-10 h-10 text-orange-500" />
+          </div>
+          {/* Text */}
+          <div>
+            <h1 className="text-3xl font-black text-gray-900 dark:text-white mb-2">
+              C#allenges Locked
+            </h1>
+            <p className="text-gray-500 dark:text-gray-400">
+              Complete{" "}
+              <span className="font-bold text-orange-500">
+                {CHAPTERS_REQUIRED} Adventure Chapters
+              </span>{" "}
+              first to unlock Machine Problems.
+            </p>
+          </div>
+          {/* Progress */}
+          <div className="bg-white dark:bg-[#1E1E1E] border border-gray-200 dark:border-gray-800 rounded-2xl p-5 space-y-3">
+            <div className="flex justify-between text-sm font-bold">
+              <span className="text-gray-500">Adventure Progress</span>
+              <span className="text-orange-500">
+                {completedChaptersCount} / {CHAPTERS_REQUIRED} chapters
+              </span>
+            </div>
+            <div className="h-3 bg-gray-100 dark:bg-gray-800 rounded-full overflow-hidden">
+              <div
+                className="h-full bg-gradient-to-r from-orange-400 to-red-500 rounded-full transition-all duration-500"
+                style={{
+                  width: `${Math.min(
+                    (completedChaptersCount / CHAPTERS_REQUIRED) * 100,
+                    100,
+                  )}%`,
+                }}
+              />
+            </div>
+            <p className="text-xs text-gray-400">
+              {CHAPTERS_REQUIRED - completedChaptersCount} more chapter
+              {CHAPTERS_REQUIRED - completedChaptersCount !== 1 ? "s" : ""} to
+              go!
+            </p>
+          </div>
+          {/* CTA */}
+          <button
+            onClick={() => navigate("/play/adventure")}
+            className="w-full flex items-center justify-center gap-3 px-6 py-4 bg-gradient-to-r from-orange-500 to-red-600 text-white font-bold rounded-2xl shadow-lg shadow-orange-500/20 hover:scale-105 active:scale-95 transition-all text-base"
+          >
+            <Compass className="w-5 h-5" />
+            Go to C# Adventures
+            <ArrowRight className="w-5 h-5" />
+          </button>
+          <Link
+            to="/dashboard"
+            className="inline-flex items-center text-sm text-gray-400 hover:text-gray-600 transition-colors gap-1"
+          >
+            <ChevronDown className="rotate-90 w-4 h-4" /> Back to Dashboard
+          </Link>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-[#0F172A] text-gray-900 dark:text-white font-sans selection:bg-blue-500/30">
@@ -668,8 +752,9 @@ const ChallengesContent = () => {
                   module={module}
                   isOpen={expandedModule === module.id}
                   onToggle={() => toggleModule(module.id)}
-                  isLocked={isModuleLocked(module.id, completed)}
-                  id={idx === 0 ? "play-module-1" : undefined} // [NEW] ID for first module
+                  isLocked={isModuleLocked(module.id, completed, challenges)}
+                  challenges={challenges}
+                  id={idx === 0 ? "play-module-1" : undefined}
                 />
               ))}
               <div className="relative pl-12 pt-4">
@@ -689,7 +774,11 @@ const ChallengesContent = () => {
               {" "}
               {/* [NEW] ID for sidebar */}
               <ProfileWidget user={user} />
-              <ProgressWidget user={user} completed={completed} />
+              <ProgressWidget
+                user={user}
+                completed={completed}
+                challenges={challenges}
+              />
               <BadgesWidget user={user} />
             </div>
           </div>

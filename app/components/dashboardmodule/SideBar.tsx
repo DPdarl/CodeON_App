@@ -7,6 +7,8 @@ import {
   UserCog,
   Bug,
   HelpCircle,
+  Users,
+  MapPin,
 } from "lucide-react";
 import { useState, useRef, useEffect } from "react";
 import {
@@ -96,10 +98,10 @@ export function Sidebar({
 
     // Management Tabs (RBAC)
     {
-      id: "student-management",
-      label: "Students",
-      icon: TogaIcon,
-      roles: STAFF_ROLES,
+      id: "admin-management",
+      label: "Admins",
+      icon: AdminIcon,
+      roles: SUPER_ONLY,
     },
     {
       id: "instructor-management",
@@ -108,10 +110,22 @@ export function Sidebar({
       roles: ADMIN_ROLES,
     },
     {
-      id: "admin-management",
-      label: "Admins",
-      icon: AdminIcon,
-      roles: SUPER_ONLY,
+      id: "student-management",
+      label: "Students",
+      icon: TogaIcon,
+      roles: STAFF_ROLES,
+    },
+    {
+      id: "instructor-sections",
+      label: "Sections",
+      icon: Users,
+      roles: STAFF_ROLES,
+    },
+    {
+      id: "instructor-side-quests",
+      label: "Side Quests",
+      icon: MapPin,
+      roles: STAFF_ROLES,
     },
     {
       id: "user-reports",
