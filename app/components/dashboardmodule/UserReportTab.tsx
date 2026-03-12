@@ -12,10 +12,16 @@ import {
 } from "~/components/ui/select";
 import { Search, Download, Loader2, Filter } from "lucide-react";
 import { Badge } from "~/components/ui/badge";
-import { exportToCSV } from "~/utils/exportHelper"; // Import the helper
+import { exportToCSV } from "~/utils/exportHelper";
 import { toast } from "sonner";
 
 const SECTIONS = ["All Sections", "BSIS", "BSCS", "BSAIS", "ACT"];
+
+interface Classroom {
+  id: string;
+  name: string;
+  academic_year: string;
+}
 
 export function UserReportTab() {
   const [students, setStudents] = useState<any[]>([]);
@@ -23,9 +29,31 @@ export function UserReportTab() {
   const [searchQuery, setSearchQuery] = useState("");
   const [sectionFilter, setSectionFilter] = useState("All Sections");
 
+  // New filters
+  const [classrooms, setClassrooms] = useState<Classroom[]>([]);
+  const [classroomFilter, setClassroomFilter] = useState("all");
+  const [schoolYearFilter, setSchoolYearFilter] = useState("all");
+
+  // Derived: unique academic years from classrooms
+  const schoolYears = [
+    "all",
+    ...Array.from(new Set(classrooms.map((c) => c.academic_year).filter(Boolean))).sort().reverse(),
+  ];
+
   useEffect(() => {
+    fetchClassrooms();
     fetchStudentProgress();
   }, []);
+
+  const fetchClassrooms = async () => {
+    const { data, error } = await supabase
+      .from("classrooms")
+      .select("id, name, academic_year")
+      .order("name");
+    if (!error && data) {
+      setClassrooms(data as Classroom[]);
+    }
+  };
 
   const fetchStudentProgress = async () => {
     setLoading(true);
@@ -38,12 +66,20 @@ export function UserReportTab() {
     if (error) {
       toast.error("Failed to load reports");
     } else {
-      const TOTAL_ADVENTURE_CHAPTERS = 10; // CSHARP_LESSONS has 10 real chapters
+      // Fetch core lesson IDs to filter out side quests from completed_chapters
+      const { data: coreLessonsData } = await supabase
+        .from("lessons")
+        .select("id")
+        .eq("is_core_node", true);
+      const coreLessonIds = new Set(coreLessonsData?.map((l: any) => l.id) || []);
+
+      const TOTAL_ADVENTURE_CHAPTERS = 10;
 
       const enhancedData = data.map((s) => {
-        const completedCount = s.completed_chapters
-          ? s.completed_chapters.length
-          : 0;
+        const filteredChapters = (s.completed_chapters || []).filter((id: string) =>
+          coreLessonIds.size === 0 || coreLessonIds.has(id),
+        );
+        const completedCount = filteredChapters.length;
         const calculatedAdventureProgress = Math.min(
           100,
           Math.round((completedCount / TOTAL_ADVENTURE_CHAPTERS) * 100),
@@ -62,13 +98,19 @@ export function UserReportTab() {
     setLoading(false);
   };
 
+  // Classroom name helper (moved up so it can be used in handleExport)
+  const getClassroomName = (id: string | null | undefined) => {
+    if (!id) return "—";
+    return classrooms.find((c) => c.id === id)?.name ?? "—";
+  };
+
   const handleExport = () => {
-    // Prepare clean data for Excel
     const exportData = filteredStudents.map((s) => ({
       "Student ID": s.student_id,
       Name: s.display_name,
       Email: s.email || "",
       Section: s.section,
+      Classroom: getClassroomName(s.classroom_id),
       Level: Math.floor((s.xp || 0) / 1000) + 1,
       "Total XP": s.xp || 0,
       "Adventure Progress (%)": `${s.adventure_progress}%`,
@@ -76,22 +118,39 @@ export function UserReportTab() {
       "Challenge Stars": s.challenge_stars,
     }));
 
-    exportToCSV(
-      exportData,
-      `Student_Report_${sectionFilter.replace(" ", "_")}`,
-    );
+    const classroomLabel =
+      classroomFilter === "all"
+        ? "All_Classrooms"
+        : (classrooms.find((c) => c.id === classroomFilter)?.name ?? classroomFilter).replace(/\s+/g, "_");
+
+    const yearLabel = schoolYearFilter === "all" ? "All_Years" : schoolYearFilter.replace(/\s+/g, "_");
+
+    exportToCSV(exportData, `Student_Report_${classroomLabel}_${yearLabel}`);
     toast.success("Report downloaded successfully");
   };
 
-  // Filter Logic
+  // ─── Filter Logic ────────────────────────────────────────────────────────────
   const filteredStudents = students.filter((s) => {
     const matchesSearch =
       s.display_name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
       s.student_id?.toLowerCase().includes(searchQuery.toLowerCase());
+
     const matchesSection =
       sectionFilter === "All Sections" || s.section === sectionFilter;
-    return matchesSearch && matchesSection;
+
+    const matchesClassroom =
+      classroomFilter === "all" || s.classroom_id === classroomFilter;
+
+    // Match school year via the classroom's academic_year
+    const studentClassroom = classrooms.find((c) => c.id === s.classroom_id);
+    const matchesSchoolYear =
+      schoolYearFilter === "all" ||
+      (studentClassroom?.academic_year === schoolYearFilter);
+
+    return matchesSearch && matchesSection && matchesClassroom && matchesSchoolYear;
   });
+
+
 
   return (
     <Card className="border-gray-200 dark:border-gray-800">
@@ -110,8 +169,9 @@ export function UserReportTab() {
         </div>
 
         {/* Filters Toolbar */}
-        <div className="flex flex-col md:flex-row gap-4 mt-4">
-          <div className="relative flex-1">
+        <div className="flex flex-col md:flex-row gap-3 mt-4 flex-wrap">
+          {/* Search */}
+          <div className="relative flex-1 min-w-[200px]">
             <Search className="absolute left-2 top-2.5 h-4 w-4 text-gray-400" />
             <Input
               placeholder="Search student name or ID..."
@@ -120,11 +180,31 @@ export function UserReportTab() {
               onChange={(e) => setSearchQuery(e.target.value)}
             />
           </div>
-          <div className="w-full md:w-48">
+
+          {/* Classroom Filter */}
+          <div className="w-full md:w-52">
+            <Select value={classroomFilter} onValueChange={setClassroomFilter}>
+              <SelectTrigger>
+                <Filter className="w-4 h-4 mr-2 text-gray-400" />
+                <SelectValue placeholder="All Classrooms" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Classrooms</SelectItem>
+                {classrooms.map((cls) => (
+                  <SelectItem key={cls.id} value={cls.id}>
+                    {cls.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          {/* Section Filter */}
+          <div className="w-full md:w-44">
             <Select value={sectionFilter} onValueChange={setSectionFilter}>
               <SelectTrigger>
                 <Filter className="w-4 h-4 mr-2 text-gray-400" />
-                <SelectValue placeholder="Filter Section" />
+                <SelectValue placeholder="All Sections" />
               </SelectTrigger>
               <SelectContent>
                 {SECTIONS.map((s) => (
@@ -135,7 +215,64 @@ export function UserReportTab() {
               </SelectContent>
             </Select>
           </div>
+
+          {/* School Year Filter */}
+          <div className="w-full md:w-44">
+            <Select value={schoolYearFilter} onValueChange={setSchoolYearFilter}>
+              <SelectTrigger>
+                <Filter className="w-4 h-4 mr-2 text-gray-400" />
+                <SelectValue placeholder="All School Years" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All School Years</SelectItem>
+                {schoolYears.slice(1).map((year) => (
+                  <SelectItem key={year} value={year}>
+                    {year}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
         </div>
+
+        {/* Active filter summary badge */}
+        {(classroomFilter !== "all" || sectionFilter !== "All Sections" || schoolYearFilter !== "all") && (
+          <div className="flex flex-wrap gap-2 mt-2">
+            {classroomFilter !== "all" && (
+              <Badge variant="secondary" className="gap-1">
+                Classroom: {getClassroomName(classroomFilter)}
+                <button
+                  className="ml-1 text-gray-400 hover:text-gray-600"
+                  onClick={() => setClassroomFilter("all")}
+                >
+                  ×
+                </button>
+              </Badge>
+            )}
+            {sectionFilter !== "All Sections" && (
+              <Badge variant="secondary" className="gap-1">
+                Section: {sectionFilter}
+                <button
+                  className="ml-1 text-gray-400 hover:text-gray-600"
+                  onClick={() => setSectionFilter("All Sections")}
+                >
+                  ×
+                </button>
+              </Badge>
+            )}
+            {schoolYearFilter !== "all" && (
+              <Badge variant="secondary" className="gap-1">
+                Year: {schoolYearFilter}
+                <button
+                  className="ml-1 text-gray-400 hover:text-gray-600"
+                  onClick={() => setSchoolYearFilter("all")}
+                >
+                  ×
+                </button>
+              </Badge>
+            )}
+          </div>
+        )}
       </CardHeader>
 
       <CardContent>
@@ -147,6 +284,7 @@ export function UserReportTab() {
                 <tr>
                   <th className="p-3">Student</th>
                   <th className="p-3">Email</th>
+                  <th className="p-3">Classroom</th>
                   <th className="p-3">Level / XP</th>
                   <th className="p-3">Adventure</th>
                   <th className="p-3">Multiplayer</th>
@@ -156,13 +294,13 @@ export function UserReportTab() {
               <tbody className="divide-y divide-gray-200 dark:divide-gray-800 bg-white dark:bg-gray-900">
                 {loading ? (
                   <tr>
-                    <td colSpan={6} className="p-8 text-center">
+                    <td colSpan={7} className="p-8 text-center">
                       <Loader2 className="animate-spin mx-auto" />
                     </td>
                   </tr>
                 ) : filteredStudents.length === 0 ? (
                   <tr>
-                    <td colSpan={6} className="p-8 text-center text-gray-500">
+                    <td colSpan={7} className="p-8 text-center text-gray-500">
                       No records found.
                     </td>
                   </tr>
@@ -183,6 +321,11 @@ export function UserReportTab() {
                       <td className="p-3">
                         <div className="text-xs font-mono text-gray-500 dark:text-gray-400">
                           {s.email || "—"}
+                        </div>
+                      </td>
+                      <td className="p-3">
+                        <div className="text-xs text-gray-500 dark:text-gray-400">
+                          {getClassroomName(s.classroom_id)}
                         </div>
                       </td>
                       <td className="p-3">
@@ -251,6 +394,9 @@ export function UserReportTab() {
                     </h3>
                     <div className="text-xs text-gray-500 mt-1">
                       {s.student_id} • {s.section}
+                    </div>
+                    <div className="text-xs text-gray-400 mt-0.5">
+                      {getClassroomName(s.classroom_id)}
                     </div>
                     <div className="text-xs font-mono text-gray-400 mt-0.5 truncate">
                       {s.email || ""}

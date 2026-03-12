@@ -68,5 +68,33 @@ export function useGameSound() {
     }
   }, []);
 
-  return { playSound, stopSound };
+  const playCustomSound = useCallback((src: string) => {
+    if (!audioCache[src]) {
+      const audio = new Audio(src);
+      audio.preload = "auto";
+      audio.volume = actualVolume;
+      audioCache[src] = audio;
+    }
+    const audio = audioCache[src];
+    if (audio) {
+      audio.currentTime = 0;
+      audio.volume = actualVolume;
+      const playPromise = audio.play();
+      if (playPromise !== undefined) {
+        playPromise.catch((error) => {
+          console.warn("Audio playback prevented:", error);
+        });
+      }
+    }
+  }, [actualVolume]);
+
+  const stopCustomSound = useCallback((src: string) => {
+    const audio = audioCache[src];
+    if (audio) {
+      audio.pause();
+      audio.currentTime = 0;
+    }
+  }, []);
+
+  return { playSound, stopSound, playCustomSound, stopCustomSound };
 }

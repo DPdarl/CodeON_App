@@ -1,7 +1,7 @@
 // app/components/dashboardmodule/PlayTab.tsx
 import { useNavigate, useSearchParams } from "@remix-run/react";
 import { motion } from "framer-motion";
-import { Users, Code2, ArrowRight, Lock } from "lucide-react";
+import { Users, Code2, ArrowRight, Lock, School } from "lucide-react";
 import { useState, useEffect } from "react"; // ADDED
 import { Card, CardContent, CardHeader, CardTitle } from "~/components/ui/card";
 import { Button } from "~/components/ui/button";
@@ -39,7 +39,9 @@ export function PlayTab() {
   useEffect(() => {
     if (user && !loading) {
       const isManualTrigger = searchParams.get("tour") === "true";
-      const hasSeenTour = user?.settings?.tutorials?.playTab;
+      const hasSeenTour =
+        user?.claimedTutorials?.includes("playTab") ||
+        user?.settings?.tutorials?.playTab;
 
       if (isManualTrigger) {
         setShowTour(true);
@@ -67,9 +69,9 @@ export function PlayTab() {
         "Master C# concepts step-by-step through interactive lessons and mini-games. This is where you will do most of your learning.",
     },
     {
-      target: "mode-multiplayer",
-      title: "Multiplayer ",
-      content: "(Coming Soon. Need a paid API to work)",
+      target: "mode-classroom",
+      title: "Classroom",
+      content: "Complete bonus special quests crafted by your instructor specifically for your class.",
     },
     {
       target: "mode-challenges",
@@ -101,16 +103,16 @@ export function PlayTab() {
       minLevel: 1,
     },
     {
-      id: "multiplayer",
-      title: "Multiplayer ",
+      id: "classroom",
+      title: "Special Quest",
       description:
-        "Compete with peers in real-time coding battles. Prove your speed and accuracy.",
-      icon: Users,
+        "Complete special quests designed by your instructor and earn extra XP.",
+      icon: School,
       color: "text-indigo-500",
       bgColor: "bg-indigo-500/10",
       borderColor: "hover:border-indigo-500/50",
-      route: "/play/multiplayer",
-      minLevel: 5,
+      route: "/play/classroom",
+      minLevel: 1,
     },
     {
       id: "challenges",
@@ -169,9 +171,7 @@ export function PlayTab() {
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         {gameModes.map((mode, index) => {
           const isLocked =
-            mode.id === "multiplayer"
-              ? true
-              : mode.id === "challenges"
+            mode.id === "challenges"
               ? isChallengesLocked
               : currentLevel < mode.minLevel;
 

@@ -117,14 +117,8 @@ export function Sidebar({
     },
     {
       id: "instructor-sections",
-      label: "Sections",
+      label: "Classrooms",
       icon: Users,
-      roles: STAFF_ROLES,
-    },
-    {
-      id: "instructor-side-quests",
-      label: "Side Quests",
-      icon: MapPin,
       roles: STAFF_ROLES,
     },
     {

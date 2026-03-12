@@ -157,7 +157,9 @@ export function QuestTab() {
       // 1. Check URL param (Manual Trigger from How-To page)
       const isManualTrigger = searchParams.get("tour") === "true";
       // 2. Check Settings (Auto Trigger)
-      const hasSeenTour = user.settings?.tutorials?.questTab;
+      const hasSeenTour =
+        user?.claimedTutorials?.includes("questTab") ||
+        user.settings?.tutorials?.questTab;
 
       if (isManualTrigger) {
         setShowTour(true);

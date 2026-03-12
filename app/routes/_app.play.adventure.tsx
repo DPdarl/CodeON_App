@@ -70,6 +70,7 @@ import {
 import { AdventureResults } from "~/components/dashboardmodule/AdventureResults";
 import { AdventureCompletedCelebration } from "~/components/dashboardmodule/AdventureCompletedCelebration"; // ✅ NEW COMPONENT
 import { AdventureSkeleton } from "~/components/dashboardmodule/AdventureSkeleton"; // ✅ NEW COMPONENT
+import { ArticleSkeleton } from "~/components/dashboardmodule/ArticleSkeleton"; // ✅ NEW COMPONENT
 import {
   CHAPTER_VISUALS,
   CHAPTER_0_VISUAL,
@@ -1245,7 +1246,18 @@ function FullScreenLesson({
               <div className="w-full max-w-2xl mx-auto p-4 sm:p-6 pb-32 sm:pb-40 overflow-y-auto h-full flex flex-col justify-center custom-scrollbar">
                 {!isFinished ? (
                   <>
-                    {currentActivity ? (
+                    {chapter.activities && chapter.activities.length === 0 ? (
+                      <div className="text-center space-y-6 py-12">
+                        <BookOpen className="w-16 h-16 mx-auto text-muted-foreground/30" />
+                        <h2 className="text-3xl font-black text-foreground">No Activities Found</h2>
+                        <p className="text-muted-foreground max-w-sm mx-auto">
+                          It looks like the instructor hasn't added any interactive activities to this quest yet. Check back later!
+                        </p>
+                        <Button onClick={handleCloseAttempt} size="lg" variant="outline" className="mt-8 border-2 font-bold">
+                          Return to Map
+                        </Button>
+                      </div>
+                    ) : currentActivity ? (
                       <div
                         className="space-y-8"
                         key={currentActivityIndex}
@@ -1435,6 +1447,9 @@ export default function AdventurePage() {
   const [loading, setLoading] = useState(true);
   const [selectedChapter, setSelectedChapter] = useState<any>(null);
   const [maxCompletedOrder, setMaxCompletedOrder] = useState(0);
+  // Track if we entered via a URL param (from the classroom page), so we can
+  // navigate back there after completing/closing a special quest.
+  const [returnToClassroom, setReturnToClassroom] = useState(false);
 
   const { playSound } = useGameSound();
   const [showNoHeartsModal, setShowNoHeartsModal] = useState(false);
@@ -1472,7 +1487,9 @@ export default function AdventurePage() {
   useEffect(() => {
     if (user && !loading && lessons.length > 0) {
       const isManualTrigger = searchParams.get("tour") === "true";
-      const hasSeenTour = user.settings?.tutorials?.adventureTab;
+      const hasSeenTour =
+        user?.claimedTutorials?.includes("adventureTab") ||
+        user.settings?.tutorials?.adventureTab;
 
       if (isManualTrigger) {
         setShowMainTour(true);
@@ -1663,19 +1680,8 @@ export default function AdventurePage() {
       setMaxCompletedOrder(maxOrder);
 
       // --- BUILD SIDE QUEST MAP (parent_lesson_id → side quest list) ---
-      const newSideQuestMap: Record<string, any[]> = {};
-      dbSideQuests.forEach((sq) => {
-        const pid = sq.parent_lesson_id;
-        if (!pid) return;
-        if (!newSideQuestMap[pid]) newSideQuestMap[pid] = [];
-        newSideQuestMap[pid].push({
-          ...sq,
-          activities: activitiesMap[sq.id] || [],
-          isSideQuest: true,
-          isCompleted: completedChaptersArray.includes(sq.id),
-        });
-      });
-      setSideQuestMap(newSideQuestMap);
+      // User requested Side Quests appear only in the Classroom tab, so we hide them from the map.
+      setSideQuestMap({});
 
       if (userStats) {
         setStats({
@@ -1733,6 +1739,7 @@ export default function AdventurePage() {
 
       // --- BUILD CHAPTER 0 TUTORIAL NODE ---
       const isChapter0Done =
+        user?.claimedTutorials?.includes("adventureChapter0") ||
         user.settings?.tutorials?.adventureChapter0 === true;
       const chapter0 = {
         ...CHAPTER_0_VISUAL,
@@ -1744,6 +1751,34 @@ export default function AdventurePage() {
 
       // Prepend Chapter 0 so it always renders first
       setLessons([chapter0, ...mergedLessons]);
+
+      // --- AUTO START LESSON IF lessonId IS IN URL ---
+      // Only auto-start on the FIRST load (i.e. when the URL still has the param).
+      // We clear the param immediately so that subsequent calls to loadAdventureProgress
+      // (e.g. after the lesson completes) do NOT re-open the quest.
+      if (typeof window !== "undefined") {
+        const urlParams = new URLSearchParams(window.location.search);
+        const targetLessonId = urlParams.get("lessonId");
+        if (targetLessonId) {
+          // Clear the param from the URL without a full page reload
+          urlParams.delete("lessonId");
+          const newSearch = urlParams.toString();
+          const newUrl = newSearch ? `${window.location.pathname}?${newSearch}` : window.location.pathname;
+          window.history.replaceState({}, "", newUrl);
+
+          const found = allDbLessons.find((l: any) => l.id === targetLessonId);
+          if (found) {
+            const processedFound = {
+              ...found,
+              activities: activitiesMap[found.id] || [],
+              isSideQuest: found.is_core_node === false,
+            };
+            setSelectedChapter(processedFound);
+            // Remember that we came from the classroom page
+            setReturnToClassroom(true);
+          }
+        }
+      }
     } catch (err) {
       console.error("Failed to load adventure progress:", err);
     } finally {
@@ -2043,6 +2078,9 @@ export default function AdventurePage() {
         return;
       }
 
+      // Capture whether we should return to the classroom page BEFORE closing the chapter
+      const wasFromClassroom = returnToClassroom && selectedChapter.isSideQuest;
+
       // 1. Capture Data & CLOSE MODAL IMMEDIATELY
       // We close the modal first to prevent "Article View" glitch and make it snappy.
       const chapter = selectedChapter;
@@ -2084,8 +2122,10 @@ export default function AdventurePage() {
       // ----------------------
 
       // 3. Record to Match History
+      // 3. Record to Match History
+      const modePrefix = chapter.isSideQuest ? "Special Quest" : "Adventure";
       await supabase.from("match_history").insert({
-        mode: `Adventure: ${chapter.title}`,
+        mode: `${modePrefix}: ${chapter.title}`,
         played_at: new Date().toISOString(),
         winner_name: user.displayName || "Player",
         participants_count: 1,
@@ -2101,6 +2141,18 @@ export default function AdventurePage() {
           },
         ],
       });
+
+      // 4. Update Course/Quest specific progress tracking
+      // We upsert into user_lesson_progress so the instructor can see detailed stats
+      await supabase.from("user_lesson_progress").upsert({
+        user_id: user.uid,
+        lesson_id: chapter.id,
+        status: "completed",
+        completion_time: timeTaken,
+        wrong_count: mistakesSet.size,
+        total_questions: totalQuestions,
+        created_at: new Date().toISOString(),
+      }, { onConflict: "user_id,lesson_id" });
 
       await recordChapterCompletion(coinsEarned, chapter.id, timeTaken);
 
@@ -2136,20 +2188,17 @@ export default function AdventurePage() {
           .eq("id", user.uid);
       }
 
-      await supabase.from("user_lesson_progress").upsert(
-        {
-          user_id: user.uid,
-          lesson_id: chapter.id,
-          status: "completed",
-          completed_at: new Date().toISOString(),
-          completion_time: timeTaken,
-        },
-        { onConflict: "user_id, lesson_id" },
-      );
 
       // Finally refresh stats in background
       await loadAdventureProgress();
       refreshUser();
+
+      // If the student launched this special quest from the classroom page,
+      // send them back there after completion.
+      if (wasFromClassroom) {
+        setReturnToClassroom(false);
+        navigate("/play/classroom");
+      }
     } catch (err: any) {
       console.error("[Adventure] Critical Error:", err);
       alert(
@@ -2158,7 +2207,12 @@ export default function AdventurePage() {
     }
   };
 
-  if (loading) return <AdventureSkeleton />;
+  if (loading) {
+    if (searchParams.get("lessonId")) {
+      return <ArticleSkeleton />;
+    }
+    return <AdventureSkeleton />;
+  }
 
   const MAIN_TOUR_STEPS: TourStep[] = [
     {
@@ -2564,7 +2618,14 @@ export default function AdventurePage() {
         {selectedChapter && (
           <FullScreenLesson
             chapter={selectedChapter}
-            onClose={() => setSelectedChapter(null)}
+            onClose={() => {
+              setSelectedChapter(null);
+              // If this special quest was opened from the classroom page, go back there
+              if (returnToClassroom && selectedChapter?.isSideQuest) {
+                setReturnToClassroom(false);
+                navigate("/play/classroom");
+              }
+            }}
             onComplete={handleChapterComplete}
             inventory={inventory}
             onUseHint={handleConsumeHint}

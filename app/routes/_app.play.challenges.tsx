@@ -592,7 +592,9 @@ const ChallengesContent = () => {
   useEffect(() => {
     if (user) {
       const isManualTrigger = searchParams.get("tour") === "true";
-      const hasSeenTour = user?.settings?.tutorials?.challengesTab;
+      const hasSeenTour =
+        user?.claimedTutorials?.includes("challengesTab") ||
+        user?.settings?.tutorials?.challengesTab;
 
       if (isManualTrigger) {
         setShowTour(true);

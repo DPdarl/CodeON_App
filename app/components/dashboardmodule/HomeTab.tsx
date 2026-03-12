@@ -176,24 +176,28 @@ export function HomeTab({ onTabChange, isActive = true }: HomeTabProps) {
         title: "Your Dashboard",
         content:
           "This is your main work area! All your coding challenges, stats, and adventures appear right here.",
+        tour_voice: "/sounds/tour_voices/onboarding-step1.mp3",
       },
       {
         target: isMobile ? "mobile-header" : "dashboard-header",
         title: "Top Bar",
         content:
           "Keep track of your Level, Streak, Coins, and Hearts here. You can also access your Profile from the right.",
+        tour_voice: "/sounds/tour_voices/onboarding-step2.mp3",
       },
       {
         target: isMobile ? "mobile-nav" : "sidebar-nav",
         title: "Navigation Menu",
         content:
           "Use this menu to seamlessly switch between Play, Leaderboard, Quests, and the Store.",
+        tour_voice: "/sounds/tour_voices/onboarding-step3.mp3",
       },
       {
         target: "tour-welcome",
         title: "Welcome Overview",
         content:
           "Get a quick glimpse of your current league and hop straight into your profile to review your progress.",
+        tour_voice: "/sounds/tour_voices/onboarding-step4.mp3",
       },
       {
         target: "tour-stats",
@@ -201,6 +205,7 @@ export function HomeTab({ onTabChange, isActive = true }: HomeTabProps) {
         content:
           "Track your completed chapters, challenges, trophies, and current league standing all in one place.",
         position: "top",
+        tour_voice: "/sounds/tour_voices/onboarding-step5.mp3",
       },
       {
         target: "tour-adventure",
@@ -208,18 +213,21 @@ export function HomeTab({ onTabChange, isActive = true }: HomeTabProps) {
         content:
           "Jump right back into your coding journey. Master concepts step-by-step through interactive lessons.",
         position: "top",
+        tour_voice: "/sounds/tour_voices/onboarding-step6.mp3",
       },
       {
         target: "tour-practice",
         title: "Machine Problems",
         content:
           "Want to hone specific skills? Select a module and tackle individual challenges at your own pace.",
+        tour_voice: "/sounds/tour_voices/onboarding-step7.mp3",
       },
       {
         target: isMobile ? "mobile-nav-more" : "nav-item-more",
         title: "Need Help?",
         content:
           "Click 'More' (or Menu) to find the 'How to?' page. It has interactive tours for every feature!",
+        tour_voice: "/sounds/tour_voices/onboarding-step8.mp3",
       },
     ],
     [isMobile],
@@ -232,7 +240,9 @@ export function HomeTab({ onTabChange, isActive = true }: HomeTabProps) {
       // VARIANT B: The tour only shows and forces completion if the user is NOT onboarded yet.
       const needsOnboarding = user.isOnboarded === false;
       // 2. Check Settings (Auto Trigger)
-      const hasSeenTour = user.settings?.tutorials?.homeTab;
+      const hasSeenTour =
+        user?.claimedTutorials?.includes("homeTab") ||
+        user.settings?.tutorials?.homeTab;
 
       if (isManualTrigger) {
         setShowTour(true);

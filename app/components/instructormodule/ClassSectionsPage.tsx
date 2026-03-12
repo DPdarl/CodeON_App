@@ -44,6 +44,9 @@ import {
   Lock,
   Unlock,
   KeyRound,
+  Download,
+  Clock,
+  Target,
 } from "lucide-react";
 
 // ─── TYPES ───────────────────────────────────────────────────────────────────
@@ -54,6 +57,7 @@ interface Classroom {
   join_code: string;
   is_locked: boolean;
   instructor_id: string;
+  instructor_name?: string;
   created_at: string;
   student_count?: number;
 }
@@ -104,12 +108,18 @@ export function ClassSectionsPage() {
 
   // Roster sheet
   const [isRosterOpen, setIsRosterOpen] = useState(false);
-  const [rosterClassroom, setRosterClassroom] = useState<Classroom | null>(
-    null,
-  );
+  const [rosterClassroom, setRosterClassroom] = useState<Classroom | null>(null);
   const [rosterStudents, setRosterStudents] = useState<SectionStudent[]>([]);
   const [isRosterLoading, setIsRosterLoading] = useState(false);
   const [rosterSearch, setRosterSearch] = useState("");
+  const [isExporting, setIsExporting] = useState(false);
+  const [isKicking, setIsKicking] = useState<string | null>(null);
+  // Quest History tab
+  const [rosterTab, setRosterTab] = useState<"students" | "history">("students");
+  const [questHistory, setQuestHistory] = useState<any[]>([]);
+  const [questList, setQuestList] = useState<{id: string; title: string}[]>([]);
+  const [selectedQuestFilter, setSelectedQuestFilter] = useState<string>("all");
+  const [isHistoryLoading, setIsHistoryLoading] = useState(false);
 
   useEffect(() => {
     if (user && !isAllowed) navigate("/dashboard");
@@ -120,28 +130,53 @@ export function ClassSectionsPage() {
     setIsLoading(true);
     const { data, error } = await supabase
       .from("classrooms")
-      .select("*")
+      .select("id, name, academic_year, join_code, is_locked, instructor_id, created_at")
       .order("created_at", { ascending: false });
 
     if (error) {
       toast.error("Failed to load classrooms.");
-    } else if (data) {
-      // Count enrolled students per classroom via classroom_id FK
-      const { data: students } = await supabase
+      setIsLoading(false);
+      return;
+    }
+
+    if (!data || data.length === 0) {
+      setClassrooms([]);
+      setIsLoading(false);
+      return;
+    }
+
+    // Parallelize: student counts + instructor names at the same time
+    const instructorIds = [...new Set(data.map((c) => c.instructor_id).filter(Boolean))];
+    const [studentsResult, instructorsResult] = await Promise.all([
+      supabase
         .from("users")
         .select("classroom_id")
-        .eq("role", "user");
+        .eq("role", "user")
+        .not("classroom_id", "is", null),
+      instructorIds.length > 0
+        ? supabase
+            .from("users")
+            .select("id, display_name")
+            .in("id", instructorIds)
+        : Promise.resolve({ data: [] as { id: string; display_name: string }[] }),
+    ]);
 
-      const countMap: Record<string, number> = {};
-      (students ?? []).forEach((s) => {
-        if (s.classroom_id)
-          countMap[s.classroom_id] = (countMap[s.classroom_id] ?? 0) + 1;
-      });
+    const countMap: Record<string, number> = {};
+    (studentsResult.data ?? []).forEach((s) => {
+      if (s.classroom_id)
+        countMap[s.classroom_id] = (countMap[s.classroom_id] ?? 0) + 1;
+    });
 
-      setClassrooms(
-        data.map((c) => ({ ...c, student_count: countMap[c.id] ?? 0 })),
-      );
-    }
+    const nameMap: Record<string, string> = {};
+    (instructorsResult.data ?? []).forEach((u: any) => { nameMap[u.id] = u.display_name; });
+
+    setClassrooms(
+      data.map((c) => ({
+        ...c,
+        student_count: countMap[c.id] ?? 0,
+        instructor_name: nameMap[c.instructor_id] ?? "—",
+      })),
+    );
     setIsLoading(false);
   };
 
@@ -253,8 +288,20 @@ export function ClassSectionsPage() {
     setRosterClassroom(classroom);
     setRosterStudents([]);
     setRosterSearch("");
+    setRosterTab("students");
+    setQuestHistory([]);
+    setQuestList([]);
+    setSelectedQuestFilter("all");
     setIsRosterOpen(true);
     setIsRosterLoading(true);
+    setIsKicking(null);
+
+    const { data: coreLessonsData } = await supabase
+      .from("lessons")
+      .select("id")
+      .eq("is_core_node", true);
+    const coreLessonIds = new Set(coreLessonsData?.map(l => l.id) || []);
+
     const { data, error } = await supabase
       .from("users")
       .select("id, display_name, student_id, email, xp, completed_chapters")
@@ -262,10 +309,147 @@ export function ClassSectionsPage() {
       .eq("classroom_id", classroom.id)
       .order("display_name", { ascending: true });
 
-    if (error) toast.error("Failed to load students.");
-    else setRosterStudents(data ?? []);
+    if (error) {
+      toast.error("Failed to load students.");
+    } else {
+      const filteredData = (data ?? []).map(student => ({
+        ...student,
+        completed_chapters: (student.completed_chapters || []).filter((id: string) => 
+          coreLessonIds.size === 0 || coreLessonIds.has(id)
+        ),
+      }));
+      setRosterStudents(filteredData);
+    }
     setIsRosterLoading(false);
   };
+
+  const handleKickStudent = async (studentId: string) => {
+    if (!rosterClassroom) return;
+    setIsKicking(studentId);
+    const { error } = await supabase
+      .from("users")
+      .update({ classroom_id: null })
+      .eq("id", studentId);
+    if (error) {
+      toast.error("Failed to remove student.");
+    } else {
+      toast.success("Student removed from classroom.");
+      setRosterStudents((prev) => prev.filter((s) => s.id !== studentId));
+      setClassrooms((prev) => prev.map((c) =>
+        c.id === rosterClassroom.id
+          ? { ...c, student_count: (c.student_count ?? 1) - 1 }
+          : c
+      ));
+    }
+    setIsKicking(null);
+  };
+
+  const fetchQuestHistory = async () => {
+    if (!rosterClassroom) return;
+    setIsHistoryLoading(true);
+    try {
+      // 1. Fetch side quests for this classroom
+      const { data: quests } = await supabase
+        .from("lessons")
+        .select("id, title, allow_retake")
+        .eq("is_core_node", false)
+        .eq("classroom_id", rosterClassroom.id);
+
+      setQuestList(quests || []);
+      const questTitles = (quests || []).map((q) => q.title);
+      const studentIds = rosterStudents.map((s) => s.id);
+
+      let matchRecords: any[] = [];
+      if (questTitles.length > 0 && studentIds.length > 0) {
+        // 2. Fetch match_history
+        const { data: matches } = await supabase
+          .from("match_history")
+          .select("*")
+          .in("user_id", studentIds)
+          .like("mode", "Special Quest:%");
+          
+        matchRecords = matches || [];
+      }
+
+      const rows: any[] = [];
+      rosterStudents.forEach((student) => {
+        (quests || []).forEach((quest: any) => {
+          // Find the best/latest match for this student and quest
+          const studentMatches = matchRecords.filter(
+            (m) => m.user_id === student.id && m.mode === `Special Quest: ${quest.title}`
+          );
+          
+          // Use the most recent match if there are multiple (or you can adjust logic to pick highest score)
+          studentMatches.sort((a, b) => new Date(b.played_at).getTime() - new Date(a.played_at).getTime());
+          const bestMatch = studentMatches[0];
+          
+          let accuracy = null;
+          if (bestMatch?.results && bestMatch.results.length > 0) {
+            const accStr = bestMatch.results[0]?.accuracy;
+            if (accStr && accStr.includes("%")) {
+                accuracy = parseInt(accStr.replace("%", ""));
+            }
+          }
+
+          const timeSec = bestMatch?.duration_seconds ?? null;
+          const runtimeLabel = timeSec != null
+            ? timeSec >= 60
+              ? `${Math.floor(timeSec / 60)}m ${timeSec % 60}s`
+              : `${timeSec}s`
+            : null;
+            
+          rows.push({
+            studentId: student.student_id,
+            studentName: student.display_name,
+            email: student.email,
+            questId: quest.id,
+            questTitle: quest.title,
+            retakePolicy: quest.allow_retake || "once",
+            status: bestMatch ? "Completed" : "Not Started",
+            timeSec,
+            runtimeLabel,
+            accuracy,
+            completedAt: bestMatch?.played_at ? new Date(bestMatch.played_at).toLocaleDateString() : "",
+          });
+        });
+      });
+      setQuestHistory(rows);
+    } catch (err) {
+      toast.error("Failed to load quest history.");
+    } finally {
+      setIsHistoryLoading(false);
+    }
+  };
+
+  const exportSideQuestHistory = async () => {
+    if (!rosterClassroom) return;
+    setIsExporting(true);
+    try {
+      const filteredRows = selectedQuestFilter === "all"
+        ? questHistory
+        : questHistory.filter((r) => r.questId === selectedQuestFilter);
+
+      let csvContent = "data:text/csv;charset=utf-8,";
+      csvContent += "Student ID,Student Name,Email,Special Quest Title,Retake Policy,Status,Runtime,Accuracy (%),Completed At\n";
+      filteredRows.forEach((row) => {
+        csvContent += `${row.studentId},${row.studentName},${row.email},${row.questTitle.replace(/,/g, "")},${row.retakePolicy},${row.status},${row.runtimeLabel ?? "—"},${row.accuracy != null ? row.accuracy + "%" : "—"},${row.completedAt}\n`;
+      });
+
+      const encodedUri = encodeURI(csvContent);
+      const link = document.createElement("a");
+      link.setAttribute("href", encodedUri);
+      link.setAttribute("download", `SpecialQuestHistory_${rosterClassroom.name.replace(/\s+/g, '_')}.csv`);
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      toast.success("Export downloaded!");
+    } catch (err: any) {
+      toast.error("Failed to export.");
+    } finally {
+      setIsExporting(false);
+    }
+  };
+
 
   const openCreate = () => {
     setForm({ ...emptyForm, join_code: generateJoinCode() });
@@ -418,6 +602,7 @@ export function ClassSectionsPage() {
               <thead className="bg-muted/50 text-muted-foreground border-b text-xs uppercase tracking-wide">
                 <tr>
                   <th className="px-5 py-3">Classroom</th>
+                  <th className="px-5 py-3">Adviser</th>
                   <th className="px-5 py-3">Join Code</th>
                   <th className="px-5 py-3">Academic Year</th>
                   <th className="px-5 py-3">Students</th>
@@ -460,6 +645,12 @@ export function ClassSectionsPage() {
                       <td className="px-5 py-4 font-semibold text-foreground">
                         {cls.name}
                       </td>
+                      <td className="px-5 py-4 text-muted-foreground text-sm">
+                        <span className="flex items-center gap-1.5">
+                          <User className="w-3.5 h-3.5" />
+                          {cls.instructor_name ?? "—"}
+                        </span>
+                      </td>
                       <td className="px-5 py-4">
                         <div
                           className="flex items-center gap-1.5"
@@ -500,15 +691,12 @@ export function ClassSectionsPage() {
                               : "text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50 dark:hover:bg-emerald-900/20"
                           }`}
                           onClick={() => handleToggleLock(cls)}
+                          disabled={cls.instructor_id !== user?.uid}
                         >
                           {cls.is_locked ? (
-                            <>
-                              <Lock className="h-3.5 w-3.5" /> Locked
-                            </>
+                            <><Lock className="h-3.5 w-3.5" /> Locked</>
                           ) : (
-                            <>
-                              <Unlock className="h-3.5 w-3.5" /> Open
-                            </>
+                            <><Unlock className="h-3.5 w-3.5" /> Open</>
                           )}
                         </Button>
                       </td>
@@ -517,34 +705,38 @@ export function ClassSectionsPage() {
                           className="flex items-center justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity"
                           onClick={(e) => e.stopPropagation()}
                         >
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="h-8 w-8 text-muted-foreground hover:text-foreground"
-                            onClick={() => {
-                              setSelected(cls);
-                              setForm({
-                                name: cls.name,
-                                join_code: cls.join_code,
-                                academic_year: cls.academic_year,
-                                description: "",
-                              });
-                              setIsEditOpen(true);
-                            }}
-                          >
-                            <Pencil className="h-4 w-4" />
-                          </Button>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="h-8 w-8 text-red-500 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-900/20"
-                            onClick={() => {
-                              setSelected(cls);
-                              setIsDeleteOpen(true);
-                            }}
-                          >
-                            <Trash2 className="h-4 w-4" />
-                          </Button>
+                          {cls.instructor_id === user?.uid && (
+                            <>
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-8 w-8 text-muted-foreground hover:text-foreground"
+                                onClick={() => {
+                                  setSelected(cls);
+                                  setForm({
+                                    name: cls.name,
+                                    join_code: cls.join_code,
+                                    academic_year: cls.academic_year,
+                                    description: "",
+                                  });
+                                  setIsEditOpen(true);
+                                }}
+                              >
+                                <Pencil className="h-4 w-4" />
+                              </Button>
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-8 w-8 text-red-500 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-900/20"
+                                onClick={() => {
+                                  setSelected(cls);
+                                  setIsDeleteOpen(true);
+                                }}
+                              >
+                                <Trash2 className="h-4 w-4" />
+                              </Button>
+                            </>
+                          )}
                           <ChevronRight className="h-4 w-4 text-muted-foreground/50" />
                         </div>
                       </td>
@@ -830,8 +1022,8 @@ export function ClassSectionsPage() {
 
       {/* ROSTER SHEET */}
       <Sheet open={isRosterOpen} onOpenChange={setIsRosterOpen}>
-        <SheetContent className="w-full sm:max-w-lg flex flex-col gap-0 p-0">
-          <SheetHeader className="p-6 pb-4 border-b">
+        <SheetContent className="w-full sm:max-w-2xl flex flex-col gap-0 p-0">
+          <SheetHeader className="p-6 pb-3 border-b">
             <div className="flex items-center gap-3">
               <div className="p-2 bg-indigo-100 dark:bg-indigo-900/30 rounded-xl">
                 <Users className="w-5 h-5 text-indigo-600 dark:text-indigo-400" />
@@ -849,6 +1041,11 @@ export function ClassSectionsPage() {
                     {rosterClassroom?.join_code}
                     <Copy className="h-3 w-3 text-muted-foreground" />
                   </button>
+                  {rosterClassroom?.instructor_name && (
+                    <span className="text-xs text-muted-foreground flex items-center gap-1">
+                      <User className="h-3 w-3" /> {rosterClassroom.instructor_name}
+                    </span>
+                  )}
                   {rosterClassroom?.is_locked && (
                     <span className="text-xs text-red-500 flex items-center gap-1">
                       <Lock className="h-3 w-3" /> Locked
@@ -857,77 +1054,233 @@ export function ClassSectionsPage() {
                 </SheetDescription>
               </div>
             </div>
-            <div className="relative mt-3">
-              <Search className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
-              <Input
-                className="pl-9 text-sm"
-                placeholder="Search name or ID…"
-                value={rosterSearch}
-                onChange={(e) => setRosterSearch(e.target.value)}
-              />
+
+            {/* Tabs */}
+            <div className="flex gap-1 mt-3 bg-muted rounded-lg p-1">
+              <button
+                className={`flex-1 py-1.5 text-xs font-semibold rounded-md transition-colors ${
+                  rosterTab === "students"
+                    ? "bg-background text-foreground shadow-sm"
+                    : "text-muted-foreground hover:text-foreground"
+                }`}
+                onClick={() => setRosterTab("students")}
+              >
+                Students ({rosterStudents.length})
+              </button>
+              <button
+                className={`flex-1 py-1.5 text-xs font-semibold rounded-md transition-colors ${
+                  rosterTab === "history"
+                    ? "bg-background text-foreground shadow-sm"
+                    : "text-muted-foreground hover:text-foreground"
+                }`}
+                onClick={() => {
+                  setRosterTab("history");
+                  if (questHistory.length === 0) fetchQuestHistory();
+                }}
+              >
+                Quest History
+              </button>
             </div>
+
+            {/* Tab-specific toolbar */}
+            {rosterTab === "students" && (
+              <div className="flex items-center gap-2 mt-2">
+                <div className="relative flex-1">
+                  <Search className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
+                  <Input
+                    className="pl-9 text-sm"
+                    placeholder="Search name or ID…"
+                    value={rosterSearch}
+                    onChange={(e) => setRosterSearch(e.target.value)}
+                  />
+                </div>
+              </div>
+            )}
+            {rosterTab === "history" && (
+              <div className="flex items-center gap-2 mt-2">
+                <select
+                  className="h-9 text-xs rounded-md border border-input bg-background px-2 flex-1"
+                  value={selectedQuestFilter}
+                  onChange={(e) => setSelectedQuestFilter(e.target.value)}
+                >
+                  <option value="all">All Special Quests</option>
+                  {questList.map((q) => (
+                    <option key={q.id} value={q.id}>{q.title}</option>
+                  ))}
+                </select>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="h-9 gap-1.5 text-xs font-semibold whitespace-nowrap"
+                  onClick={exportSideQuestHistory}
+                  disabled={isExporting || questHistory.length === 0}
+                >
+                  {isExporting ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Download className="w-3.5 h-3.5" />}
+                  Export CSV
+                </Button>
+              </div>
+            )}
           </SheetHeader>
+
           <div className="flex-1 overflow-y-auto custom-scrollbar">
-            {isRosterLoading ? (
-              <div className="py-16 text-center text-muted-foreground">
-                <Loader2 className="animate-spin mx-auto mb-2 h-6 w-6" />{" "}
-                Loading students…
-              </div>
-            ) : filteredRoster.length === 0 ? (
-              <div className="py-16 text-center text-muted-foreground">
-                <User className="mx-auto mb-2 h-8 w-8 text-muted-foreground/40" />
-                {rosterSearch
-                  ? "No students match."
-                  : "No students enrolled yet."}
-                {!rosterSearch && (
-                  <p className="text-xs mt-1">
-                    Share join code{" "}
-                    <span className="font-mono font-bold">
-                      {rosterClassroom?.join_code}
-                    </span>{" "}
-                    with students.
-                  </p>
-                )}
-              </div>
-            ) : (
-              <AnimatePresence>
-                {filteredRoster.map((student, idx) => (
-                  <motion.div
-                    key={student.id}
-                    initial={{ opacity: 0, y: 8 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ delay: idx * 0.03 }}
-                    className="flex items-center gap-3 px-6 py-3.5 border-b last:border-b-0 hover:bg-muted/30"
-                  >
-                    <div className="w-10 h-10 rounded-full bg-gradient-to-br from-indigo-400 to-purple-500 flex items-center justify-center text-white font-bold text-sm shrink-0">
-                      {student.display_name?.charAt(0)?.toUpperCase() ?? "?"}
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="font-semibold text-sm text-foreground truncate">
-                        {student.display_name}
-                      </p>
-                      <p className="text-xs text-muted-foreground font-mono">
-                        {student.student_id}
-                      </p>
-                    </div>
-                    <div className="shrink-0 text-right">
-                      <div className="flex items-center gap-1 text-xs text-blue-600 font-bold justify-end">
-                        <Zap className="w-3 h-3 fill-blue-500" />
-                        {student.xp ?? 0} XP
+            {/* STUDENTS TAB */}
+            {rosterTab === "students" && (
+              isRosterLoading ? (
+                <div className="py-16 text-center text-muted-foreground">
+                  <Loader2 className="animate-spin mx-auto mb-2 h-6 w-6" /> Loading students…
+                </div>
+              ) : filteredRoster.length === 0 ? (
+                <div className="py-16 text-center text-muted-foreground">
+                  <User className="mx-auto mb-2 h-8 w-8 text-muted-foreground/40" />
+                  {rosterSearch ? "No students match." : "No students enrolled yet."}
+                  {!rosterSearch && (
+                    <p className="text-xs mt-1">
+                      Share join code{" "}
+                      <span className="font-mono font-bold">{rosterClassroom?.join_code}</span>{" "}
+                      with students.
+                    </p>
+                  )}
+                </div>
+              ) : (
+                <AnimatePresence>
+                  {filteredRoster.map((student, idx) => (
+                    <motion.div
+                      key={student.id}
+                      initial={{ opacity: 0, y: 8 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ delay: idx * 0.03 }}
+                      className="flex items-center gap-3 px-6 py-3.5 border-b last:border-b-0 hover:bg-muted/30 group"
+                    >
+                      <div className="w-10 h-10 rounded-full bg-gradient-to-br from-indigo-400 to-purple-500 flex items-center justify-center text-white font-bold text-sm shrink-0">
+                        {student.display_name?.charAt(0)?.toUpperCase() ?? "?"}
                       </div>
-                      <div className="text-[10px] text-muted-foreground">
-                        {Array.isArray(student.completed_chapters)
-                          ? student.completed_chapters.length
-                          : 0}{" "}
-                        ch.
+                      <div className="flex-1 min-w-0">
+                        <p className="font-semibold text-sm text-foreground truncate">
+                          {student.display_name}
+                        </p>
+                        <p className="text-xs text-muted-foreground font-mono">
+                          {student.student_id} · {student.email}
+                        </p>
                       </div>
-                    </div>
-                  </motion.div>
-                ))}
-              </AnimatePresence>
+                      <div className="shrink-0 text-right flex items-center gap-2">
+                        <div>
+                          <div className="flex items-center gap-1 text-xs text-blue-600 font-bold justify-end">
+                            <Zap className="w-3 h-3 fill-blue-500" />
+                            {student.xp ?? 0} XP
+                          </div>
+                          <div className="text-[10px] text-muted-foreground">
+                            {Array.isArray(student.completed_chapters)
+                              ? student.completed_chapters.length
+                              : 0}{" "}
+                            ch.
+                          </div>
+                        </div>
+                        {rosterClassroom?.instructor_id === user?.uid && (
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-7 w-7 text-red-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 opacity-0 group-hover:opacity-100 transition-opacity"
+                            disabled={isKicking === student.id}
+                            onClick={() => handleKickStudent(student.id)}
+                            title="Remove student from classroom"
+                          >
+                            {isKicking === student.id
+                              ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                              : <Trash2 className="h-3.5 w-3.5" />}
+                          </Button>
+                        )}
+                      </div>
+                    </motion.div>
+                  ))}
+                </AnimatePresence>
+              )
+            )}
+
+            {/* QUEST HISTORY TAB */}
+            {rosterTab === "history" && (
+              isHistoryLoading ? (
+                <div className="py-16 text-center text-muted-foreground">
+                  <Loader2 className="animate-spin mx-auto mb-2 h-6 w-6" /> Loading history…
+                </div>
+              ) : questList.length === 0 ? (
+                <div className="py-16 text-center text-muted-foreground">
+                  <BookOpen className="mx-auto mb-2 h-8 w-8 text-muted-foreground/40" />
+                  No special quests assigned yet.
+                </div>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="w-full text-xs text-left">
+                    <thead className="bg-muted/50 text-muted-foreground border-b uppercase tracking-wide sticky top-0">
+                      <tr>
+                        <th className="px-4 py-2">Student</th>
+                        <th className="px-4 py-2">Quest</th>
+                        <th className="px-4 py-2 text-center">Status</th>
+                        <th className="px-4 py-2">
+                           <div className="flex items-center gap-1.5"><Clock className="w-3.5 h-3.5" /> Runtime</div>
+                        </th>
+                        <th className="px-4 py-2">
+                           <div className="flex items-center gap-1.5"><Target className="w-3.5 h-3.5" /> Accuracy</div>
+                        </th>
+                        <th className="px-4 py-2">Retake</th>
+                        <th className="px-4 py-2">Date</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-border">
+                      {(selectedQuestFilter === "all"
+                        ? questHistory
+                        : questHistory.filter((r) => r.questId === selectedQuestFilter)
+                      ).map((row, i) => (
+                        <tr key={i} className="hover:bg-muted/20">
+                          <td className="px-4 py-2">
+                            <p className="font-semibold text-foreground">{row.studentName}</p>
+                            <p className="text-muted-foreground font-mono text-[10px]">{row.studentId}</p>
+                          </td>
+                          <td className="px-4 py-2 text-foreground font-medium">{row.questTitle}</td>
+                          <td className="px-4 py-2 text-center">
+                            <span className={`px-2.5 py-1 rounded-full text-[10px] font-bold ${
+                              row.status === "Completed"
+                                ? "bg-indigo-100 text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-400 border border-indigo-200"
+                                : "bg-gray-100 text-gray-500 dark:bg-gray-800 dark:text-gray-400 border border-gray-200 dark:border-gray-700"
+                            }`}>
+                              {row.status}
+                            </span>
+                          </td>
+                          <td className="px-4 py-2 text-muted-foreground font-mono">
+                            {row.runtimeLabel ?? "—"}
+                          </td>
+                          <td className="px-4 py-2">
+                            {row.accuracy != null ? (
+                              <Badge variant="secondary" className={`font-mono font-bold ${
+                                row.accuracy >= 80 ? "bg-green-100 text-green-700 border-green-200 dark:bg-green-900/30 dark:text-green-400"
+                                : row.accuracy >= 50 ? "bg-amber-100 text-amber-700 border-amber-200 dark:bg-amber-900/30 dark:text-amber-400"
+                                : "bg-red-100 text-red-700 border-red-200 dark:bg-red-900/30 dark:text-red-400"
+                              }`}>
+                                {row.accuracy}%
+                              </Badge>
+                            ) : (
+                              <span className="text-muted-foreground">—</span>
+                            )}
+                          </td>
+                          <td className="px-4 py-2">
+                            <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                              row.retakePolicy === "always"
+                                ? "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400"
+                                : "bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400"
+                            }`}>
+                              {row.retakePolicy === "always" ? "Retakeable" : "Once"}
+                            </span>
+                          </td>
+                          <td className="px-4 py-2 text-muted-foreground ">{row.completedAt || "—"}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )
             )}
           </div>
-          {!isRosterLoading && (
+
+          {rosterTab === "students" && !isRosterLoading && (
             <div className="px-6 py-3 border-t bg-muted/30 text-xs text-muted-foreground">
               {filteredRoster.length} student
               {filteredRoster.length !== 1 ? "s" : ""}

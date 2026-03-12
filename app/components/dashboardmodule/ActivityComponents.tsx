@@ -196,7 +196,13 @@ export const BuildingBlocksActivity = forwardRef<
 
   useEffect(() => {
     if (data && data.segments && data.correctOrder) {
-      setSlots(Array(data.correctOrder.length).fill(null));
+      // Count slots from template if available, otherwise use correctOrder length
+      let slotCount = data.correctOrder.length;
+      if (data.template) {
+        const slotMatches = data.template.match(/\[slot\]|\[\d+\]/g);
+        if (slotMatches) slotCount = slotMatches.length;
+      }
+      setSlots(Array(slotCount).fill(null));
       const scrambled = data.segments
         .map((val: string, i: number) => ({
           value: val,
@@ -314,6 +320,15 @@ export const BuildingBlocksActivity = forwardRef<
 
   return (
     <div className="space-y-5 w-full max-w-2xl mx-auto">
+      {/* ── Question Prompt ── */}
+      {data.question && (
+        <div className="bg-muted/60 p-4 sm:p-6 rounded-2xl border border-border">
+          <h3 className="text-lg sm:text-xl font-bold text-center text-foreground leading-snug">
+            {data.question}
+          </h3>
+        </div>
+      )}
+
       {/* ── IDE-style code editor panel ── */}
       <div
         className={cn(
@@ -347,20 +362,25 @@ export const BuildingBlocksActivity = forwardRef<
           )}
 
           <AnimatePresence mode="popLayout">
-            {data.template ? (
-              // Structured Template Rendering
-              data.template.split("\n").map((line: string, lineIdx: number) => {
-                const parts = line.split(/(\[\d+\])/g);
+            {data.template ? (() => {
+              // Unified slot parsing — both [slot] and [0],[1] use sequential indexing
+              const slotRegex = /(\[slot\]|\[\d+\])/g;
+              let globalSlotIdx = 0;
+              return data.template.split("\n").map((line: string, lineIdx: number) => {
+                const parts = line.split(slotRegex);
+
                 return (
                   <div
                     key={lineIdx}
                     className="flex flex-wrap items-center gap-1.5 sm:gap-2 w-full min-h-[36px]"
                   >
-                    {parts.map((part, partIdx) => {
-                      if (part.startsWith("[") && part.endsWith("]")) {
-                        const idx = parseInt(part.slice(1, -1), 10);
+                    {parts.map((part: string, partIdx: number) => {
+                      const isSlot = part === "[slot]" || /^\[\d+\]$/.test(part);
+                      if (isSlot) {
+                        const idx = globalSlotIdx;
+                        globalSlotIdx++;
                         const val = slots[idx];
-                        const isEmpty = val === null;
+                        const isEmpty = val === null || val === undefined;
                         const isHintedSlot = hintSlotIdx === idx;
 
                         return (
@@ -433,7 +453,7 @@ export const BuildingBlocksActivity = forwardRef<
                   </div>
                 );
               })
-            ) : (
+            })() : (
               // Fallback Inline Rendering
               <div className="flex flex-wrap items-center gap-1.5 sm:gap-2">
                 {slots.map((val, idx) => {

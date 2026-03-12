@@ -156,6 +156,13 @@ export function LeaderboardTab() {
 
       while (attempt < maxRetries && !success) {
         try {
+          // Fetch core lesson IDs to filter out side quests from completed_chapters
+          const { data: coreLessonsData } = await supabase
+            .from("lessons")
+            .select("id")
+            .eq("is_core_node", true);
+          const coreLessonIds = new Set(coreLessonsData?.map((l: any) => l.id) || []);
+
           // EXPLICIT RESTRICTION: Only fetch students
           let query = supabase.from("users").select("*").eq("role", "user");
 
@@ -193,7 +200,7 @@ export function LeaderboardTab() {
               // Map DB column to Interface
               totalRuntime: u.total_runtime,
               role: u.role,
-              completedChapters: u.completed_chapters || [],
+              completedChapters: (u.completed_chapters || []).filter((id: string) => coreLessonIds.size === 0 || coreLessonIds.has(id)),
               isAdventureCompleted: u.is_adventure_completed,
               studentId: u.student_id,
             }),

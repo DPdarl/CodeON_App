@@ -28,6 +28,7 @@ export interface TourStep {
   title: string;
   content: string;
   position?: "top" | "bottom" | "left" | "right" | "center";
+  tour_voice?: string; // [NEW] Optional path for custom voice dialogue
 }
 
 interface OnboardingTourProps {
@@ -58,7 +59,7 @@ export function OnboardingTour({
   const navigate = useNavigate();
   const { user, updateProfile } = useAuth();
   const { grantXP } = useGameProgress();
-  const { playSound, stopSound } = useGameSound();
+  const { playSound, stopSound, playCustomSound, stopCustomSound } = useGameSound();
   const isMobile = useIsMobile();
 
   const [currentStep, setCurrentStep] = useState(0);
@@ -172,6 +173,8 @@ export function OnboardingTour({
   useEffect(() => {
     if (!isOpen) {
       stopSound("tour_voice"); // Instantly cut the voice audio when modal exits
+      const currentVoice = steps[currentStep]?.tour_voice;
+      if (currentVoice) stopCustomSound(currentVoice);
       const timer = setTimeout(() => {
         setCurrentStep(0);
         setShowRewardView(false);
@@ -191,17 +194,26 @@ export function OnboardingTour({
   // Play dialogue sound when jumping to a new step
   useEffect(() => {
     if (isOpen && !showRewardView && !rewardOnly && !isMuted) {
-      playSound("tour_voice");
+      const currentVoice = steps[currentStep]?.tour_voice;
+      if (currentVoice) {
+        playCustomSound(currentVoice);
+      } else {
+        playSound("tour_voice");
+      }
     }
-  }, [isOpen, currentStep, showRewardView, rewardOnly, playSound, isMuted]);
+  }, [isOpen, currentStep, showRewardView, rewardOnly, playSound, playCustomSound, isMuted, steps]);
 
   // [NEW] Handle mute toggle mid-tour
   const handleMuteToggle = async () => {
     const newMuted = !isMuted;
+    const currentVoice = steps[currentStep]?.tour_voice;
+
     if (newMuted) {
-      stopSound("tour_voice");
+      if (currentVoice) stopCustomSound(currentVoice);
+      else stopSound("tour_voice");
     } else {
-      playSound("tour_voice");
+      if (currentVoice) playCustomSound(currentVoice);
+      else playSound("tour_voice");
     }
     setIsMuted(newMuted);
 
@@ -263,8 +275,12 @@ export function OnboardingTour({
   const isLastStep = currentStep === steps.length - 1;
 
   const handleNext = () => {
+    // Stop voice of current step
+    const currentVoice = steps[currentStep]?.tour_voice;
+    if (currentVoice) stopCustomSound(currentVoice);
+    else stopSound("tour_voice");
+
     if (isLastStep) {
-      stopSound("tour_voice"); // Stop the voice immediately on final step progression
       if (tutorialId && user) {
         // Check the new dedicated column first, fall back to legacy settings
         const hasCompleted =
@@ -512,7 +528,14 @@ export function OnboardingTour({
                     variant="outline"
                     size="sm"
                     disabled={currentStep === 0}
-                    onClick={handlePrev}
+                    onClick={() => {
+                      // Stop voice of current step when moving to next/prev
+                      const currentVoice = steps[currentStep]?.tour_voice;
+                      if (currentVoice) stopCustomSound(currentVoice);
+                      else stopSound("tour_voice");
+                      
+                      setCurrentStep((prev) => Math.max(0, prev - 1));
+                    }}
                     className="mr-auto text-xs py-1 h-8"
                   >
                     <ChevronLeft className="w-3 h-3 mr-1" /> Back
@@ -589,7 +612,14 @@ export function OnboardingTour({
                     variant="outline"
                     size="sm"
                     disabled={currentStep === 0}
-                    onClick={handlePrev}
+                    onClick={() => {
+                      // Stop voice of current step when moving to next/prev
+                      const currentVoice = steps[currentStep]?.tour_voice;
+                      if (currentVoice) stopCustomSound(currentVoice);
+                      else stopSound("tour_voice");
+                      
+                      setCurrentStep((prev) => Math.max(0, prev - 1));
+                    }}
                     className="mr-auto"
                   >
                     <ChevronLeft className="w-4 h-4 mr-1" /> Back

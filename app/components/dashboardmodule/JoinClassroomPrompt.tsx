@@ -18,7 +18,7 @@ export function JoinClassroomPrompt({
   onJoined,
   compact = false,
 }: JoinClassroomPromptProps) {
-  const { user } = useAuth();
+  const { user, updateProfile } = useAuth();
   const [code, setCode] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -67,6 +67,9 @@ export function JoinClassroomPrompt({
         .eq("id", user.uid);
 
       if (updateError) throw updateError;
+
+      // 4. Update the local Auth context so the UI reflects the change immediately
+      await updateProfile({ classroom_id: classroom.id } as any);
 
       toast.success(`Welcome to ${classroom.name}! 🎓`, { duration: 4000 });
       setCode("");

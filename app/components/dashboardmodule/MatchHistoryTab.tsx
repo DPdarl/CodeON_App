@@ -135,14 +135,22 @@ export function MatchHistoryTab() {
   // Define static game modes based on requirements
   const PREDEFINED_MODES = [
     { label: "Adventure", value: "adventure" },
+    { label: "Special Quest", value: "special" },
     { label: "Multiplayer", value: "multiplayer" },
     { label: "Challenges", value: "challenge" },
   ];
 
   const filteredMatches = matches.filter((match) => {
     if (filterMode === "all") return true;
-    // Flexible matching: check if the match mode string contains the filter keyword
-    // e.g. "C# Adventures" -> includes "adventure"
+    
+    // Distinguish Special Quest vs Adventure
+    if (filterMode === "special") {
+      return match.mode.toLowerCase().includes("special quest");
+    }
+    if (filterMode === "adventure") {
+      return match.mode.toLowerCase().includes("adventure") && !match.mode.toLowerCase().includes("special quest");
+    }
+    
     return match.mode.toLowerCase().includes(filterMode);
   });
 
@@ -272,9 +280,9 @@ export function MatchHistoryTab() {
                   </tr>
                 ) : (
                   filteredMatches.map((match) => {
-                    const isAdventure = match.mode
-                      .toLowerCase()
-                      .includes("adventure");
+                    const isSpecialQuest = match.mode.toLowerCase().includes("special quest");
+                    const isAdventure = match.mode.toLowerCase().includes("adventure") && !isSpecialQuest;
+                    const isMultiplayer = !isAdventure && !isSpecialQuest;
 
                     const accuracy = getAccuracy(match);
 
@@ -288,12 +296,16 @@ export function MatchHistoryTab() {
                           <div className="flex items-center gap-3">
                             <div
                               className={`p-2 rounded-lg shrink-0 ${
-                                isAdventure
+                                isSpecialQuest
+                                  ? "bg-indigo-100 text-indigo-600 dark:bg-indigo-900/30"
+                                  : isAdventure
                                   ? "bg-orange-100 text-orange-600 dark:bg-orange-900/30"
                                   : "bg-purple-100 text-purple-600 dark:bg-purple-900/30"
                               }`}
                             >
-                              {isAdventure ? (
+                              {isSpecialQuest ? (
+                                <Target className="w-5 h-5" />
+                              ) : isAdventure ? (
                                 <MapIcon className="w-5 h-5" />
                               ) : (
                                 <Gamepad2 className="w-5 h-5" />
@@ -352,13 +364,15 @@ export function MatchHistoryTab() {
                             <Badge
                               variant="outline"
                               className={`gap-1 border ${
-                                isAdventure
+                                isSpecialQuest
+                                  ? "bg-indigo-50 text-indigo-700 border-indigo-200 dark:bg-indigo-900/20 dark:text-indigo-400"
+                                  : isAdventure
                                   ? "bg-green-50 text-green-700 border-green-200 dark:bg-green-900/20 dark:text-green-400"
                                   : "bg-yellow-50 text-yellow-700 border-yellow-200 dark:bg-yellow-900/20 dark:text-yellow-400"
                               }`}
                             >
                               <Trophy className="w-3 h-3" />{" "}
-                              {isAdventure ? "Completed" : match.winner_name}
+                              {isAdventure || isSpecialQuest ? "Completed" : match.winner_name}
                             </Badge>
                           ) : (
                             <span className="text-gray-400 text-xs">-</span>
@@ -400,9 +414,8 @@ export function MatchHistoryTab() {
               </div>
             ) : (
               filteredMatches.map((match) => {
-                const isAdventure = match.mode
-                  .toLowerCase()
-                  .includes("adventure");
+                const isSpecialQuest = match.mode.toLowerCase().includes("special quest");
+                const isAdventure = match.mode.toLowerCase().includes("adventure") && !isSpecialQuest;
                 const accuracy = getAccuracy(match);
 
                 return (
@@ -415,12 +428,16 @@ export function MatchHistoryTab() {
                       <div className="flex items-center gap-3">
                         <div
                           className={`p-2 rounded-lg shrink-0 ${
-                            isAdventure
+                            isSpecialQuest
+                              ? "bg-indigo-100 text-indigo-600 dark:bg-indigo-900/30"
+                              : isAdventure
                               ? "bg-orange-100 text-orange-600 dark:bg-orange-900/30"
                               : "bg-purple-100 text-purple-600 dark:bg-purple-900/30"
                           }`}
                         >
-                          {isAdventure ? (
+                          {isSpecialQuest ? (
+                            <Target className="w-5 h-5" />
+                          ) : isAdventure ? (
                             <MapIcon className="w-5 h-5" />
                           ) : (
                             <Gamepad2 className="w-5 h-5" />
@@ -478,13 +495,15 @@ export function MatchHistoryTab() {
                         <Badge
                           variant="outline"
                           className={`gap-1 border ${
-                            isAdventure
+                            isSpecialQuest
+                              ? "bg-indigo-50 text-indigo-700 border-indigo-200 dark:bg-indigo-900/20 dark:text-indigo-400"
+                              : isAdventure
                               ? "bg-green-50 text-green-700 border-green-200 dark:bg-green-900/20 dark:text-green-400"
                               : "bg-yellow-50 text-yellow-700 border-yellow-200 dark:bg-yellow-900/20 dark:text-yellow-400"
                           }`}
                         >
                           <Trophy className="w-3 h-3" />{" "}
-                          {isAdventure ? "Completed" : match.winner_name}
+                          {isAdventure || isSpecialQuest ? "Completed" : match.winner_name}
                         </Badge>
                       )}
                     </div>

@@ -48,6 +48,7 @@ export interface UserData {
   completedMachineProblems?: string[];
   equippedBadge?: string; // [FIX] Added missing property
   claimedTutorials?: string[]; // [NEW] Dedicated column for tutorial persistence
+  classroom_id?: string; // [NEW] ID for the joined classroom
 }
 
 interface AuthContextType {
@@ -115,6 +116,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       completedMachineProblems: db.completed_machineproblems ?? [],
       equippedBadge: db.equipped_badge, // [FIX] Map from DB
       claimedTutorials: db.claimed_tutorials ?? [], // [NEW]
+      classroom_id: db.classroom_id, // [NEW] Map from DB
     }),
     [],
   );
@@ -159,6 +161,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       // [NEW] Map to DB
       db.claimed_tutorials = db.claimedTutorials;
       delete db.claimedTutorials;
+    }
+    if ("classroom_id" in db) {
+      db.classroom_id = db.classroom_id;
     }
     if ("googleBound" in db) {
       db.google_bound = db.googleBound;

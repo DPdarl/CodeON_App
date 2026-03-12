@@ -106,12 +106,6 @@ export function MobileNavBar({
       roles: STAFF_ROLES,
     },
     {
-      id: "instructor-side-quests",
-      label: "Side Quests",
-      icon: MapPin,
-      roles: STAFF_ROLES,
-    },
-    {
       id: "user-reports",
       label: "Reports",
       icon: ReportIcon,

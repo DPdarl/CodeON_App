@@ -69,8 +69,6 @@ export default function AppLayout() {
     if (currentPath.startsWith("/bug-reports")) return "bug-reports";
     if (currentPath.startsWith("/instructor/class-sections"))
       return "instructor-sections";
-    if (currentPath.startsWith("/instructor-side-quests"))
-      return "instructor-side-quests";
 
     return "home";
   };
@@ -126,9 +124,6 @@ export default function AppLayout() {
         break;
       case "instructor-sections":
         navigate("/instructor/class-sections");
-        break;
-      case "instructor-side-quests":
-        navigate("/instructor-side-quests");
         break;
       default:
         navigate("/dashboard");

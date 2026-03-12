@@ -113,7 +113,7 @@ export default function HowToPage() {
           {GUIDE_MODULES.map((module, index) => {
             // Dynamically check completion based on module ID (e.g., "home" -> "homeTab")
             const tutorialKey = module.tutorialKey || `${module.id}Tab`;
-            const hasCompletedTour = user?.settings?.tutorials?.[tutorialKey];
+            const hasCompletedTour = user?.claimedTutorials?.includes(tutorialKey) || user?.settings?.tutorials?.[tutorialKey];
 
             return (
               <motion.div
